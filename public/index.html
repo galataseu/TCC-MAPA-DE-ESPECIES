@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1E7552">
+    <title>Mapa do Sul - Mata Atlântica</title>
+
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/leaflet.css">
+    <link rel="stylesheet" href="https://api.tiles.mapbox.com/mapbox.js/plugins/leaflet-locatecontrol/v0.43.0/L.Control.Locate.css">
+    <link rel="stylesheet" href="assets/css/app.css">
+
+    <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico">
+  </head>
+
+  <body>
+    <!-- Navbar Lateral -->
+    <nav id="vertical-nav">
+      <div class="navbar-header">
+        <a class="navbar-brand" href="#"><i class="fa-solid fa-earth-americas"></i></a>
+      </div>
+      <ul class="nav">
+        <li>
+          <a href="#" id="about-btn" title="Sobre">
+            <i class="fa-solid fa-circle-question"></i>
+          </a>
+        </li>
+        <li class="dropdown">
+          <a id="toolsDrop" href="#" role="button" class="dropdown-toggle" data-toggle="dropdown" title="Opções">
+            <i class="fa-solid fa-sliders"></i>
+          </a>
+          <ul class="dropdown-menu">
+            <li>
+              <a href="#" id="legend-btn">
+                <i class="fa-solid fa-map"></i>&nbsp;&nbsp;Legenda
+              </a>
+            </li>
+            <li class="divider"></li>
+            <li>
+              <a href="#" id="login-btn">
+                <i class="fa-solid fa-user-gear"></i>&nbsp;&nbsp;Acesso
+              </a>
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </nav>
+
+    <!-- Barra de Pesquisa Flutuante -->
+    <div id="floating-search">
+      <div class="search-icon-container">
+        <i id="searchicon" class="fa-solid fa-magnifying-glass"></i>
+      </div>
+      <input id="searchbox" type="text" placeholder="Pesquisar cidade..." class="form-control">
+    </div>
+
+    <main id="container">
+      <div id="map"></div>
+    </main>
+
+    <!-- Modais -->
+    <div class="modal fade" id="aboutModal" tabindex="-1" role="dialog">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button class="close" type="button" data-dismiss="modal" aria-hidden="true">&times;</button>
+            <h4 class="modal-title">Mata Atlântica no Sul</h4>
+          </div>
+          <div class="modal-body">
+            <p>Este mapa mostra a área da Mata Atlântica restrita aos estados do Paraná, Santa Catarina e Rio Grande do Sul.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" data-dismiss="modal">Entendido</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="legendModal" tabindex="-1" role="dialog">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+            <h4 class="modal-title">Legenda</h4>
+          </div>
+          <div class="modal-body">
+            <p><i class="fa-solid fa-square" style="color: #1E7552;"></i> Paraná (Verde)</p>
+            <p><i class="fa-solid fa-square" style="color: #FF0000;"></i> Santa Catarina (Vermelho)</p>
+            <p><i class="fa-solid fa-square" style="color: #FFFF00;"></i> Rio Grande do Sul (Amarelo)</p>
+            <p><i class="fa-solid fa-square" style="color: #2ECC71; opacity: 0.6;"></i> Mata Atlântica (Corte Regional)</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" data-dismiss="modal">Fechar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.10.5/typeahead.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/leaflet.js"></script>
+    <script src="https://api.tiles.mapbox.com/mapbox.js/plugins/leaflet-locatecontrol/v0.43.0/L.Control.Locate.min.js"></script>
+    
+    <!-- Turf.js para processamento geográfico (Clipping) -->
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    
+    <script src="assets/js/app.js"></script>
+  </body>
+</html>

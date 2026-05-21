@@ -1,0 +1,149 @@
+html, body, #container {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  background-color: #2B2A33;
+}
+
+/* Navbar Lateral */
+#vertical-nav {
+  width: 70px;
+  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2000;
+  background-color: #1E7552;
+  border-right: 1px solid #2B2A33;
+  padding: 10px 0;
+}
+
+#vertical-nav .navbar-header {
+  padding: 15px 5px;
+  text-align: center;
+}
+
+#vertical-nav .navbar-brand {
+  font-size: 24px;
+  color: #FFAA44;
+  display: block;
+}
+
+#vertical-nav .nav > li > a {
+  color: rgba(255, 255, 255, 0.8);
+  padding: 25px 0;
+  text-align: center;
+  font-size: 24px;
+}
+
+#vertical-nav .nav > li > a:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  color: #FFAA44;
+}
+
+/* Mapa */
+#map {
+  position: absolute;
+  left: 70px;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  background-color: #131315;
+}
+
+/* Barra de Pesquisa Flutuante (Handle na Esquerda) */
+#floating-search {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  min-width: 350px;
+  max-width: 700px;
+  width: 450px;
+  z-index: 3000;
+  background-color: #2B2A33;
+  border: 1px solid #1E7552;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  
+  /* Puxar o handle de redimensionamento para a esquerda */
+  resize: horizontal;
+  overflow: hidden;
+  direction: rtl; 
+}
+
+/* Corrigir a direção do conteúdo interno para não ficar invertido */
+#floating-search > * {
+  direction: ltr;
+}
+
+#floating-search .search-icon-container {
+  padding: 0 15px;
+  color: #FFAA44;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+#floating-search .form-control {
+  height: 45px;
+  background-color: transparent;
+  color: #fff;
+  border: none;
+  padding: 0 10px;
+  font-size: 16px;
+  flex: 1;
+  box-shadow: none !important;
+  white-space: nowrap;
+}
+
+.twitter-typeahead {
+  flex: 1;
+  display: flex !important;
+}
+
+/* Dropdowns e Modais */
+.tt-dropdown-menu {
+  background-color: #2B2A33;
+  border: 1px solid #1E7552;
+  color: #fff;
+  width: 100%;
+  margin-top: 5px;
+  direction: ltr;
+}
+
+.tt-suggestion {
+  padding: 10px 15px;
+  border-bottom: 1px solid #3b3a43;
+}
+
+.tt-suggestion.tt-cursor {
+  background-color: #1E7552;
+}
+
+.modal-content {
+  background-color: #2B2A33;
+  color: #eee;
+  border: 1px solid #1E7552;
+}
+
+.modal-header {
+  border-bottom: 1px solid #1E7552;
+}
+
+.btn-primary {
+  background-color: #1E7552;
+  border-color: #1E7552;
+}
+
+.typeahead-header {
+  padding: 8px 15px;
+  background-color: #1E7552;
+  color: #FFAA44;
+  margin: 0;
+}
