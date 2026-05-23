@@ -41,6 +41,11 @@
                 <i class="fa-solid fa-map"></i>&nbsp;&nbsp;Legenda
               </a>
             </li>
+            <li>
+              <a href="#" id="config-btn">
+                <i class="fa-solid fa-gear"></i>&nbsp;&nbsp;Configurações
+              </a>
+            </li>
             <li class="divider"></li>
             <li>
               <a href="#" id="login-btn">
@@ -62,6 +67,32 @@
 
     <main id="container">
       <div id="map"></div>
+      <div id="map-legend" class="leaflet-bar">
+        <div class="legend-header">Legenda</div>
+        <div class="legend-items">
+          <div class="legend-item">
+            <span class="legend-color" style="background-color: #287f5e;"></span>
+            <img src="svg/mataatlantica.png" class="legend-icon">
+            <span>Mata Atlântica</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background-color: #3b7ba5;"></span>
+            <img src="svg/pampa.png" class="legend-icon">
+            <span>Pampa</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background-color: #E6C140;"></span>
+            <img src="svg/cerrado.png" class="legend-icon">
+            <span>Cerrado</span>
+          </div>
+        </div>
+        <hr class="legend-divider">
+        <div class="legend-toggle">
+          <label>
+            <input type="checkbox" id="toggle-textures-legend" checked> Exibir Texturas
+          </label>
+        </div>
+      </div>
     </main>
 
     <!-- Modais -->
@@ -77,6 +108,27 @@
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-primary" data-dismiss="modal">Entendido</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="configModal" tabindex="-1" role="dialog">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button class="close" type="button" data-dismiss="modal" aria-hidden="true">&times;</button>
+            <h4 class="modal-title">Configurações de Exibição</h4>
+          </div>
+          <div class="modal-body">
+            <div class="checkbox">
+              <label>
+                <input type="checkbox" id="toggle-textures" checked> Habilitar texturas dos biomas (ícones)
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" data-dismiss="modal">Fechar</button>
           </div>
         </div>
       </div>

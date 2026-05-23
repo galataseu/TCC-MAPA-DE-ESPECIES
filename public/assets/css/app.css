@@ -69,11 +69,7 @@ html, body, #container {
   display: flex;
   align-items: center;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  
-  /* Puxar o handle de redimensionamento para a esquerda */
-  resize: horizontal;
-  overflow: hidden;
-  direction: rtl; 
+  /* Removido overflow: hidden para permitir que a lista de resultados apareça */
 }
 
 /* Corrigir a direção do conteúdo interno para não ficar invertido */
@@ -146,4 +142,104 @@ html, body, #container {
   background-color: #1E7552;
   color: #FFAA44;
   margin: 0;
+}
+
+/* Legenda no Mapa */
+#map-legend {
+  position: absolute;
+  bottom: 15px; 
+  right: 10px;
+  z-index: 1000;
+  background-color: rgba(43, 42, 51, 0.95);
+  color: #eee;
+  padding: 10px;
+  border: 1px solid #1E7552;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  min-width: 160px;
+  font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+}
+
+/* Modo Escuro para Controles do Leaflet */
+.leaflet-control-zoom a, 
+.leaflet-control-locate a {
+  background-color: #2B2A33 !important;
+  color: #FFAA44 !important;
+  border-color: #1E7552 !important;
+}
+
+.leaflet-control-zoom a:hover, 
+.leaflet-control-locate a:hover {
+  background-color: #1E7552 !important;
+  color: #fff !important;
+}
+
+.leaflet-bar {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+  border: 1px solid #1E7552 !important;
+}
+
+.leaflet-bar a:first-child {
+  border-top-left-radius: 4px !important;
+  border-top-right-radius: 4px !important;
+}
+
+.leaflet-bar a:last-child {
+  border-bottom-left-radius: 4px !important;
+  border-bottom-right-radius: 4px !important;
+}
+
+/* Subir os controles para ficarem acima da legenda */
+.leaflet-bottom.leaflet-right {
+  bottom: 180px !important;
+}
+
+.legend-header {
+  font-weight: bold;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #1E7552;
+  padding-bottom: 5px;
+  color: #FFAA44;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.legend-color {
+  width: 15px;
+  height: 15px;
+  display: inline-block;
+  margin-right: 8px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.legend-icon {
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+  filter: brightness(1.2);
+}
+
+.legend-divider {
+  margin: 8px 0;
+  border-top: 1px solid #444;
+}
+
+.legend-toggle {
+  font-size: 11px;
+}
+
+.legend-toggle label {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-weight: normal;
+}
+
+.legend-toggle input {
+  margin-right: 5px;
 }
