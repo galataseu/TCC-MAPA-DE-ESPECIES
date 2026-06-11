@@ -12,88 +12,96 @@
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/leaflet.css">
-    <link rel="stylesheet" href="https://api.tiles.mapbox.com/mapbox.js/plugins/leaflet-locatecontrol/v0.43.0/L.Control.Locate.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.79.0/dist/L.Control.Locate.min.css">
     <link rel="stylesheet" href="assets/css/app.css">
 
     <link rel="icon" type="image/x-icon" href="assets/img/favicon.ico">
   </head>
 
   <body>
-    <!-- Navbar Lateral -->
-    <nav id="vertical-nav">
-      <div class="navbar-header">
-        <a class="navbar-brand" href="#"><i class="fa-solid fa-earth-americas"></i></a>
-      </div>
-      <ul class="nav">
-        <li>
-          <a href="#" id="about-btn" title="Sobre">
-            <i class="fa-solid fa-circle-question"></i>
+    <!-- Layout Principal -->
+    <div id="main-layout">
+      <!-- Navbar Lateral -->
+      <nav id="vertical-nav">
+        <div class="navbar-header">
+          <a class="navbar-brand" href="#"><i class="fa-solid fa-earth-americas"></i></a>
+        </div>
+        <ul class="nav">
+          <li>
+            <a href="#" id="about-btn" title="Sobre">
+              <i class="fa-solid fa-circle-question"></i>
+            </a>
+          </li>
+          <li>
+          <a href="#" id="theme-toggle" title="Alternar Modo Claro/Escuro">
+            <i class="fa-solid fa-moon"></i>
           </a>
         </li>
         <li class="dropdown">
-          <a id="toolsDrop" href="#" role="button" class="dropdown-toggle" data-toggle="dropdown" title="Opções">
-            <i class="fa-solid fa-sliders"></i>
-          </a>
-          <ul class="dropdown-menu">
-            <li>
-              <a href="#" id="legend-btn">
-                <i class="fa-solid fa-map"></i>&nbsp;&nbsp;Legenda
-              </a>
-            </li>
-            <li>
-              <a href="#" id="config-btn">
-                <i class="fa-solid fa-gear"></i>&nbsp;&nbsp;Configurações
-              </a>
-            </li>
-            <li class="divider"></li>
-            <li>
-              <a href="#" id="login-btn">
-                <i class="fa-solid fa-user-gear"></i>&nbsp;&nbsp;Acesso
-              </a>
-            </li>
-          </ul>
-        </li>
-      </ul>
-    </nav>
+            <a id="toolsDrop" href="#" role="button" class="dropdown-toggle" data-toggle="dropdown" title="Opções">
+              <i class="fa-solid fa-sliders"></i>
+            </a>
+            <ul class="dropdown-menu">
+              <li>
+                <a href="#" id="legend-btn">
+                  <i class="fa-solid fa-map"></i>&nbsp;&nbsp;Legenda
+                </a>
+              </li>
+              <li>
+                <a href="#" id="config-btn">
+                  <i class="fa-solid fa-gear"></i>&nbsp;&nbsp;Configurações
+                </a>
+              </li>
+              <li class="divider"></li>
+              <li>
+                <a href="#" id="login-btn">
+                  <i class="fa-solid fa-user-gear"></i>&nbsp;&nbsp;Acesso
+                </a>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </nav>
 
-    <!-- Barra de Pesquisa Flutuante -->
-    <div id="floating-search">
-      <div class="search-icon-container">
-        <i id="searchicon" class="fa-solid fa-magnifying-glass"></i>
-      </div>
-      <input id="searchbox" type="text" placeholder="Pesquisar cidade..." class="form-control">
+      <main id="container">
+        <div id="map"></div>
+        <!-- Barra de Pesquisa Flutuante -->
+        <div id="floating-search">
+          <div class="search-icon-container">
+            <i id="searchicon" class="fa-solid fa-magnifying-glass"></i>
+          </div>
+          <input id="searchbox" type="text" placeholder="Pesquisar cidade..." class="form-control">
+        </div>
+
+        <div id="map-legend" class="leaflet-bar">
+          <div class="legend-header">Legenda</div>
+          <div class="legend-items">
+            <div class="legend-item">
+              <span class="legend-color" style="background-color: #287f5e;"></span>
+              <img src="svg/mataatlantica.png" class="legend-icon">
+              <span>Mata Atlântica</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background-color: #3b7ba5;"></span>
+              <img src="svg/pampa.png" class="legend-icon">
+              <span>Pampa</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background-color: #E6C140;"></span>
+              <img src="svg/cerrado.png" class="legend-icon">
+              <span>Cerrado</span>
+            </div>
+          </div>
+          <hr class="legend-divider">
+          <div class="legend-toggle">
+            <label>
+              <input type="checkbox" id="toggle-textures-legend" checked> Exibir Texturas
+            </label>
+          </div>
+        </div>
+      </main>
     </div>
-
-    <main id="container">
-      <div id="map"></div>
-      <div id="map-legend" class="leaflet-bar">
-        <div class="legend-header">Legenda</div>
-        <div class="legend-items">
-          <div class="legend-item">
-            <span class="legend-color" style="background-color: #287f5e;"></span>
-            <img src="svg/mataatlantica.png" class="legend-icon">
-            <span>Mata Atlântica</span>
-          </div>
-          <div class="legend-item">
-            <span class="legend-color" style="background-color: #3b7ba5;"></span>
-            <img src="svg/pampa.png" class="legend-icon">
-            <span>Pampa</span>
-          </div>
-          <div class="legend-item">
-            <span class="legend-color" style="background-color: #E6C140;"></span>
-            <img src="svg/cerrado.png" class="legend-icon">
-            <span>Cerrado</span>
-          </div>
-        </div>
-        <hr class="legend-divider">
-        <div class="legend-toggle">
-          <label>
-            <input type="checkbox" id="toggle-textures-legend" checked> Exibir Texturas
-          </label>
-        </div>
-      </div>
-    </main>
 
     <!-- Modais -->
     <div class="modal fade" id="aboutModal" tabindex="-1" role="dialog">
@@ -154,12 +162,64 @@
       </div>
     </div>
 
+    <div class="modal fade" id="loginModal" tabindex="-1" role="dialog">
+      <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+            <h4 class="modal-title">Acesso ao Sistema</h4>
+          </div>
+          <div class="modal-body">
+            <form id="login-form">
+              <div class="form-group">
+                <label for="login-username">Usuário</label>
+                <input type="text" class="form-control" id="login-username" required>
+              </div>
+              <div class="form-group">
+                <label for="login-password">Senha</label>
+                <input type="password" class="form-control" id="login-password" required>
+              </div>
+              <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+            </form>
+            <hr>
+            <p class="text-center">Não tem uma conta? <br><a href="#" id="go-to-register">Cadastre-se aqui</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="registerModal" tabindex="-1" role="dialog">
+      <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+            <h4 class="modal-title">Cadastro</h4>
+          </div>
+          <div class="modal-body">
+            <form id="register-form">
+              <div class="form-group">
+                <label for="reg-username">Usuário</label>
+                <input type="text" class="form-control" id="reg-username" required>
+              </div>
+              <div class="form-group">
+                <label for="reg-password">Senha</label>
+                <input type="password" class="form-control" id="reg-password" required>
+              </div>
+              <button type="submit" class="btn btn-success btn-block">Criar Conta</button>
+            </form>
+            <hr>
+            <p class="text-center">Já possui conta? <br><a href="#" id="go-to-login">Fazer login</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.10.5/typeahead.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/leaflet.js"></script>
-    <script src="https://api.tiles.mapbox.com/mapbox.js/plugins/leaflet-locatecontrol/v0.43.0/L.Control.Locate.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.79.0/dist/L.Control.Locate.min.js"></script>
     
     <!-- Turf.js para processamento geográfico (Clipping) -->
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>

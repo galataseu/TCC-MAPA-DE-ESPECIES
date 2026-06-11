@@ -1,4 +1,4 @@
-html, body, #container {
+html, body, #main-layout {
   height: 100%;
   width: 100%;
   overflow: hidden;
@@ -7,17 +7,29 @@ html, body, #container {
   background-color: #2B2A33;
 }
 
+#main-layout.light-mode {
+  background-color: #f8f9fa;
+}
+
+#main-layout {
+  display: flex;
+}
+
 /* Navbar Lateral */
 #vertical-nav {
   width: 70px;
   height: 100%;
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 2000;
+  flex-shrink: 0;
   background-color: #1E7552;
   border-right: 1px solid #2B2A33;
   padding: 10px 0;
+  position: relative;
+  z-index: 2000;
+}
+
+#main-layout.light-mode #vertical-nav {
+  background-color: #287f5e;
+  border-right-color: #dee2e6;
 }
 
 #vertical-nav .navbar-header {
@@ -43,15 +55,22 @@ html, body, #container {
   color: #FFAA44;
 }
 
-/* Mapa */
+/* Mapa e Conteúdo */
+#container {
+  flex: 1;
+  position: relative;
+  height: 100%;
+}
+
 #map {
-  position: absolute;
-  left: 70px;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1;
+  width: 100%;
+  height: 100%;
   background-color: #131315;
+}
+
+/* Suavizar animações de zoom suave */
+.leaflet-zoom-animated {
+  will-change: transform;
 }
 
 /* Barra de Pesquisa Flutuante (Handle na Esquerda) */
@@ -69,10 +88,14 @@ html, body, #container {
   display: flex;
   align-items: center;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  /* Removido overflow: hidden para permitir que a lista de resultados apareça */
 }
 
-/* Corrigir a direção do conteúdo interno para não ficar invertido */
+#main-layout.light-mode #floating-search {
+  background-color: #ffffff;
+  border-color: #287f5e;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
 #floating-search > * {
   direction: ltr;
 }
@@ -86,6 +109,10 @@ html, body, #container {
   flex-shrink: 0;
 }
 
+#main-layout.light-mode #floating-search .search-icon-container {
+  color: #1E7552;
+}
+
 #floating-search .form-control {
   height: 45px;
   background-color: transparent;
@@ -96,6 +123,10 @@ html, body, #container {
   flex: 1;
   box-shadow: none !important;
   white-space: nowrap;
+}
+
+#main-layout.light-mode #floating-search .form-control {
+  color: #333;
 }
 
 .twitter-typeahead {
@@ -113,9 +144,18 @@ html, body, #container {
   direction: ltr;
 }
 
+#main-layout.light-mode .tt-dropdown-menu {
+  background-color: #ffffff;
+  color: #333;
+}
+
 .tt-suggestion {
   padding: 10px 15px;
   border-bottom: 1px solid #3b3a43;
+}
+
+#main-layout.light-mode .tt-suggestion {
+  border-bottom-color: #eee;
 }
 
 .tt-suggestion.tt-cursor {
@@ -126,6 +166,11 @@ html, body, #container {
   background-color: #2B2A33;
   color: #eee;
   border: 1px solid #1E7552;
+}
+
+#main-layout.light-mode .modal-content {
+  background-color: #ffffff;
+  color: #333;
 }
 
 .modal-header {
@@ -160,12 +205,25 @@ html, body, #container {
   font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
 }
 
+#main-layout.light-mode #map-legend {
+  background-color: rgba(255, 255, 255, 0.95);
+  color: #333;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
 /* Modo Escuro para Controles do Leaflet */
 .leaflet-control-zoom a, 
 .leaflet-control-locate a {
   background-color: #2B2A33 !important;
   color: #FFAA44 !important;
   border-color: #1E7552 !important;
+}
+
+#main-layout.light-mode .leaflet-control-zoom a, 
+#main-layout.light-mode .leaflet-control-locate a {
+  background-color: #ffffff !important;
+  color: #1E7552 !important;
+  border-color: #dee2e6 !important;
 }
 
 .leaflet-control-zoom a:hover, 
@@ -177,6 +235,11 @@ html, body, #container {
 .leaflet-bar {
   box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
   border: 1px solid #1E7552 !important;
+}
+
+#main-layout.light-mode .leaflet-bar {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+  border-color: #dee2e6 !important;
 }
 
 .leaflet-bar a:first-child {

@@ -1,0 +1,332 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model api_animal {
+  id                  BigInt               @id @default(autoincrement())
+  deleted_at          DateTime?            @db.Timestamptz(6)
+  nome_comum          String               @db.VarChar(100)
+  nome_cientifico     String               @unique @db.VarChar(150)
+  classe              String?              @db.VarChar(50)
+  familia             String?              @db.VarChar(70)
+  dieta               String?              @db.VarChar(50)
+  habitos             String?
+  obs                 String?
+  imagem              String?
+  created_at          DateTime             @db.Timestamptz(6)
+  updated_at          DateTime             @db.Timestamptz(6)
+  autor_cad_id        BigInt?
+  nivel_destruicao_id BigInt?
+  nivel_extincao_id   BigInt
+  altura              Float?
+  peso                Float?
+  microrregiao_id     BigInt?
+  api_user            api_user?            @relation(fields: [autor_cad_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animal_autor_cad_id_9ef37c4a_fk_api_user_id")
+  api_microrregiao    api_microrregiao?    @relation(fields: [microrregiao_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animal_microrregiao_id_9381e61d_fk_api_microrregiao_id")
+  api_niveldestruicao api_niveldestruicao? @relation(fields: [nivel_destruicao_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animal_nivel_destruicao_id_bd962333_fk_api_nivel")
+  api_nivelextincao   api_nivelextincao    @relation(fields: [nivel_extincao_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animal_nivel_extincao_id_cd92a08b_fk_api_nivelextincao_id")
+  api_animal_biomas   api_animal_biomas[]
+  api_marcador        api_marcador[]
+
+  @@index([nivel_extincao_id], map: "api_animal_nivel_extincao_id_cd92a08b")
+  @@index([nome_cientifico], map: "api_animal_nome_cientifico_2de1afcb_like")
+  @@index([autor_cad_id], map: "api_animal_criado_por_id_60e22694")
+  @@index([nivel_destruicao_id], map: "api_animal_nivel_destruicao_id_bd962333")
+  @@index([microrregiao_id], map: "api_animal_microrregiao_id_9381e61d")
+}
+
+model api_bioma {
+  id                BigInt              @id @default(autoincrement())
+  nome              String              @unique @db.VarChar(100)
+  caract            String?
+  nivel_destr       String?             @db.VarChar(100)
+  tipo              String?             @db.VarChar(100)
+  api_animal_biomas api_animal_biomas[]
+  api_bioma_estados api_bioma_estados[]
+
+  @@index([nome], map: "api_bioma_nome_0d6095b7_like")
+}
+
+model api_nivelextincao {
+  id         BigInt       @id @default(autoincrement())
+  sigla      String?      @db.VarChar(5)
+  nome       String       @unique(map: "api_nivelextincao_nome_31220dde_uniq") @db.VarChar(100)
+  descricao  String?
+  api_animal api_animal[]
+
+  @@index([nome], map: "api_nivelextincao_nome_31220dde_like")
+}
+
+model api_ong {
+  id         BigInt                  @id @default(autoincrement())
+  deleted_at DateTime?               @db.Timestamptz(6)
+  nome       String                  @db.VarChar(150)
+  descricao  String?
+  email      String?                 @db.VarChar(100)
+  telefone   String?                 @db.VarChar(20)
+  site       String?                 @db.VarChar(200)
+  location   Unsupported("geometry")
+  endereco   String?
+  created_at DateTime                @db.Timestamptz(6)
+  updated_at DateTime                @db.Timestamptz(6)
+
+  @@index([location], map: "api_ong_location_7582b4fd_id", type: Gist)
+}
+
+model api_regiao {
+  id         BigInt       @id @default(autoincrement())
+  nome       String       @unique(map: "api_regiao_nome_767174d3_uniq") @db.VarChar(100)
+  api_estado api_estado[]
+
+  @@index([nome], map: "api_regiao_nome_767174d3_like")
+}
+
+model api_user {
+  id                                                 BigInt                      @id @default(autoincrement())
+  password                                           String                      @db.VarChar(128)
+  last_login                                         DateTime?                   @db.Timestamptz(6)
+  is_superuser                                       Boolean
+  username                                           String                      @unique @db.VarChar(150)
+  first_name                                         String                      @db.VarChar(150)
+  last_name                                          String                      @db.VarChar(150)
+  email                                              String                      @db.VarChar(254)
+  is_staff                                           Boolean
+  is_active                                          Boolean
+  date_joined                                        DateTime                    @db.Timestamptz(6)
+  role                                               String                      @db.VarChar(20)
+  deleted_at                                         DateTime?                   @db.Timestamptz(6)
+  data_nasc                                          DateTime?                   @db.Date
+  denuncias                                          Int
+  api_animal                                         api_animal[]
+  api_interacao_api_interacao_autor_idToapi_user     api_interacao[]             @relation("api_interacao_autor_idToapi_user")
+  api_interacao_api_interacao_recebedor_idToapi_user api_interacao[]             @relation("api_interacao_recebedor_idToapi_user")
+  api_user_groups                                    api_user_groups[]
+  api_user_user_permissions                          api_user_user_permissions[]
+  django_admin_log                                   django_admin_log[]
+
+  @@index([username], map: "api_user_username_cf4e88d2_like")
+}
+
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model api_user_groups {
+  id         BigInt     @id @default(autoincrement())
+  user_id    BigInt
+  group_id   Int
+  auth_group auth_group @relation(fields: [group_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_user_groups_group_id_3af85785_fk_auth_group_id")
+  api_user   api_user   @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_user_groups_user_id_a5ff39fa_fk_api_user_id")
+
+  @@unique([user_id, group_id], map: "api_user_groups_user_id_group_id_9c7ddfb5_uniq")
+  @@index([group_id], map: "api_user_groups_group_id_3af85785")
+  @@index([user_id], map: "api_user_groups_user_id_a5ff39fa")
+}
+
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model api_user_user_permissions {
+  id              BigInt          @id @default(autoincrement())
+  user_id         BigInt
+  permission_id   Int
+  auth_permission auth_permission @relation(fields: [permission_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_user_user_permis_permission_id_305b7fea_fk_auth_perm")
+  api_user        api_user        @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_user_user_permissions_user_id_f3945d65_fk_api_user_id")
+
+  @@unique([user_id, permission_id], map: "api_user_user_permissions_user_id_permission_id_a06dd704_uniq")
+  @@index([permission_id], map: "api_user_user_permissions_permission_id_305b7fea")
+  @@index([user_id], map: "api_user_user_permissions_user_id_f3945d65")
+}
+
+model api_zonapreservacao {
+  id         BigInt                  @id @default(autoincrement())
+  deleted_at DateTime?               @db.Timestamptz(6)
+  nome       String                  @db.VarChar(150)
+  descricao  String?
+  categoria  String?                 @db.VarChar(100)
+  area       Unsupported("geometry")
+  created_at DateTime                @db.Timestamptz(6)
+  updated_at DateTime                @db.Timestamptz(6)
+
+  @@index([area], map: "api_zonapreservacao_area_de95f3be_id", type: Gist)
+}
+
+model auth_group {
+  id                     Int                      @id @default(autoincrement())
+  name                   String                   @unique @db.VarChar(150)
+  api_user_groups        api_user_groups[]
+  auth_group_permissions auth_group_permissions[]
+
+  @@index([name], map: "auth_group_name_a6ea08ec_like")
+}
+
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model auth_group_permissions {
+  id              BigInt          @id @default(autoincrement())
+  group_id        Int
+  permission_id   Int
+  auth_permission auth_permission @relation(fields: [permission_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_group_permissio_permission_id_84c5c92e_fk_auth_perm")
+  auth_group      auth_group      @relation(fields: [group_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_group_permissions_group_id_b120cbf9_fk_auth_group_id")
+
+  @@unique([group_id, permission_id], map: "auth_group_permissions_group_id_permission_id_0cd325b0_uniq")
+  @@index([group_id], map: "auth_group_permissions_group_id_b120cbf9")
+  @@index([permission_id], map: "auth_group_permissions_permission_id_84c5c92e")
+}
+
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model auth_permission {
+  id                        Int                         @id @default(autoincrement())
+  name                      String                      @db.VarChar(255)
+  content_type_id           Int
+  codename                  String                      @db.VarChar(100)
+  api_user_user_permissions api_user_user_permissions[]
+  auth_group_permissions    auth_group_permissions[]
+  django_content_type       django_content_type         @relation(fields: [content_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "auth_permission_content_type_id_2f476e4b_fk_django_co")
+
+  @@unique([content_type_id, codename], map: "auth_permission_content_type_id_codename_01ab375a_uniq")
+  @@index([content_type_id], map: "auth_permission_content_type_id_2f476e4b")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model django_admin_log {
+  id                  Int                  @id @default(autoincrement())
+  action_time         DateTime             @db.Timestamptz(6)
+  object_id           String?
+  object_repr         String               @db.VarChar(200)
+  action_flag         Int                  @db.SmallInt
+  change_message      String
+  content_type_id     Int?
+  user_id             BigInt
+  django_content_type django_content_type? @relation(fields: [content_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "django_admin_log_content_type_id_c4bce8eb_fk_django_co")
+  api_user            api_user             @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "django_admin_log_user_id_c564eba6_fk_api_user_id")
+
+  @@index([content_type_id], map: "django_admin_log_content_type_id_c4bce8eb")
+  @@index([user_id], map: "django_admin_log_user_id_c564eba6")
+}
+
+model django_content_type {
+  id               Int                @id @default(autoincrement())
+  app_label        String             @db.VarChar(100)
+  model            String             @db.VarChar(100)
+  auth_permission  auth_permission[]
+  django_admin_log django_admin_log[]
+
+  @@unique([app_label, model], map: "django_content_type_app_label_model_76bd3d3b_uniq")
+}
+
+model django_migrations {
+  id      BigInt   @id @default(autoincrement())
+  app     String   @db.VarChar(255)
+  name    String   @db.VarChar(255)
+  applied DateTime @db.Timestamptz(6)
+}
+
+model django_session {
+  session_key  String   @id @db.VarChar(40)
+  session_data String
+  expire_date  DateTime @db.Timestamptz(6)
+
+  @@index([expire_date], map: "django_session_expire_date_a5c62663")
+  @@index([session_key], map: "django_session_session_key_c0390e0f_like")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model spatial_ref_sys {
+  srid      Int     @id
+  auth_name String? @db.VarChar(256)
+  auth_srid Int?
+  srtext    String? @db.VarChar(2048)
+  proj4text String? @db.VarChar(2048)
+}
+
+model api_niveldestruicao {
+  id         BigInt       @id @default(autoincrement())
+  nome       String       @unique @db.VarChar(100)
+  descricao  String?
+  cor_alerta String       @db.VarChar(7)
+  api_animal api_animal[]
+
+  @@index([nome], map: "api_niveldestruicao_nome_d03b5b09_like")
+}
+
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model api_animal_biomas {
+  id         BigInt     @id @default(autoincrement())
+  animal_id  BigInt
+  bioma_id   BigInt
+  api_animal api_animal @relation(fields: [animal_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animal_biomas_animal_id_bc96b8f6_fk_api_animal_id")
+  api_bioma  api_bioma  @relation(fields: [bioma_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animal_biomas_bioma_id_8f49162c_fk_api_bioma_id")
+
+  @@unique([animal_id, bioma_id], map: "api_animal_biomas_animal_id_bioma_id_d8b7ec0e_uniq")
+  @@index([animal_id], map: "api_animal_biomas_animal_id_bc96b8f6")
+  @@index([bioma_id], map: "api_animal_biomas_bioma_id_8f49162c")
+}
+
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model api_bioma_estados {
+  id         BigInt     @id @default(autoincrement())
+  bioma_id   BigInt
+  estado_id  BigInt
+  api_bioma  api_bioma  @relation(fields: [bioma_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_bioma_estados_bioma_id_19ec907a_fk_api_bioma_id")
+  api_estado api_estado @relation(fields: [estado_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_bioma_estados_estado_id_62a82e1b_fk_api_estado_id")
+
+  @@unique([bioma_id, estado_id], map: "api_bioma_estados_bioma_id_estado_id_54f91621_uniq")
+  @@index([bioma_id], map: "api_bioma_estados_bioma_id_19ec907a")
+  @@index([estado_id], map: "api_bioma_estados_estado_id_62a82e1b")
+}
+
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model api_estado {
+  id                BigInt              @id @default(autoincrement())
+  nome              String              @db.VarChar(50)
+  sigla             String              @unique @db.VarChar(2)
+  regiao_id         BigInt?
+  api_bioma_estados api_bioma_estados[]
+  api_regiao        api_regiao?         @relation(fields: [regiao_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_estado_regiao_id_cea44c07_fk_api_regiao_id")
+  api_microrregiao  api_microrregiao[]
+
+  @@index([regiao_id], map: "api_estado_regiao_id_cea44c07")
+  @@index([sigla], map: "api_estado_sigla_c4ec2fe6_like")
+}
+
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model api_interacao {
+  id                                            BigInt    @id @default(autoincrement())
+  tipo                                          String    @db.VarChar(50)
+  data                                          DateTime  @db.Date
+  hora                                          DateTime  @db.Time(6)
+  autor_id                                      BigInt
+  recebedor_id                                  BigInt?
+  api_user_api_interacao_autor_idToapi_user     api_user  @relation("api_interacao_autor_idToapi_user", fields: [autor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_interacao_autor_id_a8bdd6b9_fk_api_user_id")
+  api_user_api_interacao_recebedor_idToapi_user api_user? @relation("api_interacao_recebedor_idToapi_user", fields: [recebedor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_interacao_recebedor_id_35e679a7_fk_api_user_id")
+
+  @@index([autor_id], map: "api_interacao_autor_id_a8bdd6b9")
+  @@index([recebedor_id], map: "api_interacao_recebedor_id_35e679a7")
+}
+
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model api_marcador {
+  id         BigInt                  @id @default(autoincrement())
+  location   Unsupported("geometry")
+  icone      String?
+  created_at DateTime                @db.Timestamptz(6)
+  animal_id  BigInt
+  api_animal api_animal              @relation(fields: [animal_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_marcador_animal_id_da3463ec_fk_api_animal_id")
+
+  @@index([animal_id], map: "api_marcador_animal_id_da3463ec")
+  @@index([location], map: "api_marcador_location_fb82ded9_id", type: Gist)
+}
+
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model api_microrregiao {
+  id         BigInt       @id @default(autoincrement())
+  nome       String       @db.VarChar(100)
+  estado_id  BigInt
+  api_animal api_animal[]
+  api_estado api_estado   @relation(fields: [estado_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_microrregiao_estado_id_c7224df3_fk_api_estado_id")
+
+  @@unique([nome, estado_id], map: "api_microrregiao_nome_estado_id_930f23a7_uniq")
+  @@index([estado_id], map: "api_microrregiao_estado_id_c7224df3")
+}

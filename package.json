@@ -4,7 +4,13 @@
   "private": true,
   "scripts": {
     "start": "node ./bin/www",
-    "dev": "nodemon ./bin/www"
+    "dev": "nodemon ./bin/www",
+    "django:run": ".\\backend\\venv\\Scripts\\python backend/manage.py runserver 8000",
+    "django:seed": ".\\backend\\venv\\Scripts\\python backend/manage.py seed_db",
+    "django:migrate": ".\\backend\\venv\\Scripts\\python backend/manage.py migrate",
+    "prisma:studio": "npx prisma studio",
+    "prisma:pull": "npx prisma db pull",
+    "prisma:generate": "npx prisma generate"
   },
   "dependencies": {
     "bootstrap": "^5.3.8",
