@@ -24,44 +24,65 @@
     <div id="main-layout">
       <!-- Navbar Lateral -->
       <nav id="vertical-nav">
-        <div class="navbar-header">
-          <a class="navbar-brand" href="#"><i class="fa-solid fa-earth-americas"></i></a>
+        <div class="nav-section-top">
+          <div class="nav-logo">
+            <img src="assets/img/logo.png" alt="Logo">
+          </div>
+          <ul class="nav">
+            <li>
+              <a href="#" id="about-btn">
+                <i class="fa-solid fa-circle-question"></i>
+                <span class="nav-label">Sobre</span>
+              </a>
+            </li>
+          </ul>
         </div>
-        <ul class="nav">
-          <li>
-            <a href="#" id="about-btn" title="Sobre">
-              <i class="fa-solid fa-circle-question"></i>
-            </a>
-          </li>
-          <li>
-          <a href="#" id="theme-toggle" title="Alternar Modo Claro/Escuro">
-            <i class="fa-solid fa-moon"></i>
-          </a>
-        </li>
-        <li class="dropdown">
-            <a id="toolsDrop" href="#" role="button" class="dropdown-toggle" data-toggle="dropdown" title="Opções">
-              <i class="fa-solid fa-sliders"></i>
-            </a>
-            <ul class="dropdown-menu">
-              <li>
-                <a href="#" id="legend-btn">
-                  <i class="fa-solid fa-map"></i>&nbsp;&nbsp;Legenda
-                </a>
-              </li>
-              <li>
-                <a href="#" id="config-btn">
-                  <i class="fa-solid fa-gear"></i>&nbsp;&nbsp;Configurações
-                </a>
-              </li>
-              <li class="divider"></li>
-              <li>
-                <a href="#" id="login-btn">
-                  <i class="fa-solid fa-user-gear"></i>&nbsp;&nbsp;Acesso
-                </a>
-              </li>
-            </ul>
-          </li>
-        </ul>
+
+        <div class="nav-section-middle">
+          <ul class="nav">
+            <li>
+              <a href="#" id="theme-toggle">
+                <i class="fa-solid fa-moon"></i>
+                <span class="nav-label">Tema</span>
+              </a>
+            </li>
+            <li class="dropdown">
+              <a id="toolsDrop" href="#" role="button" class="dropdown-toggle" data-toggle="dropdown">
+                <i class="fa-solid fa-sliders"></i>
+                <span class="nav-label">Opções</span>
+              </a>
+              <ul class="dropdown-menu">
+                <li>
+                  <a href="#" id="legend-btn">
+                    <i class="fa-solid fa-map"></i>&nbsp;&nbsp;Legenda
+                  </a>
+                </li>
+                <li>
+                  <a href="#" id="config-btn">
+                    <i class="fa-solid fa-gear"></i>&nbsp;&nbsp;Configurações
+                  </a>
+                </li>
+                <li class="divider"></li>
+                <li>
+                  <a href="#" id="login-btn">
+                    <i class="fa-solid fa-user-gear"></i>&nbsp;&nbsp;Acesso
+                  </a>
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+
+        <div class="nav-section-bottom">
+          <ul class="nav">
+            <li>
+              <a href="animais.html">
+                <i class="fa-solid fa-paw"></i>
+                <span class="nav-label">Espécies</span>
+              </a>
+            </li>
+          </ul>
+        </div>
       </nav>
 
       <main id="container">

@@ -22,9 +22,12 @@ html, body, #main-layout {
   flex-shrink: 0;
   background-color: #1E7552;
   border-right: 1px solid #2B2A33;
-  padding: 10px 0;
+  padding: 15px 0;
   position: relative;
   z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 #main-layout.light-mode #vertical-nav {
@@ -32,27 +35,123 @@ html, body, #main-layout {
   border-right-color: #dee2e6;
 }
 
-#vertical-nav .navbar-header {
-  padding: 15px 5px;
-  text-align: center;
+#vertical-nav .nav-section-top,
+#vertical-nav .nav-section-middle,
+#vertical-nav .nav-section-bottom {
+  width: 100%;
 }
 
-#vertical-nav .navbar-brand {
-  font-size: 24px;
-  color: #FFAA44;
-  display: block;
+#vertical-nav .nav-section-middle {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+#vertical-nav .nav-logo {
+  text-align: center;
+  padding: 0 5px 15px 5px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+#vertical-nav .nav-logo img {
+  width: 45px;
+  height: auto;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+#vertical-nav ul.nav {
+  width: 100%;
+}
+
+#vertical-nav .nav > li {
+  position: relative;
 }
 
 #vertical-nav .nav > li > a {
   color: rgba(255, 255, 255, 0.8);
-  padding: 25px 0;
+  padding: 22px 0;
   text-align: center;
-  font-size: 24px;
+  font-size: 22px;
+  display: block;
+  transition: all 0.2s ease;
 }
 
 #vertical-nav .nav > li > a:hover {
   background-color: rgba(0, 0, 0, 0.1);
   color: #FFAA44;
+}
+
+/* Hover Label (Pílula Amarela que se expande POR TRÁS do ícone) */
+.nav-label {
+  position: absolute;
+  left: 5px; /* Começa alinhado ao ícone */
+  top: 50%;
+  transform: translateY(-50%) scaleX(0);
+  height: 48px; /* Aumentado para ser mais visível */
+  background-color: #FFAA44;
+  color: #2B2A33;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 20px 0 60px; /* Aumentado padding para acomodar ícone maior */
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 12px; /* Fonte levemente maior */
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0;
+  visibility: hidden;
+  transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), opacity 0.2s ease;
+  transform-origin: left;
+  z-index: 1; /* Fica atrás do ícone (ícone será z-index 2) */
+  pointer-events: none;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  border-radius: 30px; /* Mais arredondado */
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+#vertical-nav .nav > li:hover .nav-label {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) scaleX(1);
+}
+
+#vertical-nav .nav > li > a {
+  color: rgba(255, 255, 255, 0.8);
+  padding: 15px 0;
+  text-align: center;
+  font-size: 24px; /* Ícone levemente maior */
+  display: block;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 5;
+}
+
+/* Garante que o ícone mude de cor para escuro ao passar o mouse, para contrastar com o amarelo */
+#vertical-nav .nav > li:hover > a {
+  color: #2B2A33 !important;
+  background-color: transparent;
+}
+
+#vertical-nav .nav > li:hover > a i {
+  position: relative;
+  z-index: 10;
+}
+
+#vertical-nav .nav > li {
+  position: relative;
+  margin: 12px 0;
+  padding: 0 10px;
+}
+
+/* Ajuste para Dropdowns na Navbar Lateral */
+#vertical-nav .dropdown-menu {
+  left: 70px;
+  top: 0;
+  margin-top: 0;
+  border-radius: 0 4px 4px 4px;
 }
 
 /* Mapa e Conteúdo */
