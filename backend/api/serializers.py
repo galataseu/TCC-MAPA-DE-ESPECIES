@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, NivelExtincao, NivelDestruicao, Bioma, Estado, Regiao, Animal, Ong, ZonaPreservacao
+from .models import User, NivelExtincao, NivelDestruicao, Bioma, Estado, Regiao, Animal, AnimalImagem, Ong, ZonaPreservacao
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -35,6 +35,11 @@ class RegiaoSerializer(serializers.ModelSerializer):
         model = Regiao
         fields = '__all__'
 
+class AnimalImagemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnimalImagem
+        fields = ('id', 'imagem', 'legenda', 'ordem')
+
 class AnimalSerializer(serializers.ModelSerializer):
     nivel_extincao = NivelExtincaoSerializer(read_only=True)
     nivel_extincao_id = serializers.PrimaryKeyRelatedField(
@@ -55,6 +60,8 @@ class AnimalSerializer(serializers.ModelSerializer):
     regiao_id = serializers.PrimaryKeyRelatedField(
         queryset=Regiao.objects.all(), source='regiao', write_only=True
     )
+    
+    imagens = AnimalImagemSerializer(many=True, read_only=True)
 
     class Meta:
         model = Animal

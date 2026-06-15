@@ -1,0 +1,88 @@
+//- Modais
+#aboutModal.modal.fade(tabindex="-1", role="dialog")
+  .modal-dialog
+    .modal-content
+      .modal-header
+        h4.modal-title Mata Atlântica no Sul
+        button.btn-close.btn-close-white(type="button", data-bs-dismiss="modal", aria-label="Close")
+      .modal-body
+        p Este mapa mostra a área da Mata Atlântica restrita aos estados do Paraná, Santa Catarina e Rio Grande do Sul.
+      .modal-footer
+        button.btn.btn-primary(type="button", data-bs-dismiss="modal") Entendido
+
+#configModal.modal.fade(tabindex="-1", role="dialog")
+  .modal-dialog
+    .modal-content
+      .modal-header
+        h4.modal-title Configurações de Exibição
+        button.btn-close.btn-close-white(type="button", data-bs-dismiss="modal", aria-label="Close")
+      .modal-body
+        .form-check
+          input#toggle-textures.form-check-input(type="checkbox", checked)
+          label.form-check-label(for="toggle-textures") Habilitar texturas dos biomas (ícones)
+      .modal-footer
+        button.btn.btn-primary(type="button", data-bs-dismiss="modal") Fechar
+
+#legendModal.modal.fade(tabindex="-1", role="dialog")
+  .modal-dialog
+    .modal-content
+      .modal-header
+        h4.modal-title Legenda
+        button.btn-close.btn-close-white(type="button", data-bs-dismiss="modal", aria-label="Close")
+      .modal-body
+        p
+          i.fa-solid.fa-square(style="color: #1E7552;")
+          |  Paraná (Roxo)
+        p
+          i.fa-solid.fa-square(style="color: #FF0000;")
+          |  Santa Catarina (Vermelho)
+        p
+          i.fa-solid.fa-square(style="color: #FFFF00;")
+          |  Rio Grande do Sul (Amarelo)
+        p
+          i.fa-solid.fa-square(style="color: #2ECC71; opacity: 0.6;")
+          |  Mata Atlântica (Corte Regional)
+      .modal-footer
+        button.btn.btn-primary(type="button", data-bs-dismiss="modal") Fechar
+
+#loginModal.modal.fade(tabindex="-1", role="dialog")
+  .modal-dialog.modal-sm
+    .modal-content
+      .modal-header
+        h4.modal-title Acesso ao Sistema
+        button.btn-close.btn-close-white(type="button", data-bs-dismiss="modal", aria-label="Close")
+      .modal-body
+        form#login-form
+          .mb-3
+            label.form-label(for="login-username") Usuário
+            input#login-username.form-control(type="text", required)
+          .mb-3
+            label.form-label(for="login-password") Senha
+            input#login-password.form-control(type="password", required)
+          button.btn.btn-primary.w-100(type="submit") Entrar
+        hr
+        p.text-center
+          | Não tem uma conta? 
+          br
+          a#go-to-register(href="#") Cadastre-se aqui
+
+#registerModal.modal.fade(tabindex="-1", role="dialog")
+  .modal-dialog.modal-sm
+    .modal-content
+      .modal-header
+        h4.modal-title Cadastro
+        button.btn-close.btn-close-white(type="button", data-bs-dismiss="modal", aria-label="Close")
+      .modal-body
+        form#register-form
+          .mb-3
+            label.form-label(for="reg-username") Usuário
+            input#reg-username.form-control(type="text", required)
+          .mb-3
+            label.form-label(for="reg-password") Senha
+            input#reg-password.form-control(type="password", required)
+          button.btn.btn-success.w-100(type="submit") Criar Conta
+        hr
+        p.text-center
+          | Já possui conta? 
+          br
+          a#go-to-login(href="#") Fazer login

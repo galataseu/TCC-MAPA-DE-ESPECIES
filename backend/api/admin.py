@@ -1,9 +1,15 @@
 from django.contrib.gis import admin
+from django.db import models
+from django.forms import CheckboxSelectMultiple
 from .models import (
     User, NivelExtincao, NivelDestruicao, Bioma, Estado, 
     Regiao, Microrregiao, Animal, Marcador, Interacao, 
-    Ong, ZonaPreservacao
+    Ong, ZonaPreservacao, AnimalImagem
 )
+
+class AnimalImagemInline(admin.TabularInline):
+    model = AnimalImagem
+    extra = 1
 
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
@@ -40,6 +46,18 @@ class AnimalAdmin(admin.ModelAdmin):
     list_display = ('nome_comum', 'nome_cientifico', 'nivel_extincao', 'microrregiao')
     list_filter = ('nivel_extincao', 'nivel_destruicao', 'microrregiao')
     search_fields = ('nome_comum', 'nome_cientifico')
+    inlines = [AnimalImagemInline]
+    actions = ['delete_animal_quickly']
+    
+    # Adicionando seleção visual para Biomas
+    formfield_overrides = {
+        models.ManyToManyField: {'widget': CheckboxSelectMultiple},
+    }
+
+    @admin.action(description='Deletar animais selecionados rapidamente')
+    def delete_animal_quickly(self, request, queryset):
+        queryset.delete()
+        self.message_user(request, "Animais selecionados foram deletados com sucesso.")
 
 @admin.register(Marcador)
 class MarcadorAdmin(admin.GISModelAdmin):

@@ -106,7 +106,7 @@ class Bioma(models.Model):
 
 class Animal(SoftDeleteModel):
     nome_comum = models.CharField(max_length=100)
-    nome_cientifico = models.CharField(max_length=150, unique=True)
+    nome_cientifico = models.CharField(max_length=150)
     familia = models.CharField(max_length=70, null=True, blank=True)
     classe = models.CharField(max_length=50, null=True, blank=True)
     altura = models.FloatField(null=True, blank=True)
@@ -114,7 +114,6 @@ class Animal(SoftDeleteModel):
     dieta = models.CharField(max_length=50, null=True, blank=True)
     habitos = models.TextField(null=True, blank=True)
     obs = models.TextField(null=True, blank=True)
-    imagem = models.TextField(null=True, blank=True)
     
     nivel_extincao = models.ForeignKey(NivelExtincao, on_delete=models.PROTECT, related_name='animais')
     nivel_destruicao = models.ForeignKey(NivelDestruicao, on_delete=models.SET_NULL, null=True, blank=True, related_name='animais')
@@ -129,9 +128,30 @@ class Animal(SoftDeleteModel):
     class Meta:
         verbose_name = "Animal"
         verbose_name_plural = "Animais"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['nome_cientifico'],
+                condition=models.Q(deleted_at__isnull=True),
+                name='unique_active_scientific_name'
+            )
+        ]
 
     def __str__(self):
         return self.nome_comum
+
+class AnimalImagem(models.Model):
+    animal = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='imagens')
+    imagem = models.ImageField(upload_to='animais/')
+    legenda = models.CharField(max_length=100, null=True, blank=True)
+    ordem = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['ordem']
+        verbose_name = "Imagem do Animal"
+        verbose_name_plural = "Imagens dos Animais"
+
+    def __str__(self):
+        return f"Imagem de {self.animal.nome_comum} ({self.id})"
 
 class Marcador(models.Model):
     """Tabela localizac... / Marcadores na modelagem"""

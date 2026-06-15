@@ -1,13 +1,16 @@
 $(document).ready(function() {
     let animals = [];
+    let slideshowIntervals = [];
 
     // Carregar animais da API
     fetch('/api/animals')
         .then(response => response.json())
         .then(data => {
+            console.log('Dados recebidos da API Node.js:', data);
             animals = data;
-            renderAnimals(animals);
+            renderAnimals(animals, true); // Pass true for initial load
             $('#loader').hide();
+            startAllSlideshows();
         })
         .catch(error => {
             console.error('Erro ao buscar animais:', error);
@@ -15,37 +18,108 @@ $(document).ready(function() {
         });
 
     // Função para renderizar os cards
-    function renderAnimals(filteredAnimals) {
+    function renderAnimals(filteredAnimals, isInitialLoad = false) {
+        console.log('Renderizando animais:', filteredAnimals);
         const listContainer = $('#animalList');
-        // Remover itens anteriores mantendo o loader oculto
         listContainer.find('.animal-item').remove();
+        stopAllSlideshows();
 
         if (filteredAnimals.length === 0) {
-            $('#noResults').removeClass('d-none');
+            console.log('Nenhum animal para renderizar.');
+            if (!isInitialLoad) $('#noResults').removeClass('d-none');
+            else $('#noResults').addClass('d-none');
         } else {
             $('#noResults').addClass('d-none');
             filteredAnimals.forEach(animal => {
-                const statusSigla = animal.api_nivelextincao.sigla ? animal.api_nivelextincao.sigla.toLowerCase() : 'dd';
+                const statusSigla = animal.api_nivelextincao && animal.api_nivelextincao.sigla ? animal.api_nivelextincao.sigla.toLowerCase() : 'dd';
                 const statusClass = `bg-${statusSigla}`;
+                
+                // Mapeamento de Cores
+                const colorMap = {
+                    'ex': '#000000', 'ew': '#831F34', 'cr': '#FF4068', 'en': '#ff6426',
+                    'vu': '#FFA63A', 'nt': '#217757', 'lc': '#1a5fb4', 'dd': '#555555'
+                };
+                const borderColor = colorMap[statusSigla] || '#1a5fb4';
+
+                // Mapeamento de Texturas para Classes CSS
+                const classMap = {
+                    'mammalia': 'mamiferos',
+                    'aves': 'aves',
+                    'amphibia': 'anfibios',
+                    'reptilia': 'repteis',
+                    'chondrichthyes': 'peixes-cartilaginosos',
+                    'osteichthyes': 'peixes-osseos'
+                };
+                const className = animal.classe ? animal.classe.toLowerCase() : '';
+                const textureClass = classMap[className] ? `texture-${classMap[className]}` : 'texture-default';
+
+                let allImgs = [];
+                const sourceImgs = animal.imagens || animal.api_animalimagem || [];
+                sourceImgs.forEach(img => {
+                    if (img.imagem) allImgs.push(img.imagem);
+                });
+                if (allImgs.length === 0) allImgs.push('https://images.unsplash.com/photo-1474511320723-9a56873867b5?q=80&w=800&auto=format&fit=crop');
+
                 const card = `
-                    <div class="col-12 col-sm-6 col-lg-4 col-xl-3 animal-item">
-                        <div class="animal-card">
-                            <span class="status-badge ${statusClass}">${animal.api_nivelextincao.nome}</span>
+                    <div class="col-12 col-sm-6 col-lg-4 col-xl-3 animal-item" data-id="${animal.id}">
+                        <div class="animal-card ${textureClass}" style="border-color: ${borderColor};">
+                            <span class="status-badge ${statusClass}">${animal.api_nivelextincao ? animal.api_nivelextincao.nome : 'N/A'}</span>
                             <div class="animal-img-container">
-                                <img src="${animal.imagem || 'https://images.unsplash.com/photo-1474511320723-9a56873867b5?q=80&w=800&auto=format&fit=crop'}" class="animal-img" alt="${animal.nome_comum}">
+                                <img src="${allImgs[0]}" class="animal-img fade-image" alt="${animal.nome_comum}" data-imgs='${JSON.stringify(allImgs)}' data-current="0">
                             </div>
                             <div class="card-body">
                                 <h5 class="card-title text-truncate" title="${animal.nome_comum}">${animal.nome_comum}</h5>
-                                <span class="scientific-name text-truncate d-block" title="${animal.nome_cientifico}">${animal.nome_cientifico}</span>
-                                <p class="animal-info">${animal.habitos || 'Informações sobre hábitos e habitat desta espécie ainda estão sendo catalogadas em nosso sistema.'}</p>
-                                <button class="btn-view" onclick="showDetails('${animal.id}')">Ver Detalhes</button>
+                                <span class="scientific-name text-truncate d-block" style="color: ${borderColor}; filter: brightness(1.4);" title="${animal.nome_cientifico}">${animal.nome_cientifico}</span>
+                                <p class="animal-info">${animal.habitos || 'Informações sobre hábitos e habitat desta espécie ainda estão sendo catalogadas.'}</p>
+                                <button class="btn-view" style="background-color: ${borderColor};" onclick="showDetails('${animal.id}')">Ver Detalhes</button>
                             </div>
                         </div>
                     </div>
                 `;
                 listContainer.append(card);
             });
+            startAllSlideshows();
         }
+    }
+
+    function startAllSlideshows() {
+        $('.animal-img').each(function() {
+            const imgElement = $(this);
+            const imgsRaw = imgElement.attr('data-imgs');
+            if(!imgsRaw) return;
+            
+            const imgs = JSON.parse(imgsRaw);
+            if (imgs.length > 1) {
+                const interval = setInterval(() => {
+                    let current = parseInt(imgElement.attr('data-current'));
+                    let next = (current + 1) % imgs.length;
+                    
+                    const nextImg = $('<img>').attr('src', imgs[next]).css({
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        'object-fit': 'cover',
+                        opacity: 0
+                    });
+                    
+                    imgElement.parent().append(nextImg);
+                    nextImg.animate({ opacity: 1 }, 1500, function() {
+                        imgElement.attr('src', imgs[next]);
+                        imgElement.css('opacity', 1);
+                        nextImg.remove();
+                        imgElement.attr('data-current', next);
+                    });
+                }, 6000); // 6s interval
+                slideshowIntervals.push(interval);
+            }
+        });
+    }
+
+    function stopAllSlideshows() {
+        slideshowIntervals.forEach(clearInterval);
+        slideshowIntervals = [];
     }
 
     // Pesquisa em tempo real
@@ -59,69 +133,124 @@ $(document).ready(function() {
         renderAnimals(filtered);
     });
 
-    // Função global para mostrar detalhes
     window.showDetails = function(id) {
         const animal = animals.find(a => a.id == id);
+        console.log("Debug - Animal selecionado:", animal); // Log para depuração
         if (!animal) return;
 
-        $('#modalAnimalName').text(animal.nome_comum);
+        const statusSigla = animal.api_nivelextincao && animal.api_nivelextincao.sigla ? animal.api_nivelextincao.sigla.toLowerCase() : 'dd';
         
+        // Mapeamento de Cores e Ícones
+        const statusConfig = {
+            'ex': { color: '#000000', icon: 'fa-skull' },
+            'ew': { color: '#831F34', icon: 'fa-skull-crossbones' },
+            'cr': { color: '#FF4068', icon: 'fa-exclamation-triangle' },
+            'en': { color: '#ff6426', icon: 'fa-triangle-exclamation' },
+            'vu': { color: '#FFA63A', icon: 'fa-shield-halved' },
+            'nt': { color: '#217757', icon: 'fa-circle-check' },
+            'lc': { color: '#1a5fb4', icon: 'fa-circle-check' },
+            'dd': { color: '#555555', icon: 'fa-question-circle' }
+        };
+        const config = statusConfig[statusSigla] || { color: '#1a5fb4', icon: 'fa-info-circle' };
+        const statusColor = config.color;
+        const statusIcon = config.icon;
+
+        let allImgs = [];
+        if (animal.imagens) {
+            animal.imagens.forEach(img => allImgs.push(img.imagem));
+        }
+        if (allImgs.length === 0) allImgs.push('https://images.unsplash.com/photo-1474511320723-9a56873867b5?q=80&w=800&auto=format&fit=crop');
+
+        // Extração robusta de Biomas
+        let biomas = 'Não informado';
+        if (animal.biomas && Array.isArray(animal.biomas) && animal.biomas.length > 0) {
+            biomas = animal.biomas.map(b => b.nome).join(', ');
+        } else if (animal.api_animal_biomas && Array.isArray(animal.api_animal_biomas) && animal.api_animal_biomas.length > 0) {
+            biomas = animal.api_animal_biomas.map(b => b.api_bioma.nome).join(', ');
+        }
+
+        $('#modalAnimalName').text(animal.nome_comum).css('color', statusColor);
+
         let html = `
             <div class="container-fluid p-0">
                 <div class="row g-0">
                     <div class="col-md-5">
-                        <img src="${animal.imagem || 'https://images.unsplash.com/photo-1474511320723-9a56873867b5?q=80&w=800&auto=format&fit=crop'}" class="img-fluid w-100 h-100" style="object-fit: cover; min-height: 400px;">
+                        <div class="modal-img-container" style="overflow: hidden; position: relative; border-left: 5px solid ${statusColor};">
+                            <img id="modalCarouselImg" src="${allImgs[0]}" class="modal-img-pan" data-current="0" data-imgs='${JSON.stringify(allImgs)}'>
+                            ${allImgs.length > 1 ? `
+                                <button class="carousel-btn carousel-prev" onclick="changeModalImg(-1)" style="position: absolute; top: 50%; left: 10px; z-index: 10; border: none; background: ${statusColor}; color: white; border-radius: 50%; width: 40px; height: 40px; cursor: pointer;">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <button class="carousel-btn carousel-next" onclick="changeModalImg(1)" style="position: absolute; top: 50%; right: 10px; z-index: 10; border: none; background: ${statusColor}; color: white; border-radius: 50%; width: 40px; height: 40px; cursor: pointer;">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            ` : ''}
+                        </div>
                     </div>
-                    <div class="col-md-7 p-4">
+                    <div class="col-md-7 p-4" style="max-height: 400px; overflow-y: auto;">
                         <div class="mb-4">
-                            <span class="badge bg-success px-3 py-2 rounded-pill me-2">${animal.classe || 'Classe não informada'}</span>
+                            <span class="badge px-3 py-2 rounded-pill me-2" style="background-color: ${statusColor};">${animal.classe || 'Classe não informada'}</span>
                             <span class="badge bg-secondary px-3 py-2 rounded-pill">${animal.familia || 'Família não informada'}</span>
                         </div>
-                        
                         <div class="row mb-4">
                             <div class="col-6">
-                                <h6 class="text-success fw-bold text-uppercase small mb-1">Nome Científico</h6>
+                                <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Nome Científico</h6>
                                 <p class="fst-italic text-white">${animal.nome_cientifico}</p>
                             </div>
                             <div class="col-6">
-                                <h6 class="text-success fw-bold text-uppercase small mb-1">Status</h6>
-                                <p class="text-white">${animal.api_nivelextincao.nome} (${animal.api_nivelextincao.sigla})</p>
+                                <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Status de Extinção</h6>
+                                <p class="text-white"><i class="fas ${statusIcon} me-2" style="color: ${statusColor};"></i>${animal.api_nivelextincao.nome}</p>
                             </div>
                         </div>
-                        
-                        <h6 class="text-success fw-bold text-uppercase small mb-1">Dieta</h6>
-                        <p class="text-white-50 mb-4">${animal.dieta || 'Informação não disponível'}</p>
-                        
-                        <h6 class="text-success fw-bold text-uppercase small mb-1">Hábitos</h6>
-                        <p class="text-white-50 mb-4">${animal.habitos || 'Informação não disponível'}</p>
-
-                        <div class="bg-dark p-3 rounded-3">
+                        <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Biomas</h6>
+                        <p class="text-white mb-4">${biomas}</p>
+                        <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Dieta</h6>
+                        <p class="text-white-50 mb-4">${animal.dieta || 'Não informada'}</p>
+                        <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Hábitos</h6>
+                        <p class="text-white-50 mb-4">${animal.habitos || 'Não informada'}</p>
+                        <div class="bg-dark p-3 rounded-3" style="border-top: 2px solid ${statusColor};">
                             <div class="row text-center">
                                 <div class="col-6 border-end border-secondary">
-                                    <h6 class="text-success fw-bold text-uppercase small mb-1">Altura Máx.</h6>
+                                    <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Altura Máx.</h6>
                                     <p class="text-white mb-0">${animal.altura ? animal.altura + ' m' : 'N/A'}</p>
                                 </div>
                                 <div class="col-6">
-                                    <h6 class="text-success fw-bold text-uppercase small mb-1">Peso Médio</h6>
+                                    <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Peso Médio</h6>
                                     <p class="text-white mb-0">${animal.peso ? animal.peso + ' kg' : 'N/A'}</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                ${animal.obs ? `
-                <div class="row p-4 border-top border-secondary">
-                    <div class="col-12">
-                        <h6 class="text-success fw-bold text-uppercase small mb-2">Observações Adicionais</h6>
-                        <p class="text-white-50 mb-0">${animal.obs}</p>
-                    </div>
-                </div>
-                ` : ''}
             </div>
         `;
         
         $('#modalBody').html(html);
-        const modal = new bootstrap.Modal(document.getElementById('animalModal'));
-        modal.show();
+        new bootstrap.Modal(document.getElementById('animalModal')).show();
+    };
+
+    window.changeModalImg = function(step) {
+        const imgTag = $('#modalCarouselImg');
+        const imgs = JSON.parse(imgTag.attr('data-imgs'));
+        let current = parseInt(imgTag.attr('data-current'));
+        let next = (current + step + imgs.length) % imgs.length;
+        
+        const nextImg = $('<img>').attr('src', imgs[next]).css({
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            'object-fit': 'cover',
+            opacity: 0
+        });
+        
+        imgTag.parent().append(nextImg);
+        nextImg.animate({ opacity: 1 }, 800, function() {
+            imgTag.attr('src', imgs[next]);
+            imgTag.css('opacity', 1);
+            nextImg.remove();
+            imgTag.attr('data-current', next);
+        });
     };
 });

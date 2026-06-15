@@ -1,0 +1,50 @@
+extends layouts/main
+
+block content
+  #brand-header
+    img.brand-logo(src="/assets/img/logotipo.png", alt="Logotipo")
+  main#container
+    #map
+    
+    //- Barra de Pesquisa Flutuante
+    #floating-search
+      .search-icon-container
+        i#searchicon.fa-solid.fa-magnifying-glass
+      input#searchbox.form-control(type="text", placeholder="Pesquisar cidade...")
+
+    //- Painel de Controles Flutuantes (Nova localização conforme pedido)
+    #map-controls
+      button#theme-toggle.map-control-btn(title="Alternar Modo Claro/Escuro")
+        i.fa-solid.fa-moon
+      button#config-btn.map-control-btn(title="Configurações de Exibição")
+        i.fa-solid.fa-gear
+      button#legend-btn.map-control-btn(title="Ver Legenda")
+        i.fa-solid.fa-map
+
+    #map-legend.leaflet-bar
+      .legend-header Legenda
+      .legend-items
+        .legend-item
+          span.legend-color(style="background-color: #287f5e;")
+          img.legend-icon(src="/svg/mataatlantica.png")
+          span Mata Atlântica
+        .legend-item
+          span.legend-color(style="background-color: #3b7ba5;")
+          img.legend-icon(src="/svg/pampa.png")
+          span Pampa
+        .legend-item
+          span.legend-color(style="background-color: #E6C140;")
+          img.legend-icon(src="/svg/cerrado.png")
+          span Cerrado
+      hr.legend-divider
+      .legend-toggle
+        label
+          input#toggle-textures-legend(type="checkbox", checked)
+          |  Exibir Texturas
+
+  //- Modais
+  include partials/modals
+
+block scripts
+  script(src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.10.5/typeahead.bundle.min.js")
+  script(src="/assets/js/app.js")

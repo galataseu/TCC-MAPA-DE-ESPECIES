@@ -14,13 +14,12 @@ model api_animal {
   id                  BigInt               @id @default(autoincrement())
   deleted_at          DateTime?            @db.Timestamptz(6)
   nome_comum          String               @db.VarChar(100)
-  nome_cientifico     String               @unique @db.VarChar(150)
+  nome_cientifico     String               @db.VarChar(150)
   classe              String?              @db.VarChar(50)
   familia             String?              @db.VarChar(70)
   dieta               String?              @db.VarChar(50)
   habitos             String?
   obs                 String?
-  imagem              String?
   created_at          DateTime             @db.Timestamptz(6)
   updated_at          DateTime             @db.Timestamptz(6)
   autor_cad_id        BigInt?
@@ -34,10 +33,10 @@ model api_animal {
   api_niveldestruicao api_niveldestruicao? @relation(fields: [nivel_destruicao_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animal_nivel_destruicao_id_bd962333_fk_api_nivel")
   api_nivelextincao   api_nivelextincao    @relation(fields: [nivel_extincao_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animal_nivel_extincao_id_cd92a08b_fk_api_nivelextincao_id")
   api_animal_biomas   api_animal_biomas[]
+  api_animalimagem    api_animalimagem[]
   api_marcador        api_marcador[]
 
   @@index([nivel_extincao_id], map: "api_animal_nivel_extincao_id_cd92a08b")
-  @@index([nome_cientifico], map: "api_animal_nome_cientifico_2de1afcb_like")
   @@index([autor_cad_id], map: "api_animal_criado_por_id_60e22694")
   @@index([nivel_destruicao_id], map: "api_animal_nivel_destruicao_id_bd962333")
   @@index([microrregiao_id], map: "api_animal_microrregiao_id_9381e61d")
@@ -331,4 +330,17 @@ model api_microrregiao {
 
   @@unique([nome, estado_id], map: "api_microrregiao_nome_estado_id_930f23a7_uniq")
   @@index([estado_id], map: "api_microrregiao_estado_id_c7224df3")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model api_animalimagem {
+  id         BigInt     @id @default(autoincrement())
+  imagem     String     @db.VarChar(100)
+  legenda    String?    @db.VarChar(100)
+  ordem      Int
+  animal_id  BigInt
+  api_animal api_animal @relation(fields: [animal_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animalimagem_animal_id_77468e03_fk_api_animal_id")
+
+  @@index([animal_id], map: "api_animalimagem_animal_id_77468e03")
 }
