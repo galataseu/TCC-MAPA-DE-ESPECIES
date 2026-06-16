@@ -13,7 +13,6 @@ router.get('/', async (req, res) => {
       include: {
         api_nivelextincao: true,
         api_niveldestruicao: true,
-        api_animalimagem: true,
         api_animal_biomas: {
           include: {
             api_bioma: true
@@ -25,25 +24,19 @@ router.get('/', async (req, res) => {
       }
     });
 
-    console.log('--- RAW DATA FROM PRISMA ---');
-    console.log(JSON.stringify(animals, null, 2));
-    console.log('----------------------------');
-    
     // Serializar BigInt e formatar URLs das imagens
     const serializedAnimals = animals.map(animal => {
       const obj = JSON.parse(JSON.stringify(animal, (key, value) =>
         typeof value === 'bigint' ? value.toString() : value
       ));
       
-      // Mapear todas as imagens para o campo 'imagens' esperado pelo front
-      obj.imagens = (obj.api_animalimagem || []).map(img => {
-        return {
-          id: img.id,
-          imagem: img.imagem.startsWith('http') ? img.imagem : `http://localhost:8000/media/${img.imagem}`,
-          legenda: img.legenda,
-          ordem: img.ordem
-        };
-      });
+      // Mapear a imagem única para o campo 'imagens' esperado pelo front
+      obj.imagens = animal.imagem ? [{
+        id: 1,
+        imagem: animal.imagem.startsWith('http') ? animal.imagem : `http://localhost:8000/media/${animal.imagem}`,
+        legenda: animal.nome_comum,
+        ordem: 1
+      }] : [];
 
       // Mapear biomas
       obj.biomas = (obj.api_animal_biomas || []).map(b => b.api_bioma);

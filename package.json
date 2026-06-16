@@ -5,13 +5,18 @@
   "scripts": {
     "start": "node ./bin/www",
     "dev": "nodemon ./bin/www",
-    "django:run": ".\\backend\\venv\\Scripts\\python backend/manage.py runserver 8000",
-    "django:seed": ".\\backend\\venv\\Scripts\\python backend/manage.py seed_db",
-    "django:migrate": ".\\backend\\venv\\Scripts\\python backend/manage.py migrate",
+    "django:setup": "cd backend && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt",
+    "django:run": "./backend/venv/bin/python backend/manage.py runserver 8000",
+    "django:seed": "./backend/venv/bin/python backend/manage.py seed_db",
+    "django:migrate": "./backend/venv/bin/python backend/manage.py migrate",
+    "full": "concurrently \"npm run dev\" \"npm run django:run\"",
     "prisma:studio": "npx prisma studio",
     "prisma:pull": "npx prisma db pull",
     "prisma:generate": "npx prisma generate",
     "prisma:seed": "npx prisma db seed"
+  },
+  "overrides": {
+    "shell-quote": "1.8.4"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -20,12 +25,14 @@
     "bootstrap": "^5.3.8",
     "cookie-parser": "^1.4.4",
     "debug": "^2.6.9",
+    "dotenv": "^17.4.2",
     "express": "^4.22.2",
     "morgan": "^1.11.0",
     "pug": "^3.0.3"
   },
   "devDependencies": {
     "@prisma/client": "^6.19.3",
+    "concurrently": "^9.1.2",
     "nodemon": "^3.1.14",
     "prisma": "^6.19.3"
   }

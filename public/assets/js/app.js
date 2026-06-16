@@ -12,6 +12,7 @@ var prGeometry = null;
 var forestGeometry = null;
 var stateLayers = [];
 var currentTheme = "dark";
+var markersData = []; // Store markers data for details
 
 /* Camadas de Base */
 var darkFull = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
@@ -385,12 +386,86 @@ $(document).ready(function () {
     $("#login-btn").attr("title", "Você está logado como " + userData.username);
   }
 
-  /* 6. Cadastro de Animais */
+  /* 6. Marcadores e Cadastro de Animais */
+  var markersLayer = L.geoJson(null, {
+    pointToLayer: function (feature, latlng) {
+      const classe = feature.properties.classe ? feature.properties.classe.toLowerCase() : '';
+      const iconMap = {
+        'mammalia': 'icons/mamiferos.png',
+        'aves': 'icons/aves.png',
+        'reptilia': 'icons/repteis.png',
+        'amphibia': 'icons/anfibios.png',
+        'chondrichthyes': 'icons/peixes cartilaginosos.png',
+        'osteichthyes': 'icons/peixes osseos.png'
+      };
+      
+      const iconUrl = iconMap[classe] || 'icons/logotipo.png';
+      
+      const statusSigla = feature.properties.nivel_sigla ? feature.properties.nivel_sigla.toLowerCase() : 'dd';
+      const colorMap = {
+        'ex': '#000000', 'ew': '#831F34', 'cr': '#FF4068', 'en': '#ff6426',
+        'vu': '#FFA63A', 'nt': '#217757', 'lc': '#1a5fb4', 'dd': '#555555'
+      };
+      const borderColor = colorMap[statusSigla] || '#1a5fb4';
+
+      return L.marker(latlng, {
+        icon: L.divIcon({
+          className: 'custom-animal-marker',
+          html: `<div class="marker-pin" style="border-color: ${borderColor};"><img src="${iconUrl}"></div>`,
+          iconSize: [40, 40],
+          iconAnchor: [20, 40]
+        })
+      });
+    },
+    onEachFeature: function (feature, layer) {
+      const props = feature.properties;
+      const statusSigla = props.nivel_sigla ? props.nivel_sigla.toLowerCase() : 'dd';
+      const colorMap = {
+        'ex': '#000000', 'ew': '#831F34', 'cr': '#FF4068', 'en': '#ff6426',
+        'vu': '#FFA63A', 'nt': '#217757', 'lc': '#1a5fb4', 'dd': '#555555'
+      };
+      const statusColor = colorMap[statusSigla] || '#1a5fb4';
+
+      let popupContent = `
+        <div class="animal-popup">
+          <h4 style="color: ${statusColor}">${props.nome_comum}</h4>
+          <p><i>${props.nome_cientifico}</i></p>
+          <p><b>Status:</b> ${props.nivel_extincao}</p>
+          ${props.imagens && props.imagens.length > 0 ? `<img src="${props.imagens[0].imagem}" style="width:100%; border-radius:8px; margin-top:10px">` : ''}
+          <button class="btn btn-sm btn-primary w-100 mt-2" onclick="showDetails('${props.animal_id}')">Ver Mais</button>
+        </div>
+      `;
+      layer.bindPopup(popupContent);
+    }
+  }).addTo(map);
+
+  function loadMarkers() {
+    $.getJSON("/api/markers", function (data) {
+      markersLayer.clearLayers();
+      markersLayer.addData(data);
+      markersData = data.features.map(f => f.properties);
+    });
+  }
+
   map.on('contextmenu', function(e) {
-    $("#animal-lat").val(e.latlng.lat);
-    $("#animal-lng").val(e.latlng.lng);
-    $("#animalCreateModal").modal("show");
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      const userData = JSON.parse(userStr);
+      if (userData.role === 'admin' || userData.is_superuser) {
+        L.popup()
+          .setLatLng(e.latlng)
+          .setContent(`<button class="btn btn-primary btn-sm" onclick="openAnimalCreateModal(${e.latlng.lat}, ${e.latlng.lng})">Adicionar Animal Aqui</button>`)
+          .openOn(map);
+      }
+    }
   });
+
+  window.openAnimalCreateModal = function(lat, lng) {
+    $("#animal-lat").val(lat);
+    $("#animal-lng").val(lng);
+    $("#animalCreateModal").modal("show");
+    map.closePopup();
+  };
 
   $('#animalCreateModal').on('shown.bs.modal', function () {
     // Fetch data for selects - Using correct V1 API prefix
@@ -455,12 +530,125 @@ $(document).ready(function () {
       if (data.success) {
         alert("Animal cadastrado com sucesso!");
         $("#animalCreateModal").modal("hide");
+        loadMarkers(); // Refresh markers on map
       } else {
         alert("Erro ao cadastrar: " + JSON.stringify(data));
       }
     });
   });
 
+  window.showDetails = function(id) {
+    const animal = markersData.find(a => a.animal_id == id);
+    if (!animal) return;
+
+    const statusSigla = animal.nivel_sigla ? animal.nivel_sigla.toLowerCase() : 'dd';
+    
+    // Mapeamento de Cores e Ícones
+    const statusConfig = {
+      'ex': { color: '#000000', icon: 'fa-skull' },
+      'ew': { color: '#831F34', icon: 'fa-skull-crossbones' },
+      'cr': { color: '#FF4068', icon: 'fa-exclamation-triangle' },
+      'en': { color: '#ff6426', icon: 'fa-triangle-exclamation' },
+      'vu': { color: '#FFA63A', icon: 'fa-shield-halved' },
+      'nt': { color: '#217757', icon: 'fa-circle-check' },
+      'lc': { color: '#1a5fb4', icon: 'fa-circle-check' },
+      'dd': { color: '#555555', icon: 'fa-question-circle' }
+    };
+    const config = statusConfig[statusSigla] || { color: '#1a5fb4', icon: 'fa-info-circle' };
+    const statusColor = config.color;
+    const statusIcon = config.icon;
+
+    let allImgs = (animal.imagens || []).map(img => img.imagem);
+    if (allImgs.length === 0) allImgs.push('https://images.unsplash.com/photo-1474511320723-9a56873867b5?q=80&w=800&auto=format&fit=crop');
+
+    let biomas = (animal.biomas || []).map(b => b.nome).join(', ') || 'Não informado';
+
+    $('#modalAnimalName').text(animal.nome_comum).css('color', statusColor);
+
+    let html = `
+      <div class="container-fluid p-0">
+        <div class="row g-0">
+          <div class="col-md-5">
+            <div class="modal-img-container" style="overflow: hidden; position: relative; border-left: 5px solid ${statusColor};">
+              <img id="modalCarouselImg" src="${allImgs[0]}" class="modal-img-pan" data-current="0" data-imgs='${JSON.stringify(allImgs)}'>
+              ${allImgs.length > 1 ? `
+                <button class="carousel-btn carousel-prev" onclick="changeModalImg(-1)" style="position: absolute; top: 50%; left: 10px; z-index: 10; border: none; background: ${statusColor}; color: white; border-radius: 50%; width: 40px; height: 40px; cursor: pointer;">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <button class="carousel-btn carousel-next" onclick="changeModalImg(1)" style="position: absolute; top: 50%; right: 10px; z-index: 10; border: none; background: ${statusColor}; color: white; border-radius: 50%; width: 40px; height: 40px; cursor: pointer;">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              ` : ''}
+            </div>
+          </div>
+          <div class="col-md-7 p-4" style="max-height: 400px; overflow-y: auto;">
+            <div class="mb-4">
+              <span class="badge px-3 py-2 rounded-pill me-2" style="background-color: ${statusColor};">${animal.classe || 'Classe não informada'}</span>
+              <span class="badge bg-secondary px-3 py-2 rounded-pill">${animal.familia || 'Família não informada'}</span>
+            </div>
+            <div class="row mb-4">
+              <div class="col-6">
+                <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Nome Científico</h6>
+                <p class="fst-italic text-white">${animal.nome_cientifico}</p>
+              </div>
+              <div class="col-6">
+                <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Status de Extinção</h6>
+                <p class="text-white"><i class="fas ${statusIcon} me-2" style="color: ${statusColor};"></i>${animal.nivel_extincao}</p>
+              </div>
+            </div>
+            <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Biomas</h6>
+            <p class="text-white mb-4">${biomas}</p>
+            <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Dieta</h6>
+            <p class="text-white-50 mb-4">${animal.dieta || 'Não informada'}</p>
+            <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Hábitos</h6>
+            <p class="text-white-50 mb-4">${animal.habitos || 'Não informada'}</p>
+            <div class="bg-dark p-3 rounded-3" style="border-top: 2px solid ${statusColor};">
+              <div class="row text-center">
+                <div class="col-6 border-end border-secondary">
+                  <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Altura Máx.</h6>
+                  <p class="text-white mb-0">${animal.altura ? animal.altura + ' m' : 'N/A'}</p>
+                </div>
+                <div class="col-6">
+                  <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Peso Médio</h6>
+                  <p class="text-white mb-0">${animal.peso ? animal.peso + ' kg' : 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    $('#modalBody').html(html);
+    new bootstrap.Modal(document.getElementById('animalModal')).show();
+  };
+
+  window.changeModalImg = function(step) {
+    const imgTag = $('#modalCarouselImg');
+    const imgs = JSON.parse(imgTag.attr('data-imgs'));
+    let current = parseInt(imgTag.attr('data-current'));
+    let next = (current + step + imgs.length) % imgs.length;
+    
+    const nextImg = $('<img>').attr('src', imgs[next]).css({
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      'object-fit': 'cover',
+      opacity: 0
+    });
+    
+    imgTag.parent().append(nextImg);
+    nextImg.animate({ opacity: 1 }, 800, function() {
+      imgTag.attr('src', imgs[next]);
+      imgTag.css('opacity', 1);
+      nextImg.remove();
+      imgTag.attr('data-current', next);
+    });
+  };
+
   loadData();
+  loadMarkers();
   setTimeout(function() { map.invalidateSize(); }, 400);
 });

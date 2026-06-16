@@ -347,3 +347,46 @@ html, body, #main-layout {
   align-items: center;
   gap: 8px;
 }
+
+/* Marcadores Personalizados */
+.custom-animal-marker {
+  background: none;
+  border: none;
+}
+
+.marker-pin {
+  width: 40px;
+  height: 40px;
+  border-radius: 50% 50% 50% 0;
+  background: #2B2A33;
+  position: absolute;
+  transform: rotate(-45deg);
+  left: 50%;
+  top: 50%;
+  margin: -20px 0 0 -20px;
+  border: 3px solid #1a5fb4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+.marker-pin img {
+  width: 24px;
+  height: 24px;
+  transform: rotate(45deg);
+  object-fit: contain;
+}
+
+.animal-popup {
+  color: #333;
+}
+
+.animal-popup h4 {
+  margin-top: 0;
+  font-weight: bold;
+}
+
+.animal-popup p {
+  margin-bottom: 5px;
+}

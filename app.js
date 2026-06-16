@@ -1,3 +1,4 @@
+require('dotenv').config({ override: true });
 var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
@@ -6,6 +7,7 @@ var logger = require('morgan');
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 var animalsRouter = require('./routes/animals');
+var markersRouter = require('./routes/markers');
 
 var app = express();
 
@@ -23,6 +25,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/api/animals', animalsRouter);
+app.use('/api/markers', markersRouter);
 
 // Rota para a página de animais
 app.get('/animais', function(req, res) {
