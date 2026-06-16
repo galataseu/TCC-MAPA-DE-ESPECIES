@@ -1,7 +1,8 @@
 from rest_framework import viewsets, permissions, status, pagination
 from rest_framework.response import Response
 from django.db.models import Q
-from .models import User, NivelExtincao, NivelDestruicao, Bioma, Estado, Regiao, Animal, Ong, ZonaPreservacao
+from django.contrib.gis.geos import Point
+from .models import User, NivelExtincao, NivelDestruicao, Bioma, Estado, Regiao, Animal, Ong, ZonaPreservacao, Marcador
 from .serializers import (
     UserSerializer, NivelExtincaoSerializer, NivelDestruicaoSerializer, BiomaSerializer, 
     EstadoSerializer, RegiaoSerializer, AnimalSerializer, OngSerializer, ZonaPreservacaoSerializer
@@ -60,6 +61,32 @@ class BaseViewSet(viewsets.ModelViewSet):
 class AnimalViewSet(BaseViewSet):
     queryset = Animal.objects.all().order_by('-created_at')
     serializer_class = AnimalSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        # request.data is already MultiValueDict in DRF for multipart
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Safely get the user
+        user = request.user if request.user.is_authenticated else None
+        animal = serializer.save(autor_cad=user)
+        
+        # Handle Image
+        imagem = request.FILES.get('animal_imagem')
+        if imagem:
+            AnimalImagem.objects.create(animal=animal, imagem=imagem)
+            
+        # Handle Coordinates
+        lat = request.data.get('lat')
+        lng = request.data.get('lng')
+        if lat and lng:
+            Marcador.objects.create(
+                animal=animal,
+                location=Point(float(lng), float(lat), srid=4326)
+            )
+            
+        return Response({'success': True, 'data': serializer.data, 'message': 'Animal, imagem e marcador criados com sucesso'}, status=status.HTTP_201_CREATED)
 
     def get_queryset(self):
         queryset = super().get_queryset()

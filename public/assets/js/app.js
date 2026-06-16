@@ -385,6 +385,82 @@ $(document).ready(function () {
     $("#login-btn").attr("title", "Você está logado como " + userData.username);
   }
 
+  /* 6. Cadastro de Animais */
+  map.on('contextmenu', function(e) {
+    $("#animal-lat").val(e.latlng.lat);
+    $("#animal-lng").val(e.latlng.lng);
+    $("#animalCreateModal").modal("show");
+  });
+
+  $('#animalCreateModal').on('shown.bs.modal', function () {
+    // Fetch data for selects - Using correct V1 API prefix
+    fetch(`${API_URL}/v1/niveis-extincao/`)
+      .then(res => res.text()) // Get as text first
+      .then(text => {
+        console.log("Raw Niveis Extincao response:", text);
+        return JSON.parse(text);
+      })
+      .then(response => {
+        const select = $("#nivel_extincao_id");
+        select.empty();
+        const items = response.data || response;
+        items.forEach(item => select.append(`<option value="${item.id}">${item.nome}</option>`));
+      })
+      .catch(err => console.error("Error fetching niveis:", err));
+    
+    fetch(`${API_URL}/v1/biomas/`)
+      .then(res => res.text()) // Get as text first
+      .then(text => {
+        console.log("Raw Biomas response:", text);
+        return JSON.parse(text);
+      })
+      .then(response => {
+        const select = $("#biomas_ids");
+        select.empty();
+        const items = response.data || response;
+        items.forEach(item => select.append(`<option value="${item.id}">${item.nome}</option>`));
+      })
+      .catch(err => console.error("Error fetching biomas:", err));
+
+    fetch(`${API_URL}/v1/regioes/`)
+      .then(res => res.text())
+      .then(text => {
+        console.log("Raw Regioes response:", text);
+        return JSON.parse(text);
+      })
+      .then(response => {
+        const select = $("#regiao_id");
+        select.empty();
+        const items = response.data || response;
+        items.forEach(item => select.append(`<option value="${item.id}">${item.nome}</option>`));
+      })
+      .catch(err => console.error("Error fetching regioes:", err));
+  });
+
+  $("#animal-create-form").submit(function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    
+    // Convert biomas_ids array to individual values for FormData
+    const biomas = Array.from(document.getElementById('biomas_ids').selectedOptions).map(option => option.value);
+    formData.delete('biomas_ids');
+    biomas.forEach(b => formData.append('biomas_ids', b));
+
+    fetch(`${API_URL}/v1/animais/`, {
+      method: "POST",
+      body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        alert("Animal cadastrado com sucesso!");
+        $("#animalCreateModal").modal("hide");
+      } else {
+        alert("Erro ao cadastrar: " + JSON.stringify(data));
+      }
+    });
+  });
+
   loadData();
   setTimeout(function() { map.invalidateSize(); }, 400);
 });

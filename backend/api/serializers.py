@@ -58,7 +58,7 @@ class AnimalSerializer(serializers.ModelSerializer):
     
     regiao = RegiaoSerializer(read_only=True)
     regiao_id = serializers.PrimaryKeyRelatedField(
-        queryset=Regiao.objects.all(), source='regiao', write_only=True
+        queryset=Regiao.objects.all(), source='regiao', write_only=True, required=False, allow_null=True
     )
     
     imagens = AnimalImagemSerializer(many=True, read_only=True)

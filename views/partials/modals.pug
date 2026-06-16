@@ -1,14 +1,42 @@
-//- Modais
-#aboutModal.modal.fade(tabindex="-1", role="dialog")
+#animalCreateModal.modal.fade(tabindex="-1", role="dialog")
   .modal-dialog
     .modal-content
       .modal-header
-        h4.modal-title Mata Atlântica no Sul
+        h4.modal-title Cadastrar Animal
         button.btn-close.btn-close-white(type="button", data-bs-dismiss="modal", aria-label="Close")
       .modal-body
-        p Este mapa mostra a área da Mata Atlântica restrita aos estados do Paraná, Santa Catarina e Rio Grande do Sul.
-      .modal-footer
-        button.btn.btn-primary(type="button", data-bs-dismiss="modal") Entendido
+        form#animal-create-form
+          input#animal-lat(type="hidden", name="lat")
+          input#animal-lng(type="hidden", name="lng")
+          .mb-3
+            label.form-label(for="nome_comum") Nome Comum
+            input#nome_comum.form-control(type="text", name="nome_comum", required)
+          .mb-3
+            label.form-label(for="nome_cientifico") Nome Científico
+            input#nome_cientifico.form-control(type="text", name="nome_cientifico", required)
+          .mb-3
+            label.form-label(for="classe") Classe
+            select#classe.form-control(name="classe", required)
+              option(value="Mammalia") Mammalia
+              option(value="Aves") Aves
+              option(value="Reptilia") Reptilia
+              option(value="Amphibia") Amphibia
+              option(value="Chondrichthyes") Chondrichthyes
+              option(value="Osteichthyes") Osteichthyes
+          .mb-3
+            label.form-label(for="nivel_extincao_id") Nível de Extinção
+            select#nivel_extincao_id.form-control(name="nivel_extincao_id", required)
+          .mb-3
+            label.form-label(for="biomas_ids") Biomas
+            select#biomas_ids.form-control(name="biomas_ids", multiple, required)
+          .mb-3
+            label.form-label(for="regiao_id") Região
+            select#regiao_id.form-control(name="regiao_id")
+              option(value="") Selecione uma região (opcional)
+          .mb-3
+            label.form-label(for="animal_imagem") Imagem
+            input#animal_imagem.form-control(type="file", name="animal_imagem", accept="image/*")
+          button.btn.btn-primary.w-100(type="submit") Cadastrar Animal
 
 #configModal.modal.fade(tabindex="-1", role="dialog")
   .modal-dialog
