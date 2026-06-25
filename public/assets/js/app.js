@@ -419,23 +419,9 @@ $(document).ready(function () {
     },
     onEachFeature: function (feature, layer) {
       const props = feature.properties;
-      const statusSigla = props.nivel_sigla ? props.nivel_sigla.toLowerCase() : 'dd';
-      const colorMap = {
-        'ex': '#000000', 'ew': '#831F34', 'cr': '#FF4068', 'en': '#ff6426',
-        'vu': '#FFA63A', 'nt': '#217757', 'lc': '#1a5fb4', 'dd': '#555555'
-      };
-      const statusColor = colorMap[statusSigla] || '#1a5fb4';
-
-      let popupContent = `
-        <div class="animal-popup">
-          <h4 style="color: ${statusColor}">${props.nome_comum}</h4>
-          <p><i>${props.nome_cientifico}</i></p>
-          <p><b>Status:</b> ${props.nivel_extincao}</p>
-          ${props.imagens && props.imagens.length > 0 ? `<img src="${props.imagens[0].imagem}" style="width:100%; border-radius:8px; margin-top:10px">` : ''}
-          <button class="btn btn-sm btn-primary w-100 mt-2" onclick="showDetails('${props.animal_id}')">Ver Mais</button>
-        </div>
-      `;
-      layer.bindPopup(popupContent);
+      layer.on('click', function() {
+        showDetails(props.animal_id);
+      });
     }
   }).addTo(map);
 
@@ -596,22 +582,51 @@ $(document).ready(function () {
                 <p class="text-white"><i class="fas ${statusIcon} me-2" style="color: ${statusColor};"></i>${animal.nivel_extincao}</p>
               </div>
             </div>
-            <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Biomas</h6>
-            <p class="text-white mb-4">${biomas}</p>
-            <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Dieta</h6>
-            <p class="text-white-50 mb-4">${animal.dieta || 'Não informada'}</p>
-            <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Hábitos</h6>
-            <p class="text-white-50 mb-4">${animal.habitos || 'Não informada'}</p>
-            <div class="bg-dark p-3 rounded-3" style="border-top: 2px solid ${statusColor};">
-              <div class="row text-center">
-                <div class="col-6 border-end border-secondary">
-                  <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Altura Máx.</h6>
-                  <p class="text-white mb-0">${animal.altura ? animal.altura + ' m' : 'N/A'}</p>
-                </div>
-                <div class="col-6">
-                  <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Peso Médio</h6>
-                  <p class="text-white mb-0">${animal.peso ? animal.peso + ' kg' : 'N/A'}</p>
-                </div>
+            <div class="bg-dark p-4 rounded-3 mt-4" style="border-top: 3px solid ${statusColor}; border-bottom: 3px solid ${statusColor};">
+              <h5 class="fst-italic text-white mb-3 text-center">${animal.nome_cientifico}</h5>
+              <hr style="border-color: ${statusColor}; opacity: 0.5;">
+              
+              <div class="row text-center mb-1 gy-3 text-white">
+                  <div class="col-6 col-md-3 d-flex flex-column align-items-center justify-content-center">
+                      <span class="mb-1 text-muted small"><i class="fas fa-utensils me-1"></i> Dieta</span>
+                      <span class="fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">${animal.dieta || 'N/A'}</span>
+                  </div>
+                  <div class="col-6 col-md-3 d-flex flex-column align-items-center justify-content-center border-start border-secondary">
+                      <span class="mb-1 text-muted small"><i class="fas fa-weight-hanging me-1"></i> Peso</span>
+                      <span class="fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">${animal.peso ? animal.peso + ' Kg' : '00 Kg'}</span>
+                  </div>
+                  <div class="col-6 col-md-3 d-flex flex-column align-items-center justify-content-center border-start border-secondary">
+                      <span class="mb-1 text-muted small"><i class="fas fa-arrows-alt-h me-1"></i> Comprimento</span>
+                      <span class="fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">${animal.comprimento ? animal.comprimento + ' Cm' : '00 Cm'}</span>
+                  </div>
+                  <div class="col-6 col-md-3 d-flex flex-column align-items-center justify-content-center border-start border-secondary">
+                      <span class="mb-1 text-muted small"><i class="fas fa-arrows-alt-v me-1"></i> Altura</span>
+                      <span class="fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">${animal.altura ? animal.altura + ' m' : '00 Cm'}</span>
+                  </div>
+              </div>
+              
+              <hr style="border-color: ${statusColor}; opacity: 0.5;">
+              
+              <div class="row text-center mb-1 gy-3 text-white">
+                  <div class="col-12 col-md-4 d-flex flex-column align-items-center justify-content-center">
+                      <h6 class="mb-1 text-muted small">Biomas</h6>
+                      <p class="mb-0 fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">${biomas}</p>
+                  </div>
+                  <div class="col-6 col-md-4 border-start border-secondary d-flex flex-column align-items-center justify-content-center">
+                      <h6 class="mb-1 text-muted small">Regiões</h6>
+                      <p class="mb-0 fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">Sul</p>
+                  </div>
+                  <div class="col-6 col-md-4 border-start border-secondary d-flex flex-column align-items-center justify-content-center">
+                      <h6 class="mb-1 text-muted small">Estados</h6>
+                      <p class="mb-0 fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">PR, SC, RS</p>
+                  </div>
+              </div>
+
+              <hr style="border-color: ${statusColor}; opacity: 0.5;">
+              
+              <div class="mt-3 text-white">
+                  <h6 class="fst-italic text-muted small mb-2 text-center">Descrição</h6>
+                  <p class="mb-0" style="font-size: 1rem; line-height: 1.6; text-align: justify; color: #ccc;">${animal.habitos || 'Descrição detalhada não disponível.'}</p>
               </div>
             </div>
           </div>
@@ -619,6 +634,29 @@ $(document).ready(function () {
       </div>
     `;
     
+    let modalEl = $('#animalModal');
+    if (modalEl.length === 0) {
+        $('body').append(`
+            <div class="modal fade" id="animalModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-xl modal-dialog-centered">
+                    <div class="modal-content border-0 shadow-lg" style="background-color: #2B2A33;">
+                        <div class="modal-header border-bottom border-secondary">
+                            <h5 class="modal-title fw-bold" id="modalAnimalName"></h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body p-0" id="modalBody"></div>
+                        <div class="modal-footer border-top border-secondary">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `);
+    } else {
+        modalEl.find('.modal-dialog').removeClass('modal-lg').addClass('modal-xl');
+    }
+
+    $('#modalAnimalName').text(animal.nome_comum).css('color', statusColor);
     $('#modalBody').html(html);
     new bootstrap.Modal(document.getElementById('animalModal')).show();
   };
