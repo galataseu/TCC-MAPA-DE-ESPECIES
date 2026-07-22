@@ -31,12 +31,17 @@ router.get('/', async (req, res) => {
       ));
       
       // Mapear a imagem única para o campo 'imagens' esperado pelo front
-      obj.imagens = animal.imagem ? [{
+      const imgUrl = animal.imagem 
+        ? (animal.imagem.startsWith('http') || animal.imagem.startsWith('/') ? animal.imagem : `/media/${animal.imagem}`) 
+        : null;
+
+      obj.imagens = imgUrl ? [{
         id: 1,
-        imagem: animal.imagem.startsWith('http') ? animal.imagem : `http://localhost:8000/media/${animal.imagem}`,
+        imagem: imgUrl,
         legenda: animal.nome_comum,
         ordem: 1
       }] : [];
+
 
       // Mapear biomas
       obj.biomas = (obj.api_animal_biomas || []).map(b => b.api_bioma);

@@ -56,8 +56,12 @@ $(document).ready(function() {
                 let allImgs = [];
                 const sourceImgs = animal.imagens || animal.api_animalimagem || [];
                 sourceImgs.forEach(img => {
-                    if (img.imagem) allImgs.push(img.imagem);
+                    if (typeof img === 'string') allImgs.push(img);
+                    else if (img && img.imagem) allImgs.push(img.imagem);
                 });
+                if (allImgs.length === 0 && animal.imagem) {
+                    allImgs.push(animal.imagem.startsWith('http') || animal.imagem.startsWith('/') ? animal.imagem : `/media/${animal.imagem}`);
+                }
                 if (allImgs.length === 0) allImgs.push('https://images.unsplash.com/photo-1474511320723-9a56873867b5?q=80&w=800&auto=format&fit=crop');
 
                 const card = `
@@ -156,8 +160,14 @@ $(document).ready(function() {
         const statusIcon = config.icon;
 
         let allImgs = [];
-        if (animal.imagens) {
-            animal.imagens.forEach(img => allImgs.push(img.imagem));
+        if (animal.imagens && Array.isArray(animal.imagens)) {
+            animal.imagens.forEach(img => {
+                if (typeof img === 'string') allImgs.push(img);
+                else if (img && img.imagem) allImgs.push(img.imagem);
+            });
+        }
+        if (allImgs.length === 0 && animal.imagem) {
+            allImgs.push(animal.imagem.startsWith('http') || animal.imagem.startsWith('/') ? animal.imagem : `/media/${animal.imagem}`);
         }
         if (allImgs.length === 0) allImgs.push('https://images.unsplash.com/photo-1474511320723-9a56873867b5?q=80&w=800&auto=format&fit=crop');
 
@@ -169,14 +179,19 @@ $(document).ready(function() {
             biomas = animal.api_animal_biomas.map(b => b.api_bioma.nome).join(', ');
         }
 
-        $('#modalAnimalName').text(animal.nome_comum).css('color', statusColor);
+        // Formatação de data/hora e autor
+        const dataCad = animal.created_at ? new Date(animal.created_at).toLocaleDateString('pt-BR') : '11/06/2026';
+        const horaCad = animal.created_at ? new Date(animal.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : '13:18';
+        const autorCad = animal.api_user ? (animal.api_user.username || 'Admin') : 'Admin';
+
+        $('#modalAnimalName').html(`${animal.nome_comum} <span class="badge bg-dark border text-muted fs-6 ms-2">ID #${animal.id}</span>`).css('color', statusColor);
 
         let html = `
             <div class="container-fluid p-0">
                 <div class="row g-0">
                     <div class="col-md-5">
-                        <div class="modal-img-container" style="overflow: hidden; position: relative; border-left: 5px solid ${statusColor};">
-                            <img id="modalCarouselImg" src="${allImgs[0]}" class="modal-img-pan" data-current="0" data-imgs='${JSON.stringify(allImgs)}'>
+                        <div class="modal-img-container" style="overflow: hidden; position: relative; border-left: 5px solid ${statusColor}; height: 100%; min-height: 480px;">
+                            <img id="modalCarouselImg" src="${allImgs[0]}" class="modal-img-pan" data-current="0" data-imgs='${JSON.stringify(allImgs)}' style="width: 100%; height: 100%; object-fit: cover;">
                             ${allImgs.length > 1 ? `
                                 <button class="carousel-btn carousel-prev" onclick="changeModalImg(-1)" style="position: absolute; top: 50%; left: 10px; z-index: 10; border: none; background: ${statusColor}; color: white; border-radius: 50%; width: 40px; height: 40px; cursor: pointer;">
                                     <i class="fas fa-chevron-left"></i>
@@ -187,41 +202,44 @@ $(document).ready(function() {
                             ` : ''}
                         </div>
                     </div>
-                    <div class="col-md-7 p-4" style="max-height: 400px; overflow-y: auto;">
-                        <div class="mb-4">
-                            <span class="badge px-3 py-2 rounded-pill me-2" style="background-color: ${statusColor};">${animal.classe || 'Classe não informada'}</span>
-                            <span class="badge bg-secondary px-3 py-2 rounded-pill">${animal.familia || 'Família não informada'}</span>
+                    <div class="col-md-7 p-4" style="max-height: 520px; overflow-y: auto;">
+                        <div class="mb-3 d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="badge px-3 py-2 rounded-pill me-2" style="background-color: ${statusColor};">${animal.classe || 'Classe não informada'}</span>
+                                <span class="badge bg-secondary px-3 py-2 rounded-pill">${animal.familia || 'Família não informada'}</span>
+                            </div>
+                            <span class="text-muted small"><i class="fas fa-user-shield me-1"></i> Autor: <strong>${autorCad}</strong></span>
                         </div>
-                        <div class="row mb-4">
+                        <div class="row mb-3">
                             <div class="col-6">
                                 <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Nome Científico</h6>
-                                <p class="fst-italic text-white">${animal.nome_cientifico}</p>
+                                <p class="fst-italic text-white mb-0">${animal.nome_cientifico}</p>
                             </div>
                             <div class="col-6">
                                 <h6 style="color: ${statusColor};" class="fw-bold text-uppercase small mb-1">Status de Extinção</h6>
-                                <p class="text-white"><i class="fas ${statusIcon} me-2" style="color: ${statusColor};"></i>${animal.api_nivelextincao.nome}</p>
+                                <p class="text-white mb-0"><i class="fas ${statusIcon} me-2" style="color: ${statusColor};"></i>${animal.api_nivelextincao ? animal.api_nivelextincao.nome : 'N/A'}</p>
                             </div>
                         </div>
-                        <div class="bg-dark p-4 rounded-3 mt-4" style="border-top: 3px solid ${statusColor}; border-bottom: 3px solid ${statusColor};">
+                        <div class="bg-dark p-4 rounded-3 mt-3" style="border-top: 3px solid ${statusColor}; border-bottom: 3px solid ${statusColor};">
                             <h5 class="fst-italic text-white mb-3 text-center">${animal.nome_cientifico}</h5>
                             <hr style="border-color: ${statusColor}; opacity: 0.5;">
                             
                             <div class="row text-center mb-1 gy-3 text-white">
                                 <div class="col-6 col-md-3 d-flex flex-column align-items-center justify-content-center">
                                     <span class="mb-1 text-muted small"><i class="fas fa-utensils me-1"></i> Dieta</span>
-                                    <span class="fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">${animal.dieta || 'N/A'}</span>
+                                    <span class="fw-bold" style="color: ${statusColor}; font-size: 1.05rem;">${animal.dieta || 'N/A'}</span>
                                 </div>
                                 <div class="col-6 col-md-3 d-flex flex-column align-items-center justify-content-center border-start border-secondary">
                                     <span class="mb-1 text-muted small"><i class="fas fa-weight-hanging me-1"></i> Peso</span>
-                                    <span class="fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">${animal.peso ? animal.peso + ' Kg' : '00 Kg'}</span>
+                                    <span class="fw-bold" style="color: ${statusColor}; font-size: 1.05rem;">${animal.peso ? animal.peso + ' Kg' : 'N/A'}</span>
                                 </div>
                                 <div class="col-6 col-md-3 d-flex flex-column align-items-center justify-content-center border-start border-secondary">
                                     <span class="mb-1 text-muted small"><i class="fas fa-arrows-alt-h me-1"></i> Comprimento</span>
-                                    <span class="fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">${animal.comprimento ? animal.comprimento + ' Cm' : '00 Cm'}</span>
+                                    <span class="fw-bold" style="color: ${statusColor}; font-size: 1.05rem;">${animal.comprimento ? animal.comprimento + ' Cm' : (animal.altura ? Math.round(animal.altura*100) + ' Cm' : 'N/A')}</span>
                                 </div>
                                 <div class="col-6 col-md-3 d-flex flex-column align-items-center justify-content-center border-start border-secondary">
                                     <span class="mb-1 text-muted small"><i class="fas fa-arrows-alt-v me-1"></i> Altura</span>
-                                    <span class="fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">${animal.altura ? animal.altura + ' m' : '00 Cm'}</span>
+                                    <span class="fw-bold" style="color: ${statusColor}; font-size: 1.05rem;">${animal.altura ? animal.altura + ' m' : 'N/A'}</span>
                                 </div>
                             </div>
                             
@@ -230,24 +248,32 @@ $(document).ready(function() {
                             <div class="row text-center mb-1 gy-3 text-white">
                                 <div class="col-12 col-md-4 d-flex flex-column align-items-center justify-content-center">
                                     <h6 class="mb-1 text-muted small">Biomas</h6>
-                                    <p class="mb-0 fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">${biomas}</p>
+                                    <p class="mb-0 fw-bold" style="color: ${statusColor}; font-size: 1rem;">${biomas}</p>
                                 </div>
                                 <div class="col-6 col-md-4 border-start border-secondary d-flex flex-column align-items-center justify-content-center">
                                     <h6 class="mb-1 text-muted small">Regiões</h6>
-                                    <p class="mb-0 fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">Sul</p>
+                                    <p class="mb-0 fw-bold" style="color: ${statusColor}; font-size: 1rem;">Sul</p>
                                 </div>
                                 <div class="col-6 col-md-4 border-start border-secondary d-flex flex-column align-items-center justify-content-center">
                                     <h6 class="mb-1 text-muted small">Estados</h6>
-                                    <p class="mb-0 fw-bold" style="color: ${statusColor}; font-size: 1.1rem;">PR, SC, RS</p>
+                                    <p class="mb-0 fw-bold" style="color: ${statusColor}; font-size: 1rem;">PR, SC, RS</p>
                                 </div>
                             </div>
 
                             <hr style="border-color: ${statusColor}; opacity: 0.5;">
                             
                             <div class="mt-3 text-white">
-                                <h6 class="fst-italic text-muted small mb-2 text-center">Descrição</h6>
-                                <p class="mb-0" style="font-size: 1rem; line-height: 1.6; text-align: justify; color: #ccc;">${animal.habitos || 'Descrição detalhada não disponível.'}</p>
+                                <h6 class="fw-bold text-uppercase small mb-2" style="color: ${statusColor};"><i class="fas fa-paw me-2"></i>Hábitos & Comportamento</h6>
+                                <p class="mb-3" style="font-size: 0.95rem; line-height: 1.6; text-align: justify; color: #ccc;">${animal.habitos || 'Informação sobre hábitos não disponível.'}</p>
+                                
+                                <h6 class="fw-bold text-uppercase small mb-2" style="color: ${statusColor};"><i class="fas fa-shield-alt me-2"></i>Ameaças & Observações de Conservação</h6>
+                                <p class="mb-0" style="font-size: 0.95rem; line-height: 1.6; text-align: justify; color: #ccc;">${animal.obs || 'Nenhuma observação cadastrada.'}</p>
                             </div>
+                        </div>
+
+                        <div class="mt-3 pt-2 d-flex justify-content-between align-items-center text-muted small border-top border-secondary">
+                            <span><i class="far fa-calendar-alt me-1"></i> Data Cad.: <strong>${dataCad}</strong></span>
+                            <span><i class="far fa-clock me-1"></i> Hora Cad.: <strong>${horaCad}</strong></span>
                         </div>
                     </div>
                 </div>

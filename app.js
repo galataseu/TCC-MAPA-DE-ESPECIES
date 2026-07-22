@@ -20,7 +20,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
-// app.use('/icons', express.static(path.join(__dirname, 'icons'))); // Removed as folder is in public
+app.use('/media', express.static(path.join(__dirname, 'backend', 'media')));
+app.use('/media', express.static(path.join(__dirname, 'public', 'media')));
+
 
 app.use('/', indexRouter);
 app.use('/users', usersRouter);

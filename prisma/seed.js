@@ -64,6 +64,64 @@ async function main() {
     },
   });
 
+  // 4. Animals Seeding / Update
+  const especies = [
+    {
+      nome_cientifico: 'Cyanocorax caeruleus',
+      dieta: 'Onívora',
+      habitos: 'Espécie diurna e social que vive em bandos na Mata Atlântica. É a principal responsável pela disseminação da Araucaria angustifolia ao enterrar os pinhões no solo para estocar alimento.',
+      peso: 0.20,
+      altura: 0.40,
+      imagem: 'animais/gralha_azul.png'
+    },
+    {
+      nome_cientifico: 'Melanophryniscus admirabilis',
+      dieta: 'Insectívora',
+      habitos: 'Espécie microendêmica de hábito diurno e semiaquático. Encontrada exclusivamente num trecho de 700 metros do Rio Forqueta (RS), vivendo sobre rochas vulcânicas em corredeiras e matas ciliares.',
+      peso: 0.01,
+      altura: 0.02,
+      imagem: 'animais/sapo_barriga_vermelha.png'
+    },
+    {
+      nome_cientifico: 'Amazona pretrei',
+      dieta: 'Frugívora',
+      habitos: 'Diurno e gregário, realiza migrações sazonais nos planaltos do Rio Grande do Sul e Santa Catarina acompanhando a maturação das sementes de araucária (pinhões).',
+      peso: 0.30,
+      altura: 0.32,
+      imagem: 'animais/papagaio_charao.png'
+    },
+    {
+      nome_cientifico: 'Leopardus tigrinus',
+      dieta: 'Carnívora',
+      habitos: 'Predominantemente noturno e solitário. Excelente escalador de árvores, habita formações florestais e matas de galeria nos biomas Mata Atlântica e Pampa.',
+      peso: 2.50,
+      altura: 0.30,
+      imagem: 'animais/gato_do_mato_pequeno.png'
+    },
+    {
+      nome_cientifico: 'Myrmecophaga tridactyla',
+      dieta: 'Insectívora',
+      habitos: 'Espécie solitária de hábitos diurnos e crepusculares. Percorre extensas áreas de campos e bordas de mata à procura de cupinzeiros e formigueiros, utilizando garras fortes para escavação.',
+      peso: 35.00,
+      altura: 0.60,
+      imagem: 'animais/tamandua_bandeira.png'
+    }
+  ];
+
+  for (const esp of especies) {
+    await prisma.api_animal.updateMany({
+      where: { nome_cientifico: esp.nome_cientifico },
+      data: {
+        dieta: esp.dieta,
+        habitos: esp.habitos,
+        peso: esp.peso,
+        altura: esp.altura,
+        imagem: esp.imagem,
+        updated_at: new Date()
+      }
+    });
+  }
+
   console.log('✅ Seeding completed successfully!');
 }
 
