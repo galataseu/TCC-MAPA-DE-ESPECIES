@@ -71,7 +71,7 @@ router.get('/', async (req, res) => {
             biomas: m.biomas || [],
             imagens: m.imagem_unica ? [{
               id: 1,
-              imagem: m.imagem_unica.startsWith('http') ? m.imagem_unica : `https://tcc-mapa-de-especies.onrender.com/media/${m.imagem_unica}`
+              imagem: m.imagem_unica.startsWith('http') ? m.imagem_unica : `/media/${m.imagem_unica}`
             }] : []
 
           }

@@ -305,7 +305,9 @@ $(document).ready(function () {
   });
 
   /* 5. Integração com Backend Django (Login/Registro) */
-  const API_URL = "https://tcc-mapa-de-especies.onrender.com/api";
+  const API_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+    ? "http://localhost:8000/api"
+    : (window.API_BASE_URL || "https://tcc-mapa-de-especies.onrender.com/api");
 
 
 
