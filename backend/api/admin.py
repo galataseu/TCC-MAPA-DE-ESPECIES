@@ -3,7 +3,7 @@ from django.db import models
 from django.forms import CheckboxSelectMultiple
 from .models import (
     User, NivelExtincao, NivelDestruicao, Bioma, Estado, 
-    Regiao, Microrregiao, Animal, Marcador, Interacao, 
+    Regiao, Microrregiao, Animal, Marcador, Favorito, 
     Ong, ZonaPreservacao, AnimalImagem
 )
 
@@ -64,10 +64,10 @@ class MarcadorAdmin(admin.GISModelAdmin):
     list_display = ('animal', 'created_at')
     list_filter = ('animal',)
 
-@admin.register(Interacao)
-class InteracaoAdmin(admin.ModelAdmin):
-    list_display = ('autor', 'recebedor', 'tipo', 'data')
-    list_filter = ('tipo', 'data')
+@admin.register(Favorito)
+class FavoritoAdmin(admin.ModelAdmin):
+    list_display = ('user', 'animal', 'created_at')
+    list_filter = ('created_at',)
 
 @admin.register(Ong)
 class OngAdmin(admin.GISModelAdmin):

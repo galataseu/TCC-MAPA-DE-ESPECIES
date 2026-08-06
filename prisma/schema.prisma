@@ -14,13 +14,12 @@ model api_animal {
   id                  BigInt               @id @default(autoincrement())
   deleted_at          DateTime?            @db.Timestamptz(6)
   nome_comum          String               @db.VarChar(100)
-  nome_cientifico     String               @unique @db.VarChar(150)
+  nome_cientifico     String               @db.VarChar(150)
   classe              String?              @db.VarChar(50)
   familia             String?              @db.VarChar(70)
   dieta               String?              @db.VarChar(50)
   habitos             String?
   obs                 String?
-  imagem              String?
   created_at          DateTime             @db.Timestamptz(6)
   updated_at          DateTime             @db.Timestamptz(6)
   autor_cad_id        BigInt?
@@ -34,13 +33,14 @@ model api_animal {
   api_niveldestruicao api_niveldestruicao? @relation(fields: [nivel_destruicao_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animal_nivel_destruicao_id_bd962333_fk_api_nivel")
   api_nivelextincao   api_nivelextincao    @relation(fields: [nivel_extincao_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animal_nivel_extincao_id_cd92a08b_fk_api_nivelextincao_id")
   api_animal_biomas   api_animal_biomas[]
+  api_animalimagem    api_animalimagem[]
+  api_favorito        api_favorito[]
   api_marcador        api_marcador[]
 
   @@index([nivel_extincao_id], map: "api_animal_nivel_extincao_id_cd92a08b")
   @@index([autor_cad_id], map: "api_animal_criado_por_id_60e22694")
   @@index([nivel_destruicao_id], map: "api_animal_nivel_destruicao_id_bd962333")
   @@index([microrregiao_id], map: "api_animal_microrregiao_id_9381e61d")
-  @@index([nome_cientifico], map: "api_animal_nome_cientifico_2de1afcb_like")
 }
 
 model api_bioma {
@@ -90,27 +90,26 @@ model api_regiao {
 }
 
 model api_user {
-  id                                                 BigInt                      @id @default(autoincrement())
-  password                                           String                      @db.VarChar(128)
-  last_login                                         DateTime?                   @db.Timestamptz(6)
-  is_superuser                                       Boolean
-  username                                           String                      @unique @db.VarChar(150)
-  first_name                                         String                      @db.VarChar(150)
-  last_name                                          String                      @db.VarChar(150)
-  email                                              String                      @db.VarChar(254)
-  is_staff                                           Boolean
-  is_active                                          Boolean
-  date_joined                                        DateTime                    @db.Timestamptz(6)
-  role                                               String                      @db.VarChar(20)
-  deleted_at                                         DateTime?                   @db.Timestamptz(6)
-  data_nasc                                          DateTime?                   @db.Date
-  denuncias                                          Int
-  api_animal                                         api_animal[]
-  api_interacao_api_interacao_autor_idToapi_user     api_interacao[]             @relation("api_interacao_autor_idToapi_user")
-  api_interacao_api_interacao_recebedor_idToapi_user api_interacao[]             @relation("api_interacao_recebedor_idToapi_user")
-  api_user_groups                                    api_user_groups[]
-  api_user_user_permissions                          api_user_user_permissions[]
-  django_admin_log                                   django_admin_log[]
+  id                        BigInt                      @id @default(autoincrement())
+  password                  String                      @db.VarChar(128)
+  last_login                DateTime?                   @db.Timestamptz(6)
+  is_superuser              Boolean
+  username                  String                      @unique @db.VarChar(150)
+  first_name                String                      @db.VarChar(150)
+  last_name                 String                      @db.VarChar(150)
+  email                     String                      @db.VarChar(254)
+  is_staff                  Boolean
+  is_active                 Boolean
+  date_joined               DateTime                    @db.Timestamptz(6)
+  role                      String                      @db.VarChar(20)
+  deleted_at                DateTime?                   @db.Timestamptz(6)
+  data_nasc                 DateTime?                   @db.Date
+  denuncias                 Int
+  api_animal                api_animal[]
+  api_favorito              api_favorito[]
+  api_user_groups           api_user_groups[]
+  api_user_user_permissions api_user_user_permissions[]
+  django_admin_log          django_admin_log[]
 
   @@index([username], map: "api_user_username_cf4e88d2_like")
 }
@@ -294,21 +293,6 @@ model api_estado {
 }
 
 /// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
-model api_interacao {
-  id                                            BigInt    @id @default(autoincrement())
-  tipo                                          String    @db.VarChar(50)
-  data                                          DateTime  @db.Date
-  hora                                          DateTime  @db.Time(6)
-  autor_id                                      BigInt
-  recebedor_id                                  BigInt?
-  api_user_api_interacao_autor_idToapi_user     api_user  @relation("api_interacao_autor_idToapi_user", fields: [autor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_interacao_autor_id_a8bdd6b9_fk_api_user_id")
-  api_user_api_interacao_recebedor_idToapi_user api_user? @relation("api_interacao_recebedor_idToapi_user", fields: [recebedor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_interacao_recebedor_id_35e679a7_fk_api_user_id")
-
-  @@index([autor_id], map: "api_interacao_autor_id_a8bdd6b9")
-  @@index([recebedor_id], map: "api_interacao_recebedor_id_35e679a7")
-}
-
-/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
 model api_marcador {
   id         BigInt                  @id @default(autoincrement())
   location   Unsupported("geometry")
@@ -331,4 +315,31 @@ model api_microrregiao {
 
   @@unique([nome, estado_id], map: "api_microrregiao_nome_estado_id_930f23a7_uniq")
   @@index([estado_id], map: "api_microrregiao_estado_id_c7224df3")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model api_animalimagem {
+  id         BigInt     @id @default(autoincrement())
+  imagem     String     @db.VarChar(100)
+  legenda    String?    @db.VarChar(100)
+  ordem      Int
+  animal_id  BigInt
+  api_animal api_animal @relation(fields: [animal_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animalimagem_animal_id_77468e03_fk_api_animal_id")
+
+  @@index([animal_id], map: "api_animalimagem_animal_id_77468e03")
+}
+
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+model api_favorito {
+  id         BigInt     @id @default(autoincrement())
+  created_at DateTime   @db.Timestamptz(6)
+  animal_id  BigInt
+  user_id    BigInt
+  api_animal api_animal @relation(fields: [animal_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_favorito_animal_id_8ca07508_fk_api_animal_id")
+  api_user   api_user   @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_favorito_user_id_a4ba5d82_fk_api_user_id")
+
+  @@unique([user_id, animal_id], map: "api_favorito_user_id_animal_id_f457eda5_uniq")
+  @@index([animal_id], map: "api_favorito_animal_id_8ca07508")
+  @@index([user_id], map: "api_favorito_user_id_a4ba5d82")
 }

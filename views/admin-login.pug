@@ -130,7 +130,8 @@ block scripts
         const username = $("#admin-user").val();
         const password = $("#admin-pass").val();
 
-        fetch("http://localhost:8000/api/auth/login/", {
+        fetch("https://tcc-mapa-de-especies.onrender.com/api/auth/login/", {
+
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username, password })

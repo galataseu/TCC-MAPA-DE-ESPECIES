@@ -167,17 +167,19 @@ class Marcador(models.Model):
     def __str__(self):
         return f"Marcador de {self.animal.nome_comum} ({self.location.x}, {self.location.y})"
 
-class Interacao(models.Model):
-    """Tabela interage na modelagem"""
-    autor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='interacoes_feitas')
-    recebedor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='interacoes_recebidas', null=True, blank=True)
-    tipo = models.CharField(max_length=50)
-    data = models.DateField(auto_now_add=True)
-    hora = models.TimeField(auto_now_add=True)
-    
+class Favorito(models.Model):
+    """Animais favoritados pelo usuário"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favoritos')
+    animal = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='favoritado_por')
+    created_at = models.DateTimeField(auto_now_add=True)
+
     class Meta:
-        verbose_name = "Interação"
-        verbose_name_plural = "Interações"
+        verbose_name = "Favorito"
+        verbose_name_plural = "Favoritos"
+        unique_together = ('user', 'animal')
+
+    def __str__(self):
+        return f"{self.user.username} favoritou {self.animal.nome_comum}"
 
 class Ong(SoftDeleteModel):
     nome = models.CharField(max_length=150)
