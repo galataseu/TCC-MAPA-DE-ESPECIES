@@ -91,12 +91,19 @@ WSGI_APPLICATION = 'tcc_backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# Database
+# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv('DATABASE_URL'),
-        engine='django.contrib.gis.db.backends.postgis'
+        conn_max_age=600,
+        conn_health_checks=True,
     )
 }
+
+# Força o uso da engine espacial do PostGIS independentemente do prefixo da URL
+DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
 
 AUTH_USER_MODEL = 'api.User'
 
