@@ -24,10 +24,13 @@ app.use('/media', express.static(path.join(__dirname, 'backend', 'media')));
 app.use('/media', express.static(path.join(__dirname, 'public', 'media')));
 
 
+var v1Router = require('./routes/v1');
+
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/api/animals', animalsRouter);
 app.use('/api/markers', markersRouter);
+app.use('/api/v1', v1Router);
 
 // Rota para a página de animais
 app.get('/animais', function(req, res) {

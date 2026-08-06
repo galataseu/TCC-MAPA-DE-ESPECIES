@@ -304,10 +304,8 @@ $(document).ready(function () {
     }
   });
 
-  /* 5. Integração com Backend Django (Login/Registro) */
-  const API_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-    ? "http://localhost:8000/api"
-    : (window.API_BASE_URL || "https://tcc-mapa-de-especies.onrender.com/api");
+  /* 5. Integração com Backend (Login/Registro e Selects) */
+  const API_URL = "/api";
 
 
 
@@ -745,14 +743,14 @@ $(document).ready(function () {
 
     Promise.all([fetchNiveis, fetchBiomas])
       .then(([niveisRes, biomasRes]) => {
-        const selectNiveis = $(".select-nivel-extincao");
+        const selectNiveis = $(".select-nivel-extincao, #nivel_extincao_id");
         selectNiveis.empty();
         const niveis = niveisRes.data || niveisRes;
         if (Array.isArray(niveis)) {
           niveis.forEach(item => selectNiveis.append(`<option value="${item.id}">${item.nome}</option>`));
         }
 
-        const selectBiomas = $(".select-biomas");
+        const selectBiomas = $(".select-biomas, #biomas_ids");
         selectBiomas.empty();
         const biomas = biomasRes.data || biomasRes;
         if (Array.isArray(biomas)) {
