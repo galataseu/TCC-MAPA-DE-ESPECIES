@@ -28,6 +28,7 @@
     "dotenv": "^17.4.2",
     "express": "^4.22.2",
     "morgan": "^1.11.0",
+    "multer": "^2.2.0",
     "pug": "^3.0.3"
   },
   "devDependencies": {

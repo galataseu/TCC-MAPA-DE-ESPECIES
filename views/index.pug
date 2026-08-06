@@ -125,8 +125,10 @@ block content
             label.form-label.small.fw-bold Observações / Curiosidades
             textarea.form-control(name="obs", rows="2", placeholder="Observações adicionais...")
           .mb-3
-            label.form-label.small.fw-bold Imagem
-            input.form-control(type="file", name="animal_imagem", accept="image/*")
+            label.form-label.small.fw-bold Link da Imagem (URL da Internet)
+            input.form-control.mb-2(type="url", name="imagem_url", placeholder="https://exemplo.com/imagem.jpg")
+            label.form-label.tiny.text-muted.d-block Ou selecione um arquivo local:
+            input.form-control.form-control-sm(type="file", name="animal_imagem", accept="image/*")
           .d-flex.gap-2.mt-4
             button.btn.btn-success.w-100(type="submit")
               i.fa-solid.fa-check.me-1

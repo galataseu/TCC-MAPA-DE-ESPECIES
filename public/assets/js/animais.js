@@ -69,7 +69,7 @@ $(document).ready(function() {
                         <div class="animal-card ${textureClass}" style="border-color: ${borderColor};">
                             <span class="status-badge ${statusClass}">${animal.api_nivelextincao ? animal.api_nivelextincao.nome : 'N/A'}</span>
                             <div class="animal-img-container">
-                                <img src="${allImgs[0]}" class="animal-img fade-image" alt="${animal.nome_comum}" data-imgs='${JSON.stringify(allImgs)}' data-current="0">
+                                <img src="${allImgs[0]}" referrerpolicy="no-referrer" class="animal-img fade-image" alt="${animal.nome_comum}" data-imgs='${JSON.stringify(allImgs)}' data-current="0">
                             </div>
                             <div class="card-body">
                                 <h5 class="card-title text-truncate" title="${animal.nome_comum}">${animal.nome_comum}</h5>

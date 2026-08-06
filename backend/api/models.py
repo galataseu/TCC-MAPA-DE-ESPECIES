@@ -141,7 +141,7 @@ class Animal(SoftDeleteModel):
 
 class AnimalImagem(models.Model):
     animal = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='imagens')
-    imagem = models.ImageField(upload_to='animais/')
+    imagem = models.CharField(max_length=500)
     legenda = models.CharField(max_length=100, null=True, blank=True)
     ordem = models.PositiveIntegerField(default=0)
 

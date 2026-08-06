@@ -17,7 +17,8 @@ router.get('/', async (req, res) => {
           include: {
             api_bioma: true
           }
-        }
+        },
+        api_animalimagem: true
       },
       orderBy: {
         nome_comum: 'asc'
@@ -30,18 +31,17 @@ router.get('/', async (req, res) => {
         typeof value === 'bigint' ? value.toString() : value
       ));
       
-      // Mapear a imagem única para o campo 'imagens' esperado pelo front
-      const imgUrl = animal.imagem 
-        ? (animal.imagem.startsWith('http') || animal.imagem.startsWith('/') ? animal.imagem : `/media/${animal.imagem}`) 
-        : null;
+      const rawImg = animal.imagem || (animal.api_animalimagem && animal.api_animalimagem.length > 0 ? animal.api_animalimagem[0].imagem : null);
+      const imgUrl = rawImg 
+        ? (rawImg.startsWith('http') || rawImg.startsWith('/') ? rawImg : `/media/${rawImg}`) 
+        : '/assets/img/logotipo.png';
 
-      obj.imagens = imgUrl ? [{
+      obj.imagens = [{
         id: 1,
         imagem: imgUrl,
         legenda: animal.nome_comum,
         ordem: 1
-      }] : [];
-
+      }];
 
       // Mapear biomas
       obj.biomas = (obj.api_animal_biomas || []).map(b => b.api_bioma);

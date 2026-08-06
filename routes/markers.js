@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 router.get('/', async (req, res) => {
   try {
     // Fetch markers with animal info using raw query to get GeoJSON from PostGIS
-    const markers = await prisma.$queryRaw`
+    const markers = await prisma.$queryRawUnsafe(`
       SELECT 
         m.id,
         ST_AsGeoJSON(m.location) as geometry_str,
@@ -23,7 +23,9 @@ router.get('/', async (req, res) => {
         a.peso,
         a.obs,
         a.nivel_extincao_id,
-        a.imagem as imagem_unica,
+        (
+          SELECT ai.imagem FROM api_animalimagem ai WHERE ai.animal_id = a.id ORDER BY ai.ordem ASC LIMIT 1
+        ) as imagem_relacionada,
         n.nome as nivel_extincao,
         n.sigla as nivel_sigla,
         (
@@ -36,7 +38,7 @@ router.get('/', async (req, res) => {
       JOIN api_animal a ON m.animal_id = a.id
       JOIN api_nivelextincao n ON a.nivel_extincao_id = n.id
       WHERE a.deleted_at IS NULL
-    `;
+    `);
 
     const featureCollection = {
       type: 'FeatureCollection',
@@ -47,6 +49,11 @@ router.get('/', async (req, res) => {
         } catch (e) {
           console.error("Error parsing geometry:", e);
         }
+
+        const rawImg = m.imagem_relacionada;
+        const imgUrl = rawImg
+          ? (rawImg.startsWith('http') || rawImg.startsWith('/') ? rawImg : `/media/${rawImg}`)
+          : '/assets/img/logotipo.png';
 
         return {
           type: 'Feature',
@@ -66,14 +73,14 @@ router.get('/', async (req, res) => {
             nivel_extincao_id: m.nivel_extincao_id ? m.nivel_extincao_id.toString() : null,
             nivel_extincao: m.nivel_extincao,
             nivel_sigla: m.nivel_sigla,
-
             icone: m.icone,
             biomas: m.biomas || [],
-            imagens: m.imagem_unica ? [{
+            imagens: [{
               id: 1,
-              imagem: m.imagem_unica.startsWith('http') ? m.imagem_unica : `/media/${m.imagem_unica}`
-            }] : []
-
+              imagem: imgUrl,
+              legenda: m.nome_comum,
+              ordem: 1
+            }]
           }
         };
       })

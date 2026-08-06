@@ -434,8 +434,12 @@ $(document).ready(function () {
           
           menu.html(`
             <div class="admin-menu-item" id="menu-edit-entity">
-              <i class="fa-solid fa-pen-to-square text-warning"></i>
+              <i class="fa-solid fa-pen-to-square text-warning me-2"></i>
               <span>Editar ${props.nome_comum || 'Entidade'}</span>
+            </div>
+            <div class="admin-menu-item text-danger" id="menu-delete-entity">
+              <i class="fa-solid fa-trash me-2"></i>
+              <span>Excluir ${props.nome_comum || 'Entidade'}</span>
             </div>
           `);
 
@@ -447,6 +451,11 @@ $(document).ready(function () {
           $("#menu-edit-entity").off("click").on("click", function() {
             menu.addClass("d-none");
             openAdminDrawerForEdit(feature);
+          });
+
+          $("#menu-delete-entity").off("click").on("click", function() {
+            menu.addClass("d-none");
+            deleteEntityWithConfirmation(feature);
           });
         }
       });
@@ -551,10 +560,25 @@ $(document).ready(function () {
   function openAdminDrawerForEdit(feature) {
     closeAdminDrawer();
 
-    const props = feature.properties;
-    const coords = feature.geometry.coordinates; // [lng, lat]
-    const lat = parseFloat(coords[1].toFixed(6));
-    const lng = parseFloat(coords[0].toFixed(6));
+    const props = feature.properties || feature;
+    let lat = -27.59;
+    let lng = -48.54;
+
+    if (feature.geometry && feature.geometry.coordinates) {
+      lng = parseFloat(feature.geometry.coordinates[0].toFixed(6));
+      lat = parseFloat(feature.geometry.coordinates[1].toFixed(6));
+    } else if (props.lat && props.lng) {
+      lat = parseFloat(parseFloat(props.lat).toFixed(6));
+      lng = parseFloat(parseFloat(props.lng).toFixed(6));
+    } else {
+      // Tentar achar o marcador na memória (markersData)
+      const markerObj = markersData.find(m => m.properties && (m.properties.animal_id == props.animal_id || m.properties.id == props.id));
+      if (markerObj && markerObj.geometry && markerObj.geometry.coordinates) {
+        lng = parseFloat(markerObj.geometry.coordinates[0].toFixed(6));
+        lat = parseFloat(markerObj.geometry.coordinates[1].toFixed(6));
+      }
+    }
+
     const latlng = L.latLng(lat, lng);
 
     $("#admin-sidebar-drawer").removeClass("d-none");
@@ -619,6 +643,7 @@ $(document).ready(function () {
     if (action === "animal") {
       $("#drawer-title").text("Cadastrar Animal");
       const form = $("#form-create-animal");
+      form[0].reset();
       form.removeClass("d-none");
       form.find(".coord-lat, .input-lat").val(lat);
       form.find(".coord-lng, .input-lng").val(lng);
@@ -775,6 +800,11 @@ $(document).ready(function () {
     formData.delete('biomas_ids');
     biomas.forEach(b => formData.append('biomas_ids', b));
 
+    const latVal = $(this).find('.input-lat').val() || $(this).find('.coord-lat').val();
+    const lngVal = $(this).find('.input-lng').val() || $(this).find('.coord-lng').val();
+    if (latVal) formData.set('lat', latVal);
+    if (lngVal) formData.set('lng', lngVal);
+
     const editId = $("#animal-edit-id").val();
     const url = editId ? `${API_URL}/v1/animais/${editId}/` : `${API_URL}/v1/animais/`;
     const method = editId ? "PATCH" : "POST";
@@ -786,11 +816,13 @@ $(document).ready(function () {
     .then(res => res.json())
     .then(data => {
       alert(editId ? "Animal atualizado com sucesso!" : "Animal cadastrado com sucesso!");
+      this.reset();
       closeAdminDrawer();
       loadMarkers();
     })
     .catch(err => {
       alert(editId ? "Animal atualizado com sucesso!" : "Animal cadastrado com sucesso!");
+      this.reset();
       closeAdminDrawer();
       loadMarkers();
     });
@@ -932,8 +964,20 @@ $(document).ready(function () {
     const statusColor = config.color;
     const statusIcon = config.icon;
 
-    let allImgs = (animal.imagens || []).map(img => img.imagem);
-    if (allImgs.length === 0) allImgs.push('https://images.unsplash.com/photo-1474511320723-9a56873867b5?q=80&w=800&auto=format&fit=crop');
+    let allImgs = [];
+    const sourceImgs = animal.imagens || animal.api_animalimagem || [];
+    if (Array.isArray(sourceImgs)) {
+      sourceImgs.forEach(img => {
+        if (typeof img === 'string') allImgs.push(img);
+        else if (img && img.imagem) allImgs.push(img.imagem);
+      });
+    }
+    if (allImgs.length === 0 && animal.imagem_relacionada) allImgs.push(animal.imagem_relacionada);
+    if (allImgs.length === 0 && animal.imagem_unica) allImgs.push(animal.imagem_unica);
+    if (allImgs.length === 0 && animal.imagem) allImgs.push(animal.imagem);
+    if (allImgs.length === 0) allImgs.push('/assets/img/logotipo.png');
+
+    allImgs = allImgs.map(url => (url.startsWith('http') || url.startsWith('/') ? url : `/media/${url}`));
 
     let biomas = (animal.biomas || []).map(b => b.nome).join(', ') || 'Não informado';
 
@@ -944,7 +988,7 @@ $(document).ready(function () {
         <div class="row g-0">
           <div class="col-md-5">
             <div class="modal-img-container" style="overflow: hidden; position: relative; border-left: 5px solid ${statusColor};">
-              <img id="modalCarouselImg" src="${allImgs[0]}" class="modal-img-pan" data-current="0" data-imgs='${JSON.stringify(allImgs)}'>
+              <img id="modalCarouselImg" src="${allImgs[0]}" referrerpolicy="no-referrer" class="modal-img-pan" data-current="0" data-imgs='${JSON.stringify(allImgs)}'>
               ${allImgs.length > 1 ? `
                 <button class="carousel-btn carousel-prev" onclick="changeModalImg(-1)" style="position: absolute; top: 50%; left: 10px; z-index: 10; border: none; background: ${statusColor}; color: white; border-radius: 50%; width: 40px; height: 40px; cursor: pointer;">
                   <i class="fas fa-chevron-left"></i>
@@ -1033,7 +1077,8 @@ $(document).ready(function () {
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body p-0" id="modalBody"></div>
-                        <div class="modal-footer border-top border-secondary">
+                        <div class="modal-footer border-top border-secondary d-flex justify-content-between">
+                            <div id="modalAdminBtns" class="d-flex gap-2"></div>
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
                         </div>
                     </div>
@@ -1046,6 +1091,29 @@ $(document).ready(function () {
 
     $('#modalAnimalName').text(animal.nome_comum).css('color', statusColor);
     $('#modalBody').html(html);
+
+    if (isAdminModeActive()) {
+      $('#modalAdminBtns').html(`
+        <button type="button" class="btn btn-outline-warning" id="btn-modal-edit-animal">
+          <i class="fa-solid fa-pen-to-square me-1"></i> Editar
+        </button>
+        <button type="button" class="btn btn-outline-danger" id="btn-modal-delete-animal">
+          <i class="fa-solid fa-trash me-1"></i> Excluir Espécie
+        </button>
+      `);
+
+      $('#btn-modal-delete-animal').off('click').on('click', function() {
+        deleteEntityWithConfirmation(animal);
+      });
+      $('#btn-modal-edit-animal').off('click').on('click', function() {
+        const modalInstance = bootstrap.Modal.getInstance(document.getElementById('animalModal'));
+        if (modalInstance) modalInstance.hide();
+        openAdminDrawerForEdit({ properties: animal });
+      });
+    } else {
+      $('#modalAdminBtns').empty();
+    }
+
     new bootstrap.Modal(document.getElementById('animalModal')).show();
   };
 
@@ -1071,6 +1139,42 @@ $(document).ready(function () {
       imgTag.css('opacity', 1);
       nextImg.remove();
       imgTag.attr('data-current', next);
+    });
+  };
+
+  window.deleteEntityWithConfirmation = function(entity) {
+    const props = entity.properties || entity;
+    const animalId = props.animal_id || props.id;
+    const nome = props.nome_comum || props.nome || 'esta entidade';
+
+    // 1ª Confirmação
+    const step1 = confirm(`Tem certeza que deseja excluir "${nome}"?`);
+    if (!step1) return;
+
+    // 2ª Confirmação de Segurança
+    const step2 = confirm(`⚠️ CONFIRMAÇÃO FINAL DE SEGURANÇA:\n\nEsta ação é permanente e removerá "${nome}" do mapa e do catálogo.\n\nDeseja REALMENTE EXCLUIR?`);
+    if (!step2) return;
+
+    fetch(`${API_URL}/v1/animais/${animalId}/`, {
+      method: 'DELETE'
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert(`"${nome}" foi excluído com sucesso!`);
+        const modalEl = document.getElementById('animalModal');
+        if (modalEl) {
+          const bsModal = bootstrap.Modal.getInstance(modalEl);
+          if (bsModal) bsModal.hide();
+        }
+        loadMarkers();
+      } else {
+        alert(`Erro ao excluir: ${data.error || 'Erro no servidor.'}`);
+      }
+    })
+    .catch(err => {
+      console.error("Erro ao excluir:", err);
+      alert(`Erro de conexão ao tentar excluir "${nome}".`);
     });
   };
 
