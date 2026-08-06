@@ -34,6 +34,11 @@ app.get('/animais', function(req, res) {
   res.render('animais', { title: 'Espécies Ameaçadas - Lista' });
 });
 
+// Rota para a página de login de administração
+app.get('/admin/login', function(req, res) {
+  res.render('admin-login', { title: 'Login Administrador - Mapa de Espécies' });
+});
+
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
   var err = new Error('Not Found');

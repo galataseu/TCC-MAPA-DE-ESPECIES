@@ -42,8 +42,170 @@ block content
           input#toggle-textures-legend(type="checkbox", checked)
           |  Exibir Texturas
 
+    //- Indicador Visual do Modo Admin
+    #admin-mode-badge.d-none
+      i.fa-solid.fa-user-shield.me-2
+      span Modo Administrador Ativo
+
+    //- Menu de Contexto Suspenso (Clique Direito no Modo Admin)
+    #admin-context-menu.admin-context-menu.d-none
+      .admin-menu-item(data-action="preservacao")
+        i.fa-solid.fa-shield-halved.text-success
+        span Criar área de preservação
+      .admin-menu-item(data-action="animal")
+        i.fa-solid.fa-paw.text-warning
+        span Criar animal
+      .admin-menu-item(data-action="ong")
+        i.fa-solid.fa-hand-holding-heart.text-info
+        span Criar ONG
+
+    //- Barra Lateral (Sidebar Drawer) para Cadastro e Ajuste Fino
+    #admin-sidebar-drawer.admin-sidebar-drawer.d-none
+      .admin-drawer-header
+        h5#drawer-title.m-0.fw-bold Cadastrar Entidade
+        button#close-drawer-btn.btn-close.btn-close-white(type="button", aria-label="Close")
+      .admin-drawer-body
+        .alert.alert-info.small.py-2.mb-3
+          i.fa-solid.fa-circle-info.me-1
+          | Coordenadas capturadas do clique. Arraste o marcador no mapa para fazer o ajuste fino.
+
+        //- Formulário Animal
+        form#form-create-animal.admin-form.d-none
+          input#animal-edit-id(type="hidden", name="animal_id")
+          input.coord-lat(type="hidden", name="lat")
+          input.coord-lng(type="hidden", name="lng")
+          .mb-3
+            label.form-label.small.fw-bold Coordenadas Capturadas
+            .row.g-2
+              .col-6
+                label.form-label.tiny.text-secondary Latitude
+                input.form-control.form-control-sm.input-lat(type="number", step="any", required)
+              .col-6
+                label.form-label.tiny.text-secondary Longitude
+                input.form-control.form-control-sm.input-lng(type="number", step="any", required)
+          .mb-3
+            label.form-label.small.fw-bold Nome Comum
+            input.form-control(type="text", name="nome_comum", required, placeholder="Ex: Mico-leão-dourado")
+          .mb-3
+            label.form-label.small.fw-bold Nome Científico
+            input.form-control(type="text", name="nome_cientifico", required, placeholder="Ex: Leontopithecus rosalia")
+          .row.g-2.mb-3
+            .col-6
+              label.form-label.small.fw-bold Classe
+              select.form-select(name="classe", required)
+                option(value="Mammalia") Mammalia (Mamíferos)
+                option(value="Aves") Aves
+                option(value="Reptilia") Reptilia (Répteis)
+                option(value="Amphibia") Amphibia (Anfíbios)
+                option(value="Chondrichthyes") Chondrichthyes (Peixes Cartilaginosos)
+                option(value="Osteichthyes") Osteichthyes (Peixes Ósseos)
+            .col-6
+              label.form-label.small.fw-bold Família
+              input.form-control(type="text", name="familia", placeholder="Ex: Callitrichidae")
+          .mb-3
+            label.form-label.small.fw-bold Nível de Extinção
+            select.form-select.select-nivel-extincao(name="nivel_extincao_id", required)
+          .mb-3
+            label.form-label.small.fw-bold Biomas
+            select.form-select.select-biomas(name="biomas_ids", multiple, required)
+          .row.g-2.mb-3
+            .col-6
+              label.form-label.small.fw-bold Peso (Kg)
+              input.form-control(type="number", step="0.01", name="peso", placeholder="Ex: 0.6")
+            .col-6
+              label.form-label.small.fw-bold Altura / Comp. (m)
+              input.form-control(type="number", step="0.01", name="altura", placeholder="Ex: 0.26")
+          .mb-3
+            label.form-label.small.fw-bold Dieta
+            input.form-control(type="text", name="dieta", placeholder="Ex: Onívoro, Frutas, Insetos")
+          .mb-3
+            label.form-label.small.fw-bold Descrição / Hábitos
+            textarea.form-control(name="habitos", rows="3", placeholder="Informações detalhadas sobre o animal...")
+          .mb-3
+            label.form-label.small.fw-bold Observações / Curiosidades
+            textarea.form-control(name="obs", rows="2", placeholder="Observações adicionais...")
+          .mb-3
+            label.form-label.small.fw-bold Imagem
+            input.form-control(type="file", name="animal_imagem", accept="image/*")
+          .d-grid.gap-2.mt-4
+            button.btn.btn-success(type="submit")
+              i.fa-solid.fa-check.me-1
+              | Salvar Animal
+
+
+        //- Formulário Área de Preservação
+        form#form-create-preservacao.admin-form.d-none
+          input.coord-lat(type="hidden", name="lat")
+          input.coord-lng(type="hidden", name="lng")
+          .mb-3
+            label.form-label.small.fw-bold Centro da Área (Coordenadas)
+            .row.g-2
+              .col-6
+                label.form-label.tiny.text-secondary Latitude
+                input.form-control.form-control-sm.input-lat(type="number", step="any", required)
+              .col-6
+                label.form-label.tiny.text-secondary Longitude
+                input.form-control.form-control-sm.input-lng(type="number", step="any", required)
+          .mb-3
+            label.form-label.small.fw-bold Nome da Área
+            input.form-control(type="text", name="nome", required, placeholder="Ex: Parque Nacional do Iguaçu")
+          .mb-3
+            label.form-label.small.fw-bold Tipo de Preservação
+            select.form-select(name="tipo", required)
+              option(value="Parque Nacional") Parque Nacional
+              option(value="Reserva Biológica") Reserva Biológica
+              option(value="Área de Proteção Ambiental") Área de Proteção Ambiental (APA)
+              option(value="Estação Ecológica") Estação Ecológica
+              option(value="Refúgio de Vida Silvestre") Refúgio de Vida Silvestre
+          .mb-3
+            label.form-label.small.fw-bold Raio da Zona (em Metros)
+            input.form-control.input-radius(type="number", name="raio", min="100", max="500000", value="5000", required)
+            span.tiny.text-muted Ajuste o raio pelo slider ou arraste no mapa
+            input.form-range.slider-radius.mt-1(type="range", min="500", max="50000", value="5000", step="500")
+          .mb-3
+            label.form-label.small.fw-bold Descrição / Atuação
+            textarea.form-control(name="descricao", rows="3", placeholder="Descrição dos objetivos de conservação...")
+          .d-grid.gap-2.mt-4
+            button.btn.btn-success(type="submit")
+              i.fa-solid.fa-check.me-1
+              | Salvar Área de Preservação
+
+        //- Formulário ONG
+        form#form-create-ong.admin-form.d-none
+          input.coord-lat(type="hidden", name="lat")
+          input.coord-lng(type="hidden", name="lng")
+          .mb-3
+            label.form-label.small.fw-bold Localização da Sede / Atuação
+            .row.g-2
+              .col-6
+                label.form-label.tiny.text-secondary Latitude
+                input.form-control.form-control-sm.input-lat(type="number", step="any", required)
+              .col-6
+                label.form-label.tiny.text-secondary Longitude
+                input.form-control.form-control-sm.input-lng(type="number", step="any", required)
+          .mb-3
+            label.form-label.small.fw-bold Nome da ONG
+            input.form-control(type="text", name="nome", required, placeholder="Ex: SOS Mata Atlântica")
+          .mb-3
+            label.form-label.small.fw-bold Área de Foco / Atuação
+            input.form-control(type="text", name="foco", placeholder="Ex: Reforestamento, Proteção da Fauna")
+          .mb-3
+            label.form-label.small.fw-bold E-mail de Contato
+            input.form-control(type="email", name="email", placeholder="contato@ong.org.br")
+          .mb-3
+            label.form-label.small.fw-bold Telefone / WhatsApp
+            input.form-control(type="text", name="telefone", placeholder="(41) 99999-9999")
+          .mb-3
+            label.form-label.small.fw-bold Descrição das Atividades
+            textarea.form-control(name="descricao", rows="3", placeholder="Resumo dos projetos e formas de apoio...")
+          .d-grid.gap-2.mt-4
+            button.btn.btn-success(type="submit")
+              i.fa-solid.fa-check.me-1
+              | Salvar ONG
+
   //- Modais
   include partials/modals
+
 
 block scripts
   script(src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.10.5/typeahead.bundle.min.js")

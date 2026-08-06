@@ -407,3 +407,159 @@ html, body, #main-layout {
   background: rgba(150, 150, 150, 0.8);
 }
 
+/* ==========================================================================
+   MODO ADMINISTRADOR - ESTILOS
+   ========================================================================== */
+
+/* Badge Indicador de Modo Admin */
+#admin-mode-badge {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2500;
+  background: rgba(30, 117, 82, 0.95);
+  color: #ffffff;
+  padding: 8px 20px;
+  border-radius: 30px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeInDown 0.3s ease;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translate(-50%, -20px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Estado Ativo no Botão da Navbar */
+#admin-btn.admin-active {
+  background: rgba(30, 117, 82, 0.3) !important;
+  color: #2ECC71 !important;
+  border: 1px solid #1E7552 !important;
+  box-shadow: 0 0 10px rgba(46, 204, 113, 0.4) !important;
+}
+
+/* Menu de Contexto Suspenso (Clique Direito) */
+.admin-context-menu {
+  position: absolute;
+  z-index: 3500;
+  background: rgba(26, 26, 35, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  padding: 6px;
+  min-width: 220px;
+  overflow: hidden;
+  animation: popupScale 0.15s ease-out;
+}
+
+@keyframes popupScale {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.admin-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  color: #e0e0e0;
+  font-size: 0.88rem;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-menu-item:hover {
+  background: rgba(30, 117, 82, 0.4);
+  color: #ffffff;
+  transform: translateX(3px);
+}
+
+.admin-menu-item i {
+  font-size: 1.1rem;
+  width: 20px;
+  text-align: center;
+}
+
+/* Barra Lateral (Sidebar Drawer) para Cadastro e Ajuste Fino */
+.admin-sidebar-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 360px;
+  height: 100%;
+  z-index: 2800;
+  background: rgba(22, 22, 30, 0.96);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(16px);
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-drawer-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(30, 117, 82, 0.2);
+  color: #ffffff;
+}
+
+.admin-drawer-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.admin-form .form-control,
+.admin-form .form-select {
+  background-color: #2b2a33;
+  border: 1px solid #4f4e5a;
+  color: #ffffff;
+}
+
+.admin-form .form-control:focus,
+.admin-form .form-select:focus {
+  background-color: #32313d;
+  border-color: #287f5e;
+  color: #ffffff;
+  box-shadow: 0 0 0 0.25rem rgba(40, 127, 94, 0.3);
+}
+
+/* Alta visibilidade para dicas (placeholders) nos formulários */
+.admin-form ::placeholder,
+.admin-form .form-control::placeholder,
+.form-control::placeholder {
+  color: #b0bac5 !important;
+  opacity: 0.9 !important;
+  font-style: italic;
+}
+
+.admin-form label {
+  color: #f0f0f0;
+}
+
+.admin-form .text-secondary,
+.admin-form .text-muted,
+.admin-form .tiny {
+  color: #c5d0de !important;
+}
+
+.tiny {
+  font-size: 0.78rem;
+}
+
+

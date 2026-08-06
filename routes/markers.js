@@ -21,6 +21,8 @@ router.get('/', async (req, res) => {
         a.habitos,
         a.altura,
         a.peso,
+        a.obs,
+        a.nivel_extincao_id,
         a.imagem as imagem_unica,
         n.nome as nivel_extincao,
         n.sigla as nivel_sigla,
@@ -60,8 +62,11 @@ router.get('/', async (req, res) => {
             habitos: m.habitos,
             altura: m.altura,
             peso: m.peso,
+            obs: m.obs,
+            nivel_extincao_id: m.nivel_extincao_id ? m.nivel_extincao_id.toString() : null,
             nivel_extincao: m.nivel_extincao,
             nivel_sigla: m.nivel_sigla,
+
             icone: m.icone,
             biomas: m.biomas || [],
             imagens: m.imagem_unica ? [{

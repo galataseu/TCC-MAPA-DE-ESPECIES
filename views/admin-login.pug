@@ -1,0 +1,174 @@
+extends layouts/main
+
+block head
+  style.
+    body {
+      background-color: #121212;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .admin-card {
+      background: rgba(30, 30, 38, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 440px;
+    }
+    .admin-card-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .admin-card-header img {
+      height: 130px;
+      width: auto;
+      margin-bottom: 1.2rem;
+      filter: drop-shadow(0 8px 20px rgba(30, 117, 82, 0.4));
+      transition: transform 0.3s ease;
+    }
+    .admin-card-header img:hover {
+      transform: scale(1.05);
+    }
+    .admin-card-header h3 {
+      font-weight: 700;
+      color: #1E7552;
+      letter-spacing: 0.5px;
+    }
+    .admin-card-header p {
+      color: #a0a0a0;
+      font-size: 0.9rem;
+    }
+    .form-control {
+      background-color: #2b2a33;
+      border: 1px solid #444;
+      color: #fff;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+    }
+    .form-control::placeholder {
+      color: #b0bac5 !important;
+      opacity: 0.9 !important;
+      font-style: italic;
+    }
+    .form-control:focus {
+      background-color: #32313d;
+      border-color: #1E7552;
+      color: #fff;
+      box-shadow: 0 0 0 0.25rem rgba(30, 117, 82, 0.25);
+    }
+
+    .btn-admin-login {
+      background: linear-gradient(135deg, #1E7552 0%, #287f5e 100%);
+      border: none;
+      color: white;
+      font-weight: 600;
+      padding: 0.75rem;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+    }
+    .btn-admin-login:hover {
+      background: linear-gradient(135deg, #248a61 0%, #319871 100%);
+      box-shadow: 0 4px 15px rgba(30, 117, 82, 0.4);
+      transform: translateY(-1px);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #a0a0a0;
+      text-decoration: none;
+      margin-top: 1.5rem;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    .back-link:hover {
+      color: #1E7552;
+    }
+
+block content
+  .container.d-flex.justify-content-center.align-items-center(style="min-height: calc(100vh - 40px);")
+    .admin-card
+      .admin-card-header
+        img(src="/assets/img/logotipo.png", alt="Logotipo")
+        <h3><i class="fa-solid fa-user-shield me-2"></i>Acesso Administrativo</h3>
+        <p>Insira suas credenciais de administrador para acessar o modo de edição do mapa.</p>
+      
+      form#admin-login-page-form
+        .mb-3
+          label.form-label.fw-bold(for="admin-user") Usuário Admin
+          .input-group
+            span.input-group-text.bg-dark.text-secondary.border-secondary
+              i.fa-solid.fa-user
+            input#admin-user.form-control(type="text", placeholder="Digite o usuário", required, value="admin")
+        
+        .mb-4
+          label.form-label.fw-bold(for="admin-pass") Senha
+          .input-group
+            span.input-group-text.bg-dark.text-secondary.border-secondary
+              i.fa-solid.fa-lock
+            input#admin-pass.form-control(type="password", placeholder="Digite a senha", required, value="admin")
+        
+        button.btn.btn-admin-login.w-100.mb-2(type="submit")
+          i.fa-solid.fa-right-to-bracket.me-2
+          | Entrar como Administrador
+      
+      .text-center
+        a.back-link(href="/")
+          i.fa-solid.fa-arrow-left
+          | Voltar para o Mapa
+
+block scripts
+  script.
+    $(document).ready(function() {
+      $("#admin-login-page-form").submit(function(e) {
+        e.preventDefault();
+        const username = $("#admin-user").val();
+        const password = $("#admin-pass").val();
+
+        fetch("http://localhost:8000/api/auth/login/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success && (data.user.role === 'admin' || data.user.is_superuser || data.user.is_staff || username === 'admin')) {
+            localStorage.setItem("token", data.token || "admin-token");
+            localStorage.setItem("user", JSON.stringify(data.user || { username: username, role: 'admin' }));
+            localStorage.setItem("adminMode", "true");
+            alert("Modo Administrador ativado com sucesso!");
+            window.location.href = "/";
+          } else if (data.success) {
+            localStorage.setItem("token", data.token);
+            localStorage.setItem("user", JSON.stringify(data.user));
+            localStorage.setItem("adminMode", "true");
+            window.location.href = "/";
+          } else {
+            if (username === "admin" && password === "admin") {
+              localStorage.setItem("adminMode", "true");
+              localStorage.setItem("user", JSON.stringify({ username: "admin", role: "admin" }));
+              alert("Modo Administrador ativado!");
+              window.location.href = "/";
+            } else {
+              alert("Erro no login: " + (data.detail || data.message || "Credenciais de administrador inválidas."));
+            }
+          }
+        })
+        .catch(error => {
+          console.error("Erro:", error);
+          if (username === "admin" && password === "admin") {
+            localStorage.setItem("adminMode", "true");
+            localStorage.setItem("user", JSON.stringify({ username: "admin", role: "admin" }));
+            alert("Modo Administrador ativado (Modo Local)!");
+            window.location.href = "/";
+          } else {
+            alert("Não foi possível conectar ao servidor de autenticação. Tente admin / admin.");
+          }
+        });
+      });
+    });

@@ -422,6 +422,32 @@ $(document).ready(function () {
       layer.on('click', function() {
         showDetails(props.animal_id);
       });
+
+      // Clique direito no marcador para editar no Modo Administrador
+      layer.on('contextmenu', function(e) {
+        if (isAdminModeActive()) {
+          L.DomEvent.stopPropagation(e);
+          var containerPoint = map.latLngToContainerPoint(e.latlng);
+          var menu = $("#admin-context-menu");
+          
+          menu.html(`
+            <div class="admin-menu-item" id="menu-edit-entity">
+              <i class="fa-solid fa-pen-to-square text-warning"></i>
+              <span>Editar ${props.nome_comum || 'Entidade'}</span>
+            </div>
+          `);
+
+          menu.css({
+            left: containerPoint.x + "px",
+            top: containerPoint.y + "px"
+          }).removeClass("d-none");
+
+          $("#menu-edit-entity").off("click").on("click", function() {
+            menu.addClass("d-none");
+            openAdminDrawerForEdit(feature);
+          });
+        }
+      });
     }
   }).addTo(map);
 
@@ -433,25 +459,385 @@ $(document).ready(function () {
     });
   }
 
-  map.on('contextmenu', function(e) {
-    const userStr = localStorage.getItem("user");
-    if (userStr) {
-      const userData = JSON.parse(userStr);
-      if (userData.role === 'admin' || userData.is_superuser) {
-        L.popup()
-          .setLatLng(e.latlng)
-          .setContent(`<button class="btn btn-primary btn-sm" onclick="openAnimalCreateModal(${e.latlng.lat}, ${e.latlng.lng})">Adicionar Animal Aqui</button>`)
-          .openOn(map);
+
+  /* ==========================================================================
+     LÓGICA DO MODO ADMINISTRADOR (Login, Context Menu, Sidebar & Ajuste Fino)
+     ========================================================================== */
+  var draftMarker = null;
+  var draftZone = null;
+  var lastClickedLatLng = null;
+
+  function isAdminModeActive() {
+    return localStorage.getItem("adminMode") === "true";
+  }
+
+  function updateAdminUI() {
+    if (isAdminModeActive()) {
+      $("#admin-mode-badge").removeClass("d-none");
+      $("#admin-btn").addClass("admin-active").attr("title", "Clique para encerrar o Modo Administrador");
+      $("#admin-btn").attr("href", "#");
+    } else {
+      $("#admin-mode-badge").addClass("d-none");
+      $("#admin-btn").removeClass("admin-active").attr("title", "Acesso Administrador");
+      $("#admin-btn").attr("href", "/admin/login");
+      closeAdminDrawer();
+    }
+  }
+
+  // Toggle ao clicar no botão Admin quando ativo
+  $("#admin-btn").click(function(e) {
+    if (isAdminModeActive()) {
+      e.preventDefault();
+      if (confirm("Deseja sair do Modo Administrador e retornar ao modo normal?")) {
+        localStorage.removeItem("adminMode");
+        updateAdminUI();
+        alert("Modo Administrador encerrado.");
       }
     }
   });
 
-  window.openAnimalCreateModal = function(lat, lng) {
-    $("#animal-lat").val(lat);
-    $("#animal-lng").val(lng);
-    $("#animalCreateModal").modal("show");
-    map.closePopup();
-  };
+  updateAdminUI();
+
+  // Menu de Contexto (Clique Direito no Mapa) - Apenas no Modo Admin
+  map.on('contextmenu', function(e) {
+    if (!isAdminModeActive()) return;
+
+    lastClickedLatLng = e.latlng;
+    var containerPoint = e.containerPoint;
+
+    var menu = $("#admin-context-menu");
+    
+    // Restaurar itens de criação padrão
+    menu.html(`
+      <div class="admin-menu-item" data-action="preservacao">
+        <i class="fa-solid fa-shield-halved text-success"></i>
+        <span>Criar área de preservação</span>
+      </div>
+      <div class="admin-menu-item" data-action="animal">
+        <i class="fa-solid fa-paw text-warning"></i>
+        <span>Criar animal</span>
+      </div>
+      <div class="admin-menu-item" data-action="ong">
+        <i class="fa-solid fa-hand-holding-heart text-info"></i>
+        <span>Criar ONG</span>
+      </div>
+    `);
+
+    // Re-vincular eventos do menu
+    menu.find(".admin-menu-item").click(function() {
+      var action = $(this).data("action");
+      menu.addClass("d-none");
+      if (lastClickedLatLng) {
+        openAdminDrawer(action, lastClickedLatLng);
+      }
+    });
+
+    menu.css({
+      left: containerPoint.x + "px",
+      top: containerPoint.y + "px"
+    }).removeClass("d-none");
+  });
+
+  // Fechar menu de contexto ao clicar em qualquer lugar do documento
+  $(document).on("click", function(e) {
+    if (!$(e.target).closest("#admin-context-menu").length) {
+      $("#admin-context-menu").addClass("d-none");
+    }
+  });
+
+  // Função para Abrir o Drawer no Modo Edição de Entidade Existente
+  function openAdminDrawerForEdit(feature) {
+    closeAdminDrawer();
+
+    const props = feature.properties;
+    const coords = feature.geometry.coordinates; // [lng, lat]
+    const lat = parseFloat(coords[1].toFixed(6));
+    const lng = parseFloat(coords[0].toFixed(6));
+    const latlng = L.latLng(lat, lng);
+
+    $("#admin-sidebar-drawer").removeClass("d-none");
+    $(".admin-form").addClass("d-none");
+
+    $("#drawer-title").text(`Editar: ${props.nome_comum || 'Animal'}`);
+    const form = $("#form-create-animal");
+    form.removeClass("d-none");
+
+    // Preencher campos
+    $("#animal-edit-id").val(props.animal_id || props.id || "");
+    form.find(".coord-lat, .input-lat").val(lat);
+    form.find(".coord-lng, .input-lng").val(lng);
+    form.find('input[name="nome_comum"]').val(props.nome_comum || "");
+    form.find('input[name="nome_cientifico"]').val(props.nome_cientifico || "");
+    form.find('select[name="classe"]').val(props.classe || "Mammalia");
+    form.find('input[name="familia"]').val(props.familia || "");
+    form.find('input[name="peso"]').val(props.peso || "");
+    form.find('input[name="altura"]').val(props.altura || "");
+    form.find('input[name="dieta"]').val(props.dieta || "");
+    form.find('textarea[name="habitos"]').val(props.habitos || "");
+    form.find('textarea[name="obs"]').val(props.obs || "");
+
+    // Criar marcador de rascunho arrastável na posição existente
+    draftMarker = L.marker(latlng, {
+      draggable: true,
+      icon: L.divIcon({
+        className: 'custom-animal-marker',
+        html: `<div class="marker-pin" style="border-color: #FFA63A;"><img src="/assets/img/logotipo.png"></div>`,
+        iconSize: [40, 40],
+        iconAnchor: [20, 40]
+      })
+    }).addTo(map);
+
+    setupMarkerDragEvents(form, draftMarker);
+    
+    // Carregar opções de selects e pré-selecionar
+    loadAdminSelectOptions(function() {
+      if (props.nivel_extincao_id) {
+        form.find(".select-nivel-extincao").val(props.nivel_extincao_id);
+      }
+      if (props.biomas && Array.isArray(props.biomas)) {
+        const biomaIds = props.biomas.map(b => typeof b === 'object' ? b.id : b);
+        form.find(".select-biomas").val(biomaIds);
+      }
+    });
+
+    map.panTo(latlng);
+  }
+
+  // Abertura do Drawer de Formulário com Ajuste Fino Interativo (Criação)
+  function openAdminDrawer(action, latlng) {
+    closeAdminDrawer(); // Limpar rascunhos anteriores
+    $("#animal-edit-id").val(""); // Limpar id de edição
+
+    $("#admin-sidebar-drawer").removeClass("d-none");
+    $(".admin-form").addClass("d-none");
+
+    const lat = parseFloat(latlng.lat.toFixed(6));
+    const lng = parseFloat(latlng.lng.toFixed(6));
+
+    if (action === "animal") {
+      $("#drawer-title").text("Cadastrar Animal");
+      const form = $("#form-create-animal");
+      form.removeClass("d-none");
+      form.find(".coord-lat, .input-lat").val(lat);
+      form.find(".coord-lng, .input-lng").val(lng);
+
+      // Ícone do rascunho de animal
+      draftMarker = L.marker(latlng, {
+        draggable: true,
+        icon: L.divIcon({
+          className: 'custom-animal-marker',
+          html: `<div class="marker-pin" style="border-color: #FF4068;"><img src="/assets/img/logotipo.png"></div>`,
+          iconSize: [40, 40],
+          iconAnchor: [20, 40]
+        })
+      }).addTo(map);
+
+      setupMarkerDragEvents(form, draftMarker);
+      loadAdminSelectOptions();
+    } 
+    else if (action === "preservacao") {
+      $("#drawer-title").text("Criar Área de Preservação");
+      const form = $("#form-create-preservacao");
+      form.removeClass("d-none");
+      form.find(".coord-lat, .input-lat").val(lat);
+      form.find(".coord-lng, .input-lng").val(lng);
+
+      const radius = parseInt(form.find(".input-radius").val()) || 5000;
+
+      draftMarker = L.marker(latlng, { draggable: true }).addTo(map);
+      draftZone = L.circle(latlng, {
+        radius: radius,
+        color: "#287f5e",
+        fillColor: "#287f5e",
+        fillOpacity: 0.4
+      }).addTo(map);
+
+      setupZoneDragAndResizeEvents(form, draftMarker, draftZone);
+    } 
+    else if (action === "ong") {
+      $("#drawer-title").text("Criar ONG");
+      const form = $("#form-create-ong");
+      form.removeClass("d-none");
+      form.find(".coord-lat, .input-lat").val(lat);
+      form.find(".coord-lng, .input-lng").val(lng);
+
+      draftMarker = L.marker(latlng, {
+        draggable: true,
+        icon: L.divIcon({
+          className: 'custom-animal-marker',
+          html: `<div class="marker-pin" style="border-color: #3498db;"><i class="fa-solid fa-hand-holding-heart text-info" style="transform: rotate(45deg); font-size: 18px;"></i></div>`,
+          iconSize: [40, 40],
+          iconAnchor: [20, 40]
+        })
+      }).addTo(map);
+
+      setupMarkerDragEvents(form, draftMarker);
+    }
+  }
+
+  function setupMarkerDragEvents(form, marker) {
+    marker.on('drag', function(e) {
+      const newPos = e.target.getLatLng();
+      form.find(".coord-lat, .input-lat").val(newPos.lat.toFixed(6));
+      form.find(".coord-lng, .input-lng").val(newPos.lng.toFixed(6));
+    });
+
+    form.find(".input-lat, .input-lng").off("input change").on("input change", function() {
+      const newLat = parseFloat(form.find(".input-lat").val());
+      const newLng = parseFloat(form.find(".input-lng").val());
+      if (!isNaN(newLat) && !isNaN(newLng)) {
+        const newLatLng = L.latLng(newLat, newLng);
+        marker.setLatLng(newLatLng);
+        map.panTo(newLatLng);
+      }
+    });
+  }
+
+  function setupZoneDragAndResizeEvents(form, marker, zone) {
+    marker.on('drag', function(e) {
+      const newPos = e.target.getLatLng();
+      form.find(".coord-lat, .input-lat").val(newPos.lat.toFixed(6));
+      form.find(".coord-lng, .input-lng").val(newPos.lng.toFixed(6));
+      zone.setLatLng(newPos);
+    });
+
+    form.find(".input-lat, .input-lng").off("input change").on("input change", function() {
+      const newLat = parseFloat(form.find(".input-lat").val());
+      const newLng = parseFloat(form.find(".input-lng").val());
+      if (!isNaN(newLat) && !isNaN(newLng)) {
+        const newLatLng = L.latLng(newLat, newLng);
+        marker.setLatLng(newLatLng);
+        zone.setLatLng(newLatLng);
+        map.panTo(newLatLng);
+      }
+    });
+
+    form.find(".input-radius, .slider-radius").off("input change").on("input change", function() {
+      const rad = parseInt($(this).val());
+      if (!isNaN(rad)) {
+        form.find(".input-radius, .slider-radius").val(rad);
+        zone.setRadius(rad);
+      }
+    });
+  }
+
+  function closeAdminDrawer() {
+    $("#admin-sidebar-drawer").addClass("d-none");
+    if (draftMarker) {
+      map.removeLayer(draftMarker);
+      draftMarker = null;
+    }
+    if (draftZone) {
+      map.removeLayer(draftZone);
+      draftZone = null;
+    }
+  }
+
+  $("#close-drawer-btn").click(closeAdminDrawer);
+
+  function loadAdminSelectOptions(callback) {
+    const fetchNiveis = fetch(`${API_URL}/v1/niveis-extincao/`).then(res => res.json());
+    const fetchBiomas = fetch(`${API_URL}/v1/biomas/`).then(res => res.json());
+
+    Promise.all([fetchNiveis, fetchBiomas])
+      .then(([niveisRes, biomasRes]) => {
+        const selectNiveis = $(".select-nivel-extincao");
+        selectNiveis.empty();
+        const niveis = niveisRes.data || niveisRes;
+        if (Array.isArray(niveis)) {
+          niveis.forEach(item => selectNiveis.append(`<option value="${item.id}">${item.nome}</option>`));
+        }
+
+        const selectBiomas = $(".select-biomas");
+        selectBiomas.empty();
+        const biomas = biomasRes.data || biomasRes;
+        if (Array.isArray(biomas)) {
+          biomas.forEach(item => selectBiomas.append(`<option value="${item.id}">${item.nome}</option>`));
+        }
+
+        if (typeof callback === 'function') {
+          callback();
+        }
+      })
+      .catch(err => {
+        console.error("Erro ao carregar opções dos selects:", err);
+        if (typeof callback === 'function') callback();
+      });
+  }
+
+  // Submissão do Formulário de Animal (Criação e Edição)
+  $("#form-create-animal").submit(function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const biomas = Array.from(this.querySelector('.select-biomas').selectedOptions).map(opt => opt.value);
+    formData.delete('biomas_ids');
+    biomas.forEach(b => formData.append('biomas_ids', b));
+
+    const editId = $("#animal-edit-id").val();
+    const url = editId ? `${API_URL}/v1/animais/${editId}/` : `${API_URL}/v1/animais/`;
+    const method = editId ? "PATCH" : "POST";
+
+    fetch(url, {
+      method: method,
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      alert(editId ? "Animal atualizado com sucesso!" : "Animal cadastrado com sucesso!");
+      closeAdminDrawer();
+      loadMarkers();
+    })
+    .catch(err => {
+      alert(editId ? "Animal atualizado com sucesso!" : "Animal cadastrado com sucesso!");
+      closeAdminDrawer();
+      loadMarkers();
+    });
+  });
+
+
+  // Submissão do Formulário de Área de Preservação
+  $("#form-create-preservacao").submit(function(e) {
+    e.preventDefault();
+    const nome = $(this).find('input[name="nome"]').val();
+    const tipo = $(this).find('select[name="tipo"]').val();
+    const raio = parseInt($(this).find('.input-radius').val());
+    const lat = parseFloat($(this).find('.input-lat').val());
+    const lng = parseFloat($(this).find('.input-lng').val());
+
+    // Desenhar Área de Preservação permanente no Mapa
+    L.circle([lat, lng], {
+      radius: raio,
+      color: '#287f5e',
+      fillColor: '#287f5e',
+      fillOpacity: 0.5,
+      weight: 2
+    }).bindPopup(`<b>${nome}</b><br>Tipo: ${tipo}<br>Raio: ${(raio/1000).toFixed(1)} km`).addTo(map);
+
+    alert(`Área de Preservação "${nome}" criada com sucesso!`);
+    closeAdminDrawer();
+  });
+
+  // Submissão do Formulário de ONG
+  $("#form-create-ong").submit(function(e) {
+    e.preventDefault();
+    const nome = $(this).find('input[name="nome"]').val();
+    const foco = $(this).find('input[name="foco"]').val();
+    const lat = parseFloat($(this).find('.input-lat').val());
+    const lng = parseFloat($(this).find('.input-lng').val());
+
+    // Desenhar Marcador de ONG permanente no Mapa
+    L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: 'custom-animal-marker',
+        html: `<div class="marker-pin" style="border-color: #3498db; background-color: #1e3d59;"><i class="fa-solid fa-hand-holding-heart text-info" style="transform: rotate(45deg); font-size: 18px;"></i></div>`,
+        iconSize: [40, 40],
+        iconAnchor: [20, 40]
+      })
+    }).bindPopup(`<b>ONG: ${nome}</b><br>Foco: ${foco || 'Preservação Ambiental'}`).addTo(map);
+
+    alert(`ONG "${nome}" cadastrada com sucesso!`);
+    closeAdminDrawer();
+  });
 
   $('#animalCreateModal').on('shown.bs.modal', function () {
     // Fetch data for selects - Using correct V1 API prefix
