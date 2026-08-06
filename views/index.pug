@@ -127,10 +127,13 @@ block content
           .mb-3
             label.form-label.small.fw-bold Imagem
             input.form-control(type="file", name="animal_imagem", accept="image/*")
-          .d-grid.gap-2.mt-4
-            button.btn.btn-success(type="submit")
+          .d-flex.gap-2.mt-4
+            button.btn.btn-success.w-100(type="submit")
               i.fa-solid.fa-check.me-1
               | Salvar Animal
+            button.btn.btn-outline-secondary.w-100.btn-cancel-drawer(type="button")
+              i.fa-solid.fa-xmark.me-1
+              | Cancelar
 
 
         //- Formulário Área de Preservação
@@ -165,10 +168,13 @@ block content
           .mb-3
             label.form-label.small.fw-bold Descrição / Atuação
             textarea.form-control(name="descricao", rows="3", placeholder="Descrição dos objetivos de conservação...")
-          .d-grid.gap-2.mt-4
-            button.btn.btn-success(type="submit")
+          .d-flex.gap-2.mt-4
+            button.btn.btn-success.w-100(type="submit")
               i.fa-solid.fa-check.me-1
               | Salvar Área de Preservação
+            button.btn.btn-outline-secondary.w-100.btn-cancel-drawer(type="button")
+              i.fa-solid.fa-xmark.me-1
+              | Cancelar
 
         //- Formulário ONG
         form#form-create-ong.admin-form.d-none
@@ -198,10 +204,13 @@ block content
           .mb-3
             label.form-label.small.fw-bold Descrição das Atividades
             textarea.form-control(name="descricao", rows="3", placeholder="Resumo dos projetos e formas de apoio...")
-          .d-grid.gap-2.mt-4
-            button.btn.btn-success(type="submit")
+          .d-flex.gap-2.mt-4
+            button.btn.btn-success.w-100(type="submit")
               i.fa-solid.fa-check.me-1
               | Salvar ONG
+            button.btn.btn-outline-secondary.w-100.btn-cancel-drawer(type="button")
+              i.fa-solid.fa-xmark.me-1
+              | Cancelar
 
   //- Modais
   include partials/modals
@@ -210,3 +219,4 @@ block content
 block scripts
   script(src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.10.5/typeahead.bundle.min.js")
   script(src="/assets/js/app.js")
+

@@ -733,7 +733,7 @@ $(document).ready(function () {
     }
   }
 
-  $("#close-drawer-btn").click(closeAdminDrawer);
+  $("#close-drawer-btn, .btn-cancel-drawer").click(closeAdminDrawer);
 
   function loadAdminSelectOptions(callback) {
     const fetchNiveis = fetch(`${API_URL}/v1/niveis-extincao/`).then(res => res.json());
