@@ -69,10 +69,53 @@ O projeto consiste em um **Mapa Interativo Web** focado na representação espac
 
 ---
 
-## 6. 🚀 COMANDOS RÁPIDOS E CREDENCIAIS
-*Consultar `backend/INSTRUCOES_TCC.txt` para detalhes de execução.*
+## 6. 🚀 COMO EXECUTAR E COMANDOS ÚTEIS
 
+### 6.1. Requisitos
+- Node.js & npm
+- Python 3.12+
+- PostgreSQL com PostGIS (ou Supabase configurado)
+
+### 6.2. Backend (Django)
+Acesse a pasta `backend/`, ative o ambiente virtual e instale as dependências:
+```bash
+cd backend
+python -m venv venv
+# Windows:
+.\venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py seed_db
+python manage.py runserver 8000
+```
+
+### 6.3. Frontend (Express)
+Na raiz do projeto:
+```bash
+npm install
+npm run dev
+```
+
+### 6.4. Comandos Úteis (via npm)
+- `npm run django:run`: Inicia o Django na porta 8000.
+- `npm run django:seed`: Popula o banco de dados local.
+- `npm run prisma:studio`: Abre o visualizador do banco de dados (Prisma).
+
+### 6.5. Credenciais e Integração
 - **Admin Padrão:** `admin / admin`
 - **User Padrão:** `user / user`
-- **Django Server:** `localhost:8000`
-- **Node/Express:** `localhost:3000` (ou porta configurada)
+- **Django Server (API):** `http://localhost:8000`
+- **Node/Express (Frontend):** `http://localhost:3000` (ou porta configurada)
+
+*A integração ocorre com o frontend em `public/` configurado para consumir a API Django em `http://localhost:8000`.*
+
+---
+
+## 7. 🏗️ ESTRUTURA DO PROJETO
+- **root**: Servidor Express para entrega do frontend estático e BFF.
+- **backend/**: Servidor Django REST Framework com suporte a dados geoespaciais (PostGIS) e Painel Admin.
+- **prisma/**: Gestão e visualização do banco de dados via Prisma Studio.
+- **public/**: Interface do usuário (HTML, CSS, JS).
