@@ -104,14 +104,14 @@ block content
           .input-group
             span.input-group-text.bg-dark.text-secondary.border-secondary
               i.fa-solid.fa-user
-            input#admin-user.form-control(type="text", placeholder="Digite o usuário", required, value="admin")
+            input#admin-user.form-control(type="text", placeholder="Digite o usuário", required)
         
         .mb-4
           label.form-label.fw-bold(for="admin-pass") Senha
           .input-group
             span.input-group-text.bg-dark.text-secondary.border-secondary
               i.fa-solid.fa-lock
-            input#admin-pass.form-control(type="password", placeholder="Digite a senha", required, value="admin")
+            input#admin-pass.form-control(type="password", placeholder="Digite a senha", required)
         
         button.btn.btn-admin-login.w-100.mb-2(type="submit")
           i.fa-solid.fa-right-to-bracket.me-2
@@ -134,29 +134,34 @@ block scripts
           ? "http://localhost:8000/api"
           : (window.API_BASE_URL || "https://tcc-mapa-de-especies.onrender.com/api");
 
-        fetch(`${API_URL}/auth/login/`, {
+        // Timeout rápido de 3 segundos para não travar a tela na Vercel
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
 
+        fetch(`${API_URL}/auth/login/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ username, password }),
+          signal: controller.signal
         })
         .then(response => response.json())
         .then(data => {
-          if (data.success && (data.user.role === 'admin' || data.user.is_superuser || data.user.is_staff || username === 'admin')) {
-            localStorage.setItem("token", data.token || "admin-token");
-            localStorage.setItem("user", JSON.stringify(data.user || { username: username, role: 'admin' }));
-            localStorage.setItem("adminMode", "true");
+          clearTimeout(timeoutId);
+          if (data.success && (data.user.role === 'admin' || data.user.is_superuser || data.user.is_staff || username === 'admin67')) {
+            sessionStorage.setItem("token", data.token || "admin-token");
+            sessionStorage.setItem("user", JSON.stringify(data.user || { username: username, role: 'admin' }));
+            sessionStorage.setItem("adminMode", "true");
             alert("Modo Administrador ativado com sucesso!");
             window.location.href = "/";
           } else if (data.success) {
-            localStorage.setItem("token", data.token);
-            localStorage.setItem("user", JSON.stringify(data.user));
-            localStorage.setItem("adminMode", "true");
+            sessionStorage.setItem("token", data.token);
+            sessionStorage.setItem("user", JSON.stringify(data.user));
+            sessionStorage.setItem("adminMode", "true");
             window.location.href = "/";
           } else {
-            if (username === "admin" && password === "admin") {
-              localStorage.setItem("adminMode", "true");
-              localStorage.setItem("user", JSON.stringify({ username: "admin", role: "admin" }));
+            if (username === "admin67" && password === "admin67") {
+              sessionStorage.setItem("adminMode", "true");
+              sessionStorage.setItem("user", JSON.stringify({ username: "admin67", role: "admin" }));
               alert("Modo Administrador ativado!");
               window.location.href = "/";
             } else {
@@ -165,14 +170,16 @@ block scripts
           }
         })
         .catch(error => {
+          clearTimeout(timeoutId);
           console.error("Erro:", error);
-          if (username === "admin" && password === "admin") {
-            localStorage.setItem("adminMode", "true");
-            localStorage.setItem("user", JSON.stringify({ username: "admin", role: "admin" }));
+          // Fallback rápido se a API estiver fora do ar
+          if (username === "admin67" && password === "admin67") {
+            sessionStorage.setItem("adminMode", "true");
+            sessionStorage.setItem("user", JSON.stringify({ username: "admin67", role: "admin" }));
             alert("Modo Administrador ativado (Modo Local)!");
             window.location.href = "/";
           } else {
-            alert("Não foi possível conectar ao servidor de autenticação. Tente admin / admin.");
+            alert("Não foi possível conectar ao servidor. Tente admin67 / admin67.");
           }
         });
       });

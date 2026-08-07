@@ -479,7 +479,7 @@ $(document).ready(function () {
   var lastClickedLatLng = null;
 
   function isAdminModeActive() {
-    return localStorage.getItem("adminMode") === "true";
+    return sessionStorage.getItem("adminMode") === "true";
   }
 
   function updateAdminUI() {
@@ -500,7 +500,7 @@ $(document).ready(function () {
     if (isAdminModeActive()) {
       e.preventDefault();
       if (confirm("Deseja sair do Modo Administrador e retornar ao modo normal?")) {
-        localStorage.removeItem("adminMode");
+        sessionStorage.removeItem("adminMode");
         updateAdminUI();
         alert("Modo Administrador encerrado.");
       }
