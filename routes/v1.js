@@ -2,14 +2,49 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-const upload = multer({ dest: path.join(__dirname, '..', 'public', 'media') });
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const dir = path.join(__dirname, '..', 'public', 'media');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    const ext = path.extname(file.originalname) || '.png';
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  }
+});
+
+const upload = multer({ storage: storage });
 
 const serialize = (obj) => JSON.parse(JSON.stringify(obj, (key, value) =>
   typeof value === 'bigint' ? value.toString() : value
 ));
+
+// Helper para salvar imagem em base64 (crop de ícone)
+function saveBase64Image(dataString, prefix = 'icon') {
+  if (!dataString || typeof dataString !== 'string' || !dataString.startsWith('data:image')) {
+    return null;
+  }
+  const matches = dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) return null;
+
+  const ext = matches[1].includes('jpeg') ? '.jpg' : '.png';
+  const buffer = Buffer.from(matches[2], 'base64');
+  const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`;
+  const dir = path.join(__dirname, '..', 'public', 'media');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(path.join(dir, filename), buffer);
+  return `/media/${filename}`;
+}
 
 // GET /api/v1/niveis-extincao/
 router.get('/niveis-extincao/', async (req, res) => {
@@ -61,7 +96,8 @@ router.get('/animais/', async (req, res) => {
         api_animal_biomas: {
           include: { api_bioma: true }
         },
-        api_animalimagem: true
+        api_animalimagem: true,
+        api_marcador: true
       },
       orderBy: { nome_comum: 'asc' }
     });
@@ -72,16 +108,42 @@ router.get('/animais/', async (req, res) => {
   }
 });
 
+const uploadFields = upload.fields([
+  { name: 'animal_imagem', maxCount: 5 },
+  { name: 'animal_icone', maxCount: 1 }
+]);
+
 // POST /api/v1/animais/
-router.post('/animais/', upload.single('animal_imagem'), async (req, res) => {
+router.post('/animais/', uploadFields, async (req, res) => {
   try {
     const b = req.body;
     const now = new Date();
 
     const nivelExtincaoId = b.nivel_extincao_id ? BigInt(b.nivel_extincao_id) : 1n;
-    const imgPath = (b.imagem_url && b.imagem_url.trim().length > 0)
-      ? b.imagem_url.trim()
-      : (req.file ? `/media/${req.file.filename}` : (b.imagem || null));
+    
+    // 1. Capturar arquivo ou URL da imagem principal
+    let imgPath = null;
+    if (req.files && req.files['animal_imagem'] && req.files['animal_imagem'].length > 0) {
+      imgPath = `/media/${req.files['animal_imagem'][0].filename}`;
+    } else if (b.imagem_url && b.imagem_url.trim().length > 0) {
+      imgPath = b.imagem_url.trim();
+    } else if (b.imagem) {
+      imgPath = b.imagem;
+    }
+
+    // 2. Capturar arquivo ou base64 do ícone
+    let iconPath = null;
+    if (b.icone_base64 && typeof b.icone_base64 === 'string' && b.icone_base64.startsWith('data:image')) {
+      iconPath = saveBase64Image(b.icone_base64, 'icon');
+    } else if (req.files && req.files['animal_icone'] && req.files['animal_icone'].length > 0) {
+      iconPath = `/media/${req.files['animal_icone'][0].filename}`;
+    } else if (b.icone) {
+      iconPath = b.icone;
+    }
+
+    // Fallback mútuo: Se enviou apenas ícone ou apenas imagem, aproveita para ambos
+    if (!iconPath && imgPath) iconPath = imgPath;
+    if (!imgPath && iconPath) imgPath = iconPath;
 
     const animal = await prisma.api_animal.create({
       data: {
@@ -100,7 +162,19 @@ router.post('/animais/', upload.single('animal_imagem'), async (req, res) => {
       }
     });
 
-    if (imgPath) {
+    // 3. Salvar imagens enviadas na tabela api_animalimagem
+    if (req.files && req.files['animal_imagem'] && req.files['animal_imagem'].length > 0) {
+      for (let i = 0; i < req.files['animal_imagem'].length; i++) {
+        await prisma.api_animalimagem.create({
+          data: {
+            animal_id: animal.id,
+            imagem: `/media/${req.files['animal_imagem'][i].filename}`,
+            legenda: b.nome_comum || '',
+            ordem: i + 1
+          }
+        });
+      }
+    } else if (imgPath) {
       await prisma.api_animalimagem.create({
         data: {
           animal_id: animal.id,
@@ -111,7 +185,7 @@ router.post('/animais/', upload.single('animal_imagem'), async (req, res) => {
       });
     }
 
-    // Mapear biomas selecionados
+    // 4. Mapear biomas selecionados
     if (b.biomas_ids) {
       const biomasArr = Array.isArray(b.biomas_ids) ? b.biomas_ids : [b.biomas_ids];
       for (const biomaId of biomasArr) {
@@ -126,16 +200,18 @@ router.post('/animais/', upload.single('animal_imagem'), async (req, res) => {
       }
     }
 
-    // Criar Marcador Geográfico no PostGIS se lat e lng forem informados
-    const lat = parseFloat(b.lat);
-    const lng = parseFloat(b.lng);
-    if (!isNaN(lat) && !isNaN(lng)) {
-      const icon = `${(b.nome_comum || 'animal').toLowerCase().replace(/\s+/g, '-')}-icon`;
-      await prisma.$executeRawUnsafe(`
-        INSERT INTO public.api_marcador (animal_id, location, icone, created_at)
-        VALUES (${animal.id}, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326), '${icon}', NOW());
-      `);
+    // 5. Criar Marcador Geográfico no PostGIS
+    let lat = parseFloat(b.lat);
+    let lng = parseFloat(b.lng);
+    if (isNaN(lat) || isNaN(lng)) {
+      lat = -27.59;
+      lng = -48.54;
     }
+    const iconVal = iconPath || imgPath || '/assets/img/logotipo.png';
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO public.api_marcador (animal_id, location, icone, created_at)
+      VALUES (${animal.id}, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326), '${iconVal}', NOW());
+    `);
 
     res.status(201).json({ success: true, data: serialize(animal) });
   } catch (err) {
@@ -145,23 +221,38 @@ router.post('/animais/', upload.single('animal_imagem'), async (req, res) => {
 });
 
 // PATCH /api/v1/animais/:id/ (Edição)
-router.patch('/animais/:id/', upload.single('animal_imagem'), async (req, res) => {
+router.patch('/animais/:id/', uploadFields, async (req, res) => {
   try {
     const id = BigInt(req.params.id);
     const b = req.body;
     const now = new Date();
 
-    const imgPath = (b.imagem_url && b.imagem_url.trim().length > 0)
-      ? b.imagem_url.trim()
-      : (req.file ? `/media/${req.file.filename}` : null);
+    let imgPath = null;
+    if (req.files && req.files['animal_imagem'] && req.files['animal_imagem'].length > 0) {
+      imgPath = `/media/${req.files['animal_imagem'][0].filename}`;
+    } else if (b.imagem_url && b.imagem_url.trim().length > 0) {
+      imgPath = b.imagem_url.trim();
+    }
+
+    let iconPath = null;
+    if (b.icone_base64 && typeof b.icone_base64 === 'string' && b.icone_base64.startsWith('data:image')) {
+      iconPath = saveBase64Image(b.icone_base64, 'icon');
+    } else if (req.files && req.files['animal_icone'] && req.files['animal_icone'].length > 0) {
+      iconPath = `/media/${req.files['animal_icone'][0].filename}`;
+    } else if (b.icone) {
+      iconPath = b.icone;
+    }
+
+    if (!iconPath && imgPath) iconPath = imgPath;
+    if (!imgPath && iconPath) imgPath = iconPath;
 
     const updateData = { updated_at: now };
     if (b.nome_comum) updateData.nome_comum = b.nome_comum;
     if (b.nome_cientifico) updateData.nome_cientifico = b.nome_cientifico;
     if (b.classe) updateData.classe = b.classe;
     if (b.familia) updateData.familia = b.familia;
-    if (b.peso) updateData.peso = parseFloat(b.peso);
-    if (b.altura) updateData.altura = parseFloat(b.altura);
+    if (b.peso !== undefined && b.peso !== '') updateData.peso = parseFloat(b.peso);
+    if (b.altura !== undefined && b.altura !== '') updateData.altura = parseFloat(b.altura);
     if (b.dieta) updateData.dieta = b.dieta;
     if (b.habitos) updateData.habitos = b.habitos;
     if (b.obs) updateData.obs = b.obs;
@@ -172,7 +263,19 @@ router.patch('/animais/:id/', upload.single('animal_imagem'), async (req, res) =
       data: updateData
     });
 
-    if (imgPath) {
+    if (req.files && req.files['animal_imagem'] && req.files['animal_imagem'].length > 0) {
+      await prisma.api_animalimagem.deleteMany({ where: { animal_id: id } });
+      for (let i = 0; i < req.files['animal_imagem'].length; i++) {
+        await prisma.api_animalimagem.create({
+          data: {
+            animal_id: id,
+            imagem: `/media/${req.files['animal_imagem'][i].filename}`,
+            legenda: animal.nome_comum || '',
+            ordem: i + 1
+          }
+        });
+      }
+    } else if (imgPath) {
       await prisma.api_animalimagem.deleteMany({ where: { animal_id: id } });
       await prisma.api_animalimagem.create({
         data: {
@@ -199,14 +302,30 @@ router.patch('/animais/:id/', upload.single('animal_imagem'), async (req, res) =
       }
     }
 
-    // Atualizar posição do marcador no PostGIS se lat/lng fornecidos
+    // Atualizar posição e ícone do marcador no PostGIS
     const lat = parseFloat(b.lat);
     const lng = parseFloat(b.lng);
-    if (!isNaN(lat) && !isNaN(lng)) {
+    const hasCoords = !isNaN(lat) && !isNaN(lng);
+
+    const existingMarker = await prisma.api_marcador.findFirst({ where: { animal_id: id } });
+    if (existingMarker) {
+      let setClauses = [];
+      if (hasCoords) {
+        setClauses.push(`location = ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)`);
+      }
+      if (iconPath) {
+        setClauses.push(`icone = '${iconPath}'`);
+      }
+      if (setClauses.length > 0) {
+        await prisma.$executeRawUnsafe(`UPDATE public.api_marcador SET ${setClauses.join(', ')} WHERE animal_id = ${id};`);
+      }
+    } else if (hasCoords || iconPath) {
+      const coordLat = hasCoords ? lat : -27.59;
+      const coordLng = hasCoords ? lng : -48.54;
+      const iconVal = iconPath || imgPath || '/assets/img/logotipo.png';
       await prisma.$executeRawUnsafe(`
-        UPDATE public.api_marcador 
-        SET location = ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)
-        WHERE animal_id = ${id};
+        INSERT INTO public.api_marcador (animal_id, location, icone, created_at)
+        VALUES (${id}, ST_SetSRID(ST_MakePoint(${coordLng}, ${coordLat}), 4326), '${iconVal}', NOW());
       `);
     }
 

@@ -51,9 +51,25 @@ router.get('/', async (req, res) => {
         }
 
         const rawImg = m.imagem_relacionada;
-        const imgUrl = rawImg
-          ? (rawImg.startsWith('http') || rawImg.startsWith('/') ? rawImg : `/media/${rawImg}`)
-          : '/assets/img/logotipo.png';
+        let imgUrl = '/assets/img/logotipo.png';
+        if (rawImg && typeof rawImg === 'string' && rawImg.trim().length > 0) {
+          const t = rawImg.trim();
+          if (t.startsWith('http') || t.startsWith('/') || t.startsWith('data:')) {
+            imgUrl = t;
+          } else if (t.includes('.')) {
+            imgUrl = `/media/${t}`;
+          }
+        }
+
+        let iconUrl = imgUrl;
+        if (m.icone && typeof m.icone === 'string' && m.icone.trim().length > 0) {
+          const ic = m.icone.trim();
+          if (ic.startsWith('http') || ic.startsWith('/') || ic.startsWith('data:')) {
+            iconUrl = ic;
+          } else if (ic.includes('.')) {
+            iconUrl = `/media/${ic}`;
+          }
+        }
 
         return {
           type: 'Feature',
@@ -73,7 +89,8 @@ router.get('/', async (req, res) => {
             nivel_extincao_id: m.nivel_extincao_id ? m.nivel_extincao_id.toString() : null,
             nivel_extincao: m.nivel_extincao,
             nivel_sigla: m.nivel_sigla,
-            icone: m.icone,
+            icone: iconUrl,
+            imagem: imgUrl,
             biomas: m.biomas || [],
             imagens: [{
               id: 1,

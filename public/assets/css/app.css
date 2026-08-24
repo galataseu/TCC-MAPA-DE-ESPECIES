@@ -41,7 +41,7 @@ html, body, #main-layout {
   border-right: 2px solid #1a5fb4;
   padding: 20px 0;
   position: relative;
-  z-index: 2000;
+  z-index: 3100;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -76,10 +76,10 @@ html, body, #main-layout {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px; /* Ícones menores */
+  font-size: 20px;
   transition: all 0.2s ease;
   position: relative;
-  z-index: 1001; /* Ícone SEMPRE acima de tudo */
+  z-index: 3201;
   border-radius: 12px;
   text-decoration: none !important;
   border: none !important;
@@ -94,13 +94,13 @@ html, body, #main-layout {
 #vertical-nav .nav > li > a i {
   pointer-events: none;
   position: relative;
-  z-index: 1002; /* Força o ícone acima da pílula */
+  z-index: 3202;
 }
 
 /* Hover Label (Pílula Azul) */
 .nav-label {
   position: absolute;
-  left: 0px; /* Começa exatamente na borda da navbar */
+  left: 0px;
   top: 50%;
   transform: translateY(-50%) scaleX(0);
   height: 50px;
@@ -111,7 +111,7 @@ html, body, #main-layout {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 0 25px 0 60px; /* Espaço de 60px para o ícone ficar livre à esquerda */
+  padding: 0 25px 0 60px;
   white-space: nowrap;
   font-weight: 800;
   font-size: 13px;
@@ -121,7 +121,7 @@ html, body, #main-layout {
   visibility: hidden;
   transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s ease;
   transform-origin: left;
-  z-index: 1000; /* Pílula abaixo do ícone */
+  z-index: 3200;
   pointer-events: none;
   box-shadow: 0 4px 15px rgba(0,0,0,0.5);
   border-radius: 25px;
@@ -181,23 +181,30 @@ html, body, #main-layout {
   right: 20px;
   min-width: 350px;
   max-width: 700px;
-  width: 450px;
+  width: 480px;
   z-index: 3000;
-  background-color: #2B2A33;
-  border: 1px solid #1a5fb4;
-  border-radius: 4px;
+  background-color: #23222B;
+  border: 1.5px solid #3B3A48;
+  border-radius: 12px;
   display: flex;
-  align-items: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  flex-direction: column;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-#main-layout.light-mode #floating-search {
-  background-color: #ffffff;
-  border-color: #2a7ade;
+#floating-search:focus-within {
+  border-color: #1a5fb4;
+  box-shadow: 0 10px 30px rgba(26, 95, 180, 0.35);
+}
+
+.search-input-wrapper {
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 
 #floating-search .search-icon-container {
-  padding: 0 15px;
+  padding: 0 16px;
   color: #FFAA44;
   font-size: 18px;
   display: flex;
@@ -205,18 +212,175 @@ html, body, #main-layout {
 }
 
 #floating-search .form-control {
-  height: 45px;
+  height: 48px;
   background-color: transparent;
   color: #fff;
   border: none;
-  padding: 0 10px;
-  font-size: 16px;
+  padding: 0 12px;
+  font-size: 15px;
   flex: 1;
   box-shadow: none !important;
 }
 
-#main-layout.light-mode #floating-search .form-control {
-  color: #333;
+#floating-search .form-control::placeholder {
+  color: #8C8B96 !important;
+  font-style: italic;
+}
+
+/* Dropdown de Resultados da Pesquisa (Prototipagem) */
+.search-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background-color: #1F1E26;
+  border: 1.5px solid #3B3A48;
+  border-radius: 14px;
+  box-shadow: 0 14px 35px rgba(0,0,0,0.8);
+  max-height: 420px;
+  overflow-y: auto;
+  z-index: 3050;
+  padding: 8px;
+}
+
+.search-category-header {
+  padding: 8px 12px 4px 12px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #8C8B96;
+}
+
+.search-item-location {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.15s ease;
+  color: #E8E8EC;
+}
+
+.search-item-location:hover {
+  background-color: rgba(255, 255, 255, 0.09);
+  color: #FFFFFF;
+  transform: translateX(2px);
+}
+
+.search-item-location .loc-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.search-item-location .loc-icon {
+  color: #A09FA9;
+  font-size: 1.1rem;
+}
+
+.search-item-location .loc-coords {
+  font-size: 0.8rem;
+  color: #8C8B96;
+  font-family: monospace;
+}
+
+.search-item-animal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.15s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.search-item-animal:last-child {
+  border-bottom: none;
+}
+
+.search-item-animal:hover {
+  background-color: rgba(255, 255, 255, 0.09);
+  transform: translateX(2px);
+}
+
+.search-item-animal .animal-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.search-item-animal .animal-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-item-animal .animal-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.search-item-animal .animal-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.search-item-animal .animal-names {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.search-item-animal .animal-sci-name {
+  font-size: 0.82rem;
+  font-weight: 400;
+  font-style: italic;
+  color: #A09FA9;
+  margin-left: 6px;
+}
+
+.search-item-animal .animal-desc {
+  font-size: 0.78rem;
+  color: #8C8B96;
+}
+
+.search-item-animal .animal-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.search-item-animal .status-badge {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #FFF;
+  letter-spacing: 0.5px;
+}
+
+.search-item-animal .animal-coords {
+  font-size: 0.76rem;
+  color: #8C8B96;
+  font-family: monospace;
 }
 
 /* Modais */
@@ -226,7 +390,6 @@ html, body, #main-layout {
   border: 1px solid #1a5fb4;
 }
 
-/* Efeito de Pan lento original */
 .modal-img-pan {
   width: 100%;
   height: 100%; object-fit: cover; object-position: center;
@@ -248,86 +411,106 @@ html, body, #main-layout {
   border-color: #1a5fb4;
 }
 
-/* Controles do Mapa */
-#map-controls {
-  position: absolute;
-  bottom: 180px;
-  right: 10px;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* Leaflet UI & Botões de Zoom e Localização nas Cores do Site */
+.leaflet-control-zoom,
+.leaflet-control-locate {
+  border: 1.5px solid #1a5fb4 !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6) !important;
+  background-color: #2B2A33 !important;
 }
 
-.map-control-btn {
-  width: 40px;
-  height: 40px;
-  background-color: #2B2A33;
-  color: #FFAA44;
-  border: 1px solid #1a5fb4;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+.leaflet-control-zoom a,
+.leaflet-control-locate a {
+  background-color: #2B2A33 !important;
+  color: #FFAA44 !important;
+  border-bottom: 1px solid rgba(255,255,255,0.12) !important;
+  font-weight: bold !important;
+  transition: all 0.2s ease !important;
+  width: 36px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
-#main-layout.light-mode .map-control-btn {
-  background-color: #ffffff;
-  color: #1a5fb4;
+.leaflet-control-zoom a:last-child {
+  border-bottom: none !important;
 }
 
-/* Leaflet UI */
+.leaflet-control-zoom a:hover,
+.leaflet-control-locate a:hover {
+  background-color: #3B3A48 !important;
+  color: #FFFFFF !important;
+}
+
 .leaflet-bottom.leaflet-right {
-  bottom: 320px !important;
+  bottom: 20px !important;
+  right: 15px !important;
 }
 
+/* Legenda Organizada (Biomas + Níveis de Extinção) */
 #map-legend {
   position: absolute;
-  bottom: 15px; 
-  right: 10px;
+  bottom: 20px; 
+  left: 85px; /* Perto do canto inferior esquerdo */
   z-index: 1000;
-  background-color: rgba(43, 42, 51, 0.95);
+  background-color: rgba(35, 34, 43, 0.95);
   color: #eee;
-  padding: 12px;
-  border: 1px solid #1a5fb4;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  padding: 14px 16px;
+  border: 1px solid #3B3A48;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
   width: auto;
-  max-width: 250px;
+  min-width: 210px;
+  max-width: 260px;
+  backdrop-filter: blur(10px);
 }
 
 .legend-header {
-  font-weight: bold;
+  font-weight: 800;
   margin-bottom: 8px;
-  border-bottom: 1px solid #1a5fb4;
-  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  padding-bottom: 6px;
   color: #FFAA44;
   font-size: 14px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.legend-section-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #8C8B96;
+  margin-top: 6px;
+  margin-bottom: 6px;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-size: 13px;
+  font-weight: 600;
 }
 
 .legend-color {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   display: inline-block;
-  margin-right: 10px;
+  margin-right: 8px;
   border-radius: 3px;
   flex-shrink: 0;
 }
 
 .legend-icon {
-  width: 20px;
-  height: 20px;
-  margin-right: 10px;
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
   object-fit: contain;
   flex-shrink: 0;
 }
@@ -339,6 +522,7 @@ html, body, #main-layout {
 
 .legend-toggle {
   font-size: 12px;
+  color: #C0BFC8;
 }
 
 .legend-toggle label {
@@ -348,34 +532,126 @@ html, body, #main-layout {
   gap: 8px;
 }
 
-/* Marcadores Personalizados */
+.extinction-legend-items .legend-item {
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.extinction-badge {
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #FFF;
+  min-width: 26px;
+  text-align: center;
+  display: inline-block;
+}
+
+.legend-text {
+  font-size: 0.8rem;
+  color: #DDD;
+}
+
+/* ==========================================================================
+   MARCADORES PERSONALIZADOS & HOVER EXPANSÍVEL
+   ========================================================================== */
 .custom-animal-marker {
   background: none;
   border: none;
 }
 
+.marker-container {
+  position: relative;
+  cursor: pointer;
+}
+
 .marker-pin {
-  width: 40px;
-  height: 40px;
-  border-radius: 50% 50% 50% 0;
-  background: #2B2A33;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #23222B;
+  border: 2.5px solid #1a5fb4;
+  border-radius: 25px;
+  padding: 3px 4px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.65);
+  transition: all 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  white-space: nowrap;
+  user-select: none;
+  transform-origin: 18px 36px;
+}
+
+/* Ponta inferior do formato clássico de marcador de mapa */
+.marker-pin::after {
+  content: '';
   position: absolute;
-  transform: rotate(-45deg);
-  left: 50%;
-  top: 50%;
-  margin: -20px 0 0 -20px;
-  border: 3px solid #1a5fb4;
+  bottom: -6px;
+  left: 17px;
+  transform: translateX(-50%) rotate(45deg);
+  width: 9px;
+  height: 9px;
+  background-color: #23222B;
+  border-right: 2.5px solid;
+  border-bottom: 2.5px solid;
+  border-color: inherit;
+  transition: all 0.28s ease;
+  z-index: -1;
+}
+
+.marker-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  flex-shrink: 0;
+  transition: all 0.28s ease;
 }
 
-.marker-pin img {
-  width: 24px;
-  height: 24px;
-  transform: rotate(45deg);
-  object-fit: contain;
+.marker-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.marker-name-label {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  transition: all 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  white-space: nowrap;
+  padding-right: 0;
+}
+
+/* Efeito Hover Expansível do Marcador (mantendo a ponta do pino) */
+.custom-animal-marker:hover .marker-pin {
+  padding: 5px 14px 5px 6px;
+  transform: scale(1.15) translateY(-6px);
+  box-shadow: 0 8px 22px rgba(0,0,0,0.85);
+  z-index: 9999;
+}
+
+.custom-animal-marker:hover .marker-avatar {
+  width: 36px;
+  height: 36px;
+}
+
+.custom-animal-marker:hover .marker-pin::after {
+  left: 20px;
+}
+
+.custom-animal-marker:hover .marker-name-label {
+  max-width: 260px;
+  opacity: 1;
+  padding-right: 6px;
 }
 
 .animal-popup {
@@ -389,6 +665,72 @@ html, body, #main-layout {
 
 .animal-popup p {
   margin-bottom: 5px;
+}
+
+/* Custom Stepper Controls */
+.custom-stepper-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.custom-stepper-wrapper input[type=number] {
+  -moz-appearance: textfield;
+}
+
+.custom-stepper-wrapper input[type=number]::-webkit-inner-spin-button,
+.custom-stepper-wrapper input[type=number]::-webkit-outer-spin-button {
+  opacity: 0.5;
+  filter: invert(1);
+  cursor: pointer;
+  height: 24px;
+}
+
+/* Imagem arrastável no círculo de ícone */
+.crop-draggable-img {
+  cursor: grab;
+  position: absolute;
+  touch-action: none;
+  user-select: none;
+  max-width: none;
+}
+
+.crop-draggable-img:active {
+  cursor: grabbing;
+}
+
+/* Menu Dropdown de 3 Pontinhos no Card */
+.species-card-menu-dropdown {
+  position: absolute;
+  top: 36px;
+  right: 10px;
+  background: #252430;
+  border: 1px solid #484654;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+  z-index: 200;
+  min-width: 130px;
+  overflow: hidden;
+  animation: popupScale 0.15s ease-out;
+}
+
+.species-card-menu-item {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #E8E8EC;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.species-card-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.species-card-menu-item.text-danger:hover {
+  background-color: rgba(231, 76, 60, 0.2);
 }
 
 /* Custom Scrollbar Minimalista */
@@ -561,5 +903,619 @@ html, body, #main-layout {
 .tiny {
   font-size: 0.78rem;
 }
+
+/* ==========================================================================
+   TELA DE CADASTRO DE ESPÉCIES & SPLIT-SCREEN (DESIGN SYSTEM DEDICADO)
+   ========================================================================== */
+
+.species-modal-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 70px; /* Alinhado com a navbar lateral */
+  right: 0;
+  bottom: 0;
+  z-index: 2900;
+  background-color: #23222B;
+  color: #E8E8EC;
+  display: flex;
+  overflow: hidden;
+}
+
+.species-split-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.species-form-panel {
+  flex: 1;
+  padding: 30px 40px;
+  overflow-y: auto;
+  background-color: #23222B;
+  border-right: 2px solid #18171E;
+  display: flex;
+  flex-direction: column;
+}
+
+.species-display-panel {
+  flex: 1;
+  padding: 25px 30px;
+  background-color: #1F1E26;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Título Estilizado */
+.species-title {
+  font-size: 1.8rem;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 1px;
+  color: #FFFFFF;
+  margin-bottom: 25px;
+  text-transform: uppercase;
+}
+
+/* Área de Upload / Previews */
+.upload-previews-container {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 30px;
+  align-items: flex-start;
+}
+
+.image-stack-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.icon-upload-section {
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.section-subtitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #D1D1D8;
+  margin-bottom: 12px;
+}
+
+/* Stack de Imagens (1000px x 1000px) */
+.image-stack-wrapper {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  cursor: pointer;
+}
+
+.image-card-stack {
+  position: absolute;
+  border-radius: 24px;
+  width: 75%;
+  height: 180px;
+  background-color: #A3ADB2;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.image-card-stack.card-back-2 {
+  right: 0;
+  top: 10px;
+  background-color: #929D9D;
+  z-index: 1;
+}
+
+.image-card-stack.card-back-1 {
+  right: 40px;
+  top: 5px;
+  background-color: #B4C0C0;
+  z-index: 2;
+}
+
+.image-card-stack.card-main {
+  left: 0;
+  top: 0;
+  background-color: #E6ECEC;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-card-stack.card-main img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.upload-placeholder-content {
+  text-align: center;
+  color: #556066;
+}
+
+.upload-placeholder-content i {
+  font-size: 2.2rem;
+  margin-bottom: 8px;
+}
+
+/* Circulo Ícone (500px x 500px) */
+.icon-circle-wrapper {
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+  overflow: hidden;
+  position: relative;
+  transition: transform 0.2s ease;
+}
+
+.icon-circle-wrapper:hover {
+  transform: scale(1.03);
+}
+
+.icon-circle-wrapper img {
+  width: 85%;
+  height: 85%;
+  object-fit: contain;
+}
+
+.dimension-label {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: #8C8B96;
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Campos de Formulário Dark Pill */
+.dark-pill-input,
+.dark-pill-select {
+  background-color: #383642 !important;
+  border: 1px solid #484654 !important;
+  color: #FFFFFF !important;
+  border-radius: 20px !important;
+  padding: 10px 18px !important;
+  font-size: 0.95rem !important;
+}
+
+.dark-pill-input:focus,
+.dark-pill-select:focus {
+  background-color: #42404F !important;
+  border-color: #9C5B1C !important;
+  box-shadow: 0 0 0 3px rgba(156, 91, 28, 0.3) !important;
+}
+
+.dark-pill-input::placeholder {
+  color: #8E8D9B !important;
+  font-style: italic !important;
+}
+
+.species-form-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #D1D1D8;
+  margin-bottom: 6px;
+  display: block;
+}
+
+/* Tag Chips Interativos para Biomas */
+.biomes-tag-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  background-color: #383642;
+  border: 1px solid #484654;
+  border-radius: 20px;
+  padding: 8px 14px;
+  min-height: 48px;
+}
+
+.biome-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 16px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  transition: transform 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
+}
+
+.biome-chip:hover {
+  transform: translateY(-2px);
+}
+
+.biome-chip[data-selected="false"] {
+  opacity: 0.45;
+  filter: grayscale(0.8);
+}
+
+.biome-chip-mata-atlantica { background-color: #287F5E !important; }
+.biome-chip-pampa { background-color: #3B7BA5 !important; }
+.biome-chip-cerrado { background-color: #E6C140 !important; color: #111111 !important; }
+
+/* Mini Mapa da Localização (Painel Direito) */
+#right-panel-map-container,
+#modal-right-panel-map {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 480px !important;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #3B3A48;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  display: block !important;
+}
+
+/* Nível de Extinção Dynamic Select & Colored Options */
+.select-nivel-extincao {
+  font-weight: 700 !important;
+  color: #FFFFFF !important;
+  transition: background-color 0.3s ease, border-color 0.3s ease !important;
+}
+
+.select-nivel-extincao option {
+  font-weight: bold;
+  padding: 8px;
+  color: #FFFFFF;
+}
+
+.select-nivel-extincao option[data-sigla="cr"],
+.select-nivel-extincao option[value="1"] { background-color: #FF4068; color: #FFF; }
+.select-nivel-extincao option[data-sigla="en"],
+.select-nivel-extincao option[value="2"] { background-color: #FF6426; color: #FFF; }
+.select-nivel-extincao option[data-sigla="vu"],
+.select-nivel-extincao option[value="3"] { background-color: #FFA63A; color: #111; }
+.select-nivel-extincao option[data-sigla="nt"],
+.select-nivel-extincao option[value="4"] { background-color: #217757; color: #FFF; }
+.select-nivel-extincao option[data-sigla="lc"],
+.select-nivel-extincao option[value="5"] { background-color: #1A5FB4; color: #FFF; }
+.select-nivel-extincao option[data-sigla="dd"],
+.select-nivel-extincao option[value="6"] { background-color: #555555; color: #FFF; }
+
+
+
+/* Painel Direito: Barra de Alternância (Mapa vs Lista) */
+.view-toggle-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.view-toggle-btns {
+  display: flex;
+  background-color: #2A2934;
+  border-radius: 20px;
+  padding: 3px;
+  border: 1px solid #3B3A48;
+}
+
+.toggle-btn {
+  background: transparent;
+  border: none;
+  color: #A09FA9;
+  padding: 6px 16px;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toggle-btn.active {
+  background-color: #9C5B1C;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* Busca do Painel Direito */
+.right-panel-search {
+  background-color: #2A2934 !important;
+  border: 1px solid #3B3A48 !important;
+  border-radius: 20px !important;
+  color: #FFFFFF !important;
+  padding: 10px 18px 10px 42px !important;
+  font-size: 0.92rem !important;
+}
+
+.search-box-wrapper {
+  position: relative;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.search-box-wrapper .search-icon {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #A09FA9;
+  pointer-events: none;
+}
+
+/* Grid de Cards de Espécies (Direita) */
+.species-cards-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+.species-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+/* Card de Espécie (Tamanho Fixo e Rígido) */
+.species-card {
+  border-radius: 18px;
+  padding: 16px 14px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  height: 230px;
+  min-height: 230px;
+  max-height: 230px;
+  box-sizing: border-box;
+  justify-content: space-between;
+  overflow: hidden;
+}
+
+.species-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.4);
+}
+
+/* Variações de Cores dos Cards */
+.card-color-brown { background-color: #8C511B; }
+.card-color-crimson { background-color: #7E2034; }
+.card-color-slate { background-color: #3C4350; }
+.card-color-green { background-color: #1E5A3D; }
+
+/* Botão de 3 Pontos */
+.species-card-menu-btn {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  z-index: 10;
+}
+
+.species-card-menu-btn:hover {
+  color: #FFFFFF;
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Foto/Avatar do Card (Tamanho 100% Rígido e Fixo) */
+.species-card-avatar {
+  width: 84px;
+  height: 84px;
+  min-width: 84px;
+  min-height: 84px;
+  max-width: 84px;
+  max-height: 84px;
+  border-radius: 50%;
+  background-color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.species-card-avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  display: block;
+}
+
+.species-card-name-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 4px;
+  margin-bottom: 4px;
+}
+
+.species-card-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #FFFFFF;
+  text-align: center;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+
+.species-card-extinction-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: #FFFFFF;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  flex-shrink: 0;
+}
+
+/* Rodapé do Card */
+.species-card-footer {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.species-card-id-pill {
+  font-family: monospace;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+
+.species-card-meta {
+  text-align: right;
+  line-height: 1.3;
+}
+
+/* Efeito Visual de Cartas Empilhadas "Tortas" (Tilted Card Stack) */
+.image-stack-wrapper {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  cursor: pointer;
+  perspective: 1000px;
+}
+
+.image-card-stack {
+  position: absolute;
+  border-radius: 24px;
+  width: 78%;
+  height: 180px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.4);
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.image-card-stack.card-back-2 {
+  right: 5px;
+  top: 12px;
+  background-color: #7D888D;
+  z-index: 1;
+  transform: rotate(-7deg) scale(0.95);
+}
+
+.image-card-stack.card-back-1 {
+  right: 35px;
+  top: 6px;
+  background-color: #9AA7AC;
+  z-index: 2;
+  transform: rotate(6deg) scale(0.98);
+}
+
+.image-card-stack.card-main {
+  left: 5px;
+  top: 0;
+  background-color: #E6ECEC;
+  z-index: 3;
+  transform: rotate(-2deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-stack-wrapper:hover .card-back-2 {
+  transform: rotate(-11deg) translateY(4px) scale(0.96);
+}
+
+.image-stack-wrapper:hover .card-back-1 {
+  transform: rotate(9deg) translateY(-2px) scale(0.99);
+}
+
+.image-stack-wrapper:hover .card-main {
+  transform: rotate(0deg) scale(1.02);
+}
+
+.image-card-stack img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Campos de Formulário Coloridos (Pill Inputs Coloridos) */
+.colored-pill-input-bronze {
+  background-color: #3D2D20 !important;
+  border: 1.5px solid #9C5B1C !important;
+  color: #FFFFFF !important;
+  border-radius: 20px !important;
+  padding: 10px 18px !important;
+}
+
+.colored-pill-input-green {
+  background-color: #1A3628 !important;
+  border: 1.5px solid #1E5A3D !important;
+  color: #FFFFFF !important;
+  border-radius: 20px !important;
+  padding: 10px 18px !important;
+}
+
+.colored-pill-input-crimson {
+  background-color: #3A1B24 !important;
+  border: 1.5px solid #902237 !important;
+  color: #FFFFFF !important;
+  border-radius: 20px !important;
+  padding: 10px 18px !important;
+}
+
+.colored-pill-input-blue {
+  background-color: #1B2B3E !important;
+  border: 1.5px solid #1A5FB4 !important;
+  color: #FFFFFF !important;
+  border-radius: 20px !important;
+  padding: 10px 18px !important;
+}
+
+.colored-pill-input-bronze:focus { border-color: #D67E27 !important; box-shadow: 0 0 0 3px rgba(156, 91, 28, 0.4) !important; }
+.colored-pill-input-green:focus { border-color: #2ECC71 !important; box-shadow: 0 0 0 3px rgba(30, 90, 61, 0.4) !important; }
+.colored-pill-input-crimson:focus { border-color: #FF4068 !important; box-shadow: 0 0 0 3px rgba(144, 34, 55, 0.4) !important; }
+.colored-pill-input-blue:focus { border-color: #3584E4 !important; box-shadow: 0 0 0 3px rgba(26, 95, 180, 0.4) !important; }
+
+/* Modo Usuário Comum (Visualização Full Width) */
+.user-mode-display-only {
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  border-left: none !important;
+  padding: 35px 50px !important;
+}
+
+.user-mode-display-only .species-cards-grid {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
+  gap: 22px !important;
+}
+
+
 
 

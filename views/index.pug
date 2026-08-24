@@ -6,23 +6,18 @@ block content
   main#container
     #map
     
-    //- Barra de Pesquisa Flutuante
+    //- Barra de Pesquisa Flutuante com Dropdown Customizado
     #floating-search
       .search-icon-container
         i#searchicon.fa-solid.fa-magnifying-glass
-      input#searchbox.form-control(type="text", placeholder="Pesquisar cidade...")
-
-    //- Painel de Controles Flutuantes (Nova localização conforme pedido)
-    #map-controls
-      button#theme-toggle.map-control-btn(title="Alternar Modo Claro/Escuro")
-        i.fa-solid.fa-moon
-      button#config-btn.map-control-btn(title="Configurações de Exibição")
-        i.fa-solid.fa-gear
-      button#legend-btn.map-control-btn(title="Ver Legenda")
-        i.fa-solid.fa-map
+      input#searchbox.form-control(type="text", placeholder="Pesquisar animal ou local...", autocomplete="off")
+      #search-results-dropdown.search-dropdown-menu.d-none
 
     #map-legend.leaflet-bar
-      .legend-header Legenda
+      .legend-header
+        i.fa-solid.fa-layer-group.me-1
+        | Legenda
+      .legend-section-title Biomas
       .legend-items
         .legend-item
           span.legend-color(style="background-color: #287f5e;")
@@ -36,11 +31,33 @@ block content
           span.legend-color(style="background-color: #E6C140;")
           img.legend-icon(src="/svg/cerrado.png")
           span Cerrado
-      hr.legend-divider
       .legend-toggle
         label
           input#toggle-textures-legend(type="checkbox", checked)
           |  Exibir Texturas
+
+      hr.legend-divider
+
+      .legend-section-title Níveis de Extinção
+      .legend-items.extinction-legend-items
+        .legend-item
+          span.extinction-badge(style="background-color: #FF4068;") CR
+          span.legend-text Criticamente em Perigo
+        .legend-item
+          span.extinction-badge(style="background-color: #FF6426;") EN
+          span.legend-text Em Perigo
+        .legend-item
+          span.extinction-badge(style="background-color: #FFA63A; color: #111;") VU
+          span.legend-text Vulnerável
+        .legend-item
+          span.extinction-badge(style="background-color: #217757;") NT
+          span.legend-text Quase Ameaçada
+        .legend-item
+          span.extinction-badge(style="background-color: #1A5FB4;") LC
+          span.legend-text Pouco Preocupante
+        .legend-item
+          span.extinction-badge(style="background-color: #555555;") DD
+          span.legend-text Dados Insuficientes
 
     //- Indicador Visual do Modo Admin
     #admin-mode-badge.d-none
@@ -59,7 +76,150 @@ block content
         i.fa-solid.fa-hand-holding-heart.text-info
         span Criar ONG
 
-    //- Barra Lateral (Sidebar Drawer) para Cadastro e Ajuste Fino
+    //- Modal Overlay Split-Screen para Cadastro de Espécies (Criar Animal / Clique Direito)
+    #species-admin-modal.species-modal-fullscreen.d-none
+      button#close-species-modal-btn.btn-close.btn-close-white(type="button", style="position: absolute; top: 20px; right: 25px; z-index: 3100;")
+      .species-split-layout
+        //- PAINEL ESQUERDO: FORMULÁRIO CADASTRAR ANIMAIS
+        .species-form-panel
+          h2.species-title CADASTRAR ANIMAIS
+
+          form#form-create-animal(action="/api/v1/animais/", method="POST", enctype="multipart/form-data")
+            input#animal-edit-id(type="hidden", name="animal_id")
+            input.coord-lat(type="hidden", name="lat")
+            input.coord-lng(type="hidden", name="lng")
+
+            //- Seção de Uploads (Imagens e Ícone)
+            .upload-previews-container
+              .image-stack-section
+                span.section-subtitle Imagens
+                #modal-image-stack-trigger.image-stack-wrapper
+                  .image-card-stack.card-back-2
+                  .image-card-stack.card-back-1
+                  .image-card-stack.card-main
+                    #modal-image-preview-content.upload-placeholder-content
+                      i.fa-solid.fa-cloud-arrow-up
+                      .fw-bold Selecionar imagens
+                    img#modal-image-preview-img.d-none(src="", alt="Preview Imagem")
+                  input#modal-input-file-image.d-none(type="file", name="animal_imagem", accept="image/*", multiple)
+                  input#modal-input-url-image.d-none(type="hidden", name="imagem_url")
+                .dimension-label 1000px x 1000px
+
+              .icon-upload-section
+                span.section-subtitle Ícone
+                #modal-icon-circle-trigger.icon-circle-wrapper(title="Clique para escolher ou arraste a imagem para enquadrar")
+                  #modal-icon-preview-content.upload-placeholder-content
+                    i.fa-solid.fa-paw(style="font-size: 2.5rem; color: #8C8B96;")
+                  img#modal-icon-preview-img.d-none.crop-draggable-img(src="", alt="Preview Ícone", draggable="false")
+                  input#modal-input-file-icon.d-none(type="file", name="animal_icone", accept="image/*")
+                  input#modal-input-icon-base64(type="hidden", name="icone_base64")
+                .dimension-label 500px x 500px (Arraste p/ enquadrar)
+
+            //- Linha 1: Nome Comum e Nome Científico
+            .row.g-3.mb-3
+              .col-md-6
+                label.species-form-label Nome Comum
+                input.form-control.colored-pill-input-bronze(type="text", name="nome_comum", placeholder="Humano", required)
+              .col-md-6
+                label.species-form-label Nome Científico
+                input.form-control.colored-pill-input-crimson(type="text", name="nome_cientifico", placeholder="Homo sapiens", required)
+
+            //- Linha 2: Classe e Família
+            .row.g-3.mb-3
+              .col-md-6
+                label.species-form-label Classe
+                select.form-select.colored-pill-input-green(name="classe")
+                  option(value="Mammalia", selected) Mamíferos
+                  option(value="Aves") Aves
+                  option(value="Reptilia") Répteis
+                  option(value="Amphibia") Anfíbios
+                  option(value="Chondrichthyes") Peixes Cartilaginosos
+                  option(value="Osteichthyes") Peixes Ósseos
+              .col-md-6
+                label.species-form-label Família
+                input.form-control.colored-pill-input-blue(type="text", name="familia", placeholder="Hominidae")
+
+            //- Linha 3: Nível de Extinção e Biomas
+            .row.g-3.mb-3
+              .col-md-6
+                label.species-form-label Nível de extinção
+                select.form-select.select-nivel-extincao.dark-pill-select(name="nivel_extincao_id", required)
+                  option(value="") NÍVEL DE EXTINÇÃO
+              .col-md-6
+                label.species-form-label Biomas
+                #modal-biomes-tag-selector.biomes-tag-container
+                  .biome-chip.biome-chip-mata-atlantica(data-id="1", data-selected="true")
+                    span Mata Atlântica
+                    i.fa-solid.fa-check.chip-icon
+                  .biome-chip.biome-chip-pampa(data-id="2", data-selected="true")
+                    span Pampa
+                    i.fa-solid.fa-check.chip-icon
+                  .biome-chip.biome-chip-cerrado(data-id="3", data-selected="false")
+                    span Cerrado
+                    i.fa-solid.fa-plus.chip-icon
+                  select.select-biomas.d-none(name="biomas_ids", multiple)
+                    option(value="1", selected) Mata Atlântica
+                    option(value="2", selected) Pampa
+                    option(value="3") Cerrado
+
+            //- Linha 4: Peso, Altura e Dieta
+            .row.g-3.mb-3
+              .col-md-4
+                label.species-form-label Peso (Kg)
+                .custom-stepper-wrapper
+                  input.form-control.colored-pill-input-green(type="number", step="0.01", name="peso", placeholder="Ex: 0.60")
+              .col-md-4
+                label.species-form-label Altura / Comp. (m)
+                .custom-stepper-wrapper
+                  input.form-control.colored-pill-input-blue(type="number", step="0.01", name="altura", placeholder="Ex: 0.26")
+              .col-md-4
+                label.species-form-label Dieta
+                input.form-control.colored-pill-input-crimson(type="text", name="dieta", placeholder="Ex: Onívoro, Insetos")
+
+            //- Linha 5: Hábitos e Observações
+            .row.g-3.mb-4
+              .col-md-6
+                label.species-form-label Descrição / Hábitos
+                textarea.form-control.colored-pill-input-bronze(name="habitos", rows="2", placeholder="Detalhes dos hábitos e comportamento...")
+              .col-md-6
+                label.species-form-label Observações / Curiosidades
+                textarea.form-control.colored-pill-input-green(name="obs", rows="2", placeholder="Curiosidades e notas de conservação...")
+
+            //- Botões de Ação
+            .d-flex.gap-3.mt-auto
+              button.btn.btn-warning.fw-bold.rounded-pill.px-4.py-2(type="submit", style="background-color: #9C5B1C; border: none; color: #FFF;")
+                i.fa-solid.fa-check.me-2
+                | Salvar Espécie
+              button.btn.btn-outline-secondary.rounded-pill.px-4.py-2.btn-cancel-modal(type="button")
+                i.fa-solid.fa-rotate-left.me-2
+                | Limpar
+
+        //- PAINEL DIREITO: MAPA / ANIMAIS CADASTRADOS
+        .species-display-panel
+          //- Barra Superior com Alternância
+          .view-toggle-bar
+            .view-toggle-btns
+              button#modal-toggle-map.toggle-btn.active(type="button")
+                i.fa-solid.fa-map-location-dot
+                | Mapa da Localização
+              button#modal-toggle-list.toggle-btn(type="button")
+                i.fa-solid.fa-list
+                | Animais Cadastrados
+
+          //- VISÃO 1: MAPA DA LOCALIZAÇÃO (Padrão para clique direito)
+          #modal-panel-map.h-100
+            #modal-right-panel-map.h-100(style="border-radius: 16px; overflow: hidden; border: 1px solid #3B3A48;")
+
+          //- VISÃO 2: LISTA DE ANIMAIS CADASTRADOS
+          #modal-panel-list.h-100.d-flex.flex-column.d-none
+            .search-box-wrapper
+              input#modalAnimalSearch.form-control.right-panel-search(type="text", placeholder="Pesquisar animais...")
+              i.fa-solid.fa-magnifying-glass.search-icon
+
+            .species-cards-scroll-area
+              #modalAnimalCardsGrid.species-cards-grid
+
+    //- Barra Lateral (Sidebar Drawer) para Cadastro de ONG e Áreas de Preservação
     #admin-sidebar-drawer.admin-sidebar-drawer.d-none
       .admin-drawer-header
         h5#drawer-title.m-0.fw-bold Cadastrar Entidade
@@ -69,73 +229,6 @@ block content
           i.fa-solid.fa-circle-info.me-1
           | Coordenadas capturadas do clique. Arraste o marcador no mapa para fazer o ajuste fino.
 
-        //- Formulário Animal
-        form#form-create-animal.admin-form.d-none
-          input#animal-edit-id(type="hidden", name="animal_id")
-          input.coord-lat(type="hidden", name="lat")
-          input.coord-lng(type="hidden", name="lng")
-          .mb-3
-            label.form-label.small.fw-bold Coordenadas Capturadas
-            .row.g-2
-              .col-6
-                label.form-label.tiny.text-secondary Latitude
-                input.form-control.form-control-sm.input-lat(type="number", step="any", required)
-              .col-6
-                label.form-label.tiny.text-secondary Longitude
-                input.form-control.form-control-sm.input-lng(type="number", step="any", required)
-          .mb-3
-            label.form-label.small.fw-bold Nome Comum
-            input.form-control(type="text", name="nome_comum", required, placeholder="Ex: Mico-leão-dourado")
-          .mb-3
-            label.form-label.small.fw-bold Nome Científico
-            input.form-control(type="text", name="nome_cientifico", required, placeholder="Ex: Leontopithecus rosalia")
-          .row.g-2.mb-3
-            .col-6
-              label.form-label.small.fw-bold Classe
-              select.form-select(name="classe", required)
-                option(value="Mammalia") Mammalia (Mamíferos)
-                option(value="Aves") Aves
-                option(value="Reptilia") Reptilia (Répteis)
-                option(value="Amphibia") Amphibia (Anfíbios)
-                option(value="Chondrichthyes") Chondrichthyes (Peixes Cartilaginosos)
-                option(value="Osteichthyes") Osteichthyes (Peixes Ósseos)
-            .col-6
-              label.form-label.small.fw-bold Família
-              input.form-control(type="text", name="familia", placeholder="Ex: Callitrichidae")
-          .mb-3
-            label.form-label.small.fw-bold Nível de Extinção
-            select.form-select.select-nivel-extincao(name="nivel_extincao_id", required)
-          .mb-3
-            label.form-label.small.fw-bold Biomas
-            select.form-select.select-biomas(name="biomas_ids", multiple, required)
-          .row.g-2.mb-3
-            .col-6
-              label.form-label.small.fw-bold Peso (Kg)
-              input.form-control(type="number", step="0.01", name="peso", placeholder="Ex: 0.6")
-            .col-6
-              label.form-label.small.fw-bold Altura / Comp. (m)
-              input.form-control(type="number", step="0.01", name="altura", placeholder="Ex: 0.26")
-          .mb-3
-            label.form-label.small.fw-bold Dieta
-            input.form-control(type="text", name="dieta", placeholder="Ex: Onívoro, Frutas, Insetos")
-          .mb-3
-            label.form-label.small.fw-bold Descrição / Hábitos
-            textarea.form-control(name="habitos", rows="3", placeholder="Informações detalhadas sobre o animal...")
-          .mb-3
-            label.form-label.small.fw-bold Observações / Curiosidades
-            textarea.form-control(name="obs", rows="2", placeholder="Observações adicionais...")
-          .mb-3
-            label.form-label.small.fw-bold Link da Imagem (URL da Internet)
-            input.form-control.mb-2(type="url", name="imagem_url", placeholder="https://exemplo.com/imagem.jpg")
-            label.form-label.tiny.text-muted.d-block Ou selecione um arquivo local:
-            input.form-control.form-control-sm(type="file", name="animal_imagem", accept="image/*")
-          .d-flex.gap-2.mt-4
-            button.btn.btn-success.w-100(type="submit")
-              i.fa-solid.fa-check.me-1
-              | Salvar Animal
-            button.btn.btn-outline-secondary.w-100.btn-cancel-drawer(type="button")
-              i.fa-solid.fa-xmark.me-1
-              | Cancelar
 
 
         //- Formulário Área de Preservação
