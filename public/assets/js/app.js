@@ -24,10 +24,10 @@ var darkFull = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{
 
 // Mapa de cores para níveis de extinção
 const extinctionColorMap = {
-  'ex': '#000000', 'ew': '#831F34', 'cr': '#FF4068', 'en': '#ff6426',
+  'ex': '#403E4C', 'ew': '#831F34', 'cr': '#FF4068', 'en': '#ff6426',
   'vu': '#FFA63A', 'nt': '#217757', 'lc': '#1a5fb4', 'dd': '#555555',
   '1': '#FF4068', '2': '#ff6426', '3': '#FFA63A',
-  '4': '#217757', '5': '#1a5fb4', '6': '#555555'
+  '4': '#217757', '5': '#1a5fb4', '6': '#555555', '7': '#403E4C', '8': '#831F34'
 };
 
 // Cidades pré-configuradas do Sul para pesquisa instantânea
@@ -256,6 +256,105 @@ $(document).ready(function () {
     }
   });
 
+  // Slider de tamanho dos marcadores no mapa
+  $(document).on("input", "#marker-size-slider", function() {
+    const val = parseFloat($(this).val());
+    const percentage = Math.round(val * 100);
+    $("#marker-size-val").text(percentage + "%");
+    document.documentElement.style.setProperty("--marker-scale", val);
+  });
+
+  // Tornar o Quadro de Legendas Arrastável na Tela
+  function makeLegendDraggable() {
+    const legend = document.getElementById("map-legend");
+    if (!legend) return;
+
+    if (window.L && L.DomEvent) {
+      L.DomEvent.disableClickPropagation(legend);
+      L.DomEvent.disableScrollPropagation(legend);
+    }
+
+    const header = legend.querySelector(".legend-header");
+    if (!header) return;
+
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let initialLeft = 0, initialTop = 0;
+
+    function onDragStart(clientX, clientY, target) {
+      if (['INPUT', 'BUTTON', 'LABEL'].includes(target.tagName)) return false;
+
+      isDragging = true;
+      $(header).css('cursor', 'grabbing');
+
+      const rect = legend.getBoundingClientRect();
+      startX = clientX;
+      startY = clientY;
+
+      legend.style.bottom = "auto";
+      legend.style.right = "auto";
+      legend.style.left = rect.left + "px";
+      legend.style.top = rect.top + "px";
+
+      initialLeft = rect.left;
+      initialTop = rect.top;
+      return true;
+    }
+
+    function onDragMove(clientX, clientY) {
+      if (!isDragging) return;
+      const dx = clientX - startX;
+      const dy = clientY - startY;
+
+      let newLeft = initialLeft + dx;
+      let newTop = initialTop + dy;
+
+      const maxLeft = window.innerWidth - legend.offsetWidth - 10;
+      const maxTop = window.innerHeight - legend.offsetHeight - 10;
+
+      newLeft = Math.max(10, Math.min(newLeft, maxLeft));
+      newTop = Math.max(10, Math.min(newTop, maxTop));
+
+      legend.style.left = newLeft + "px";
+      legend.style.top = newTop + "px";
+    }
+
+    function onDragEnd() {
+      if (isDragging) {
+        isDragging = false;
+        $(header).css('cursor', 'grab');
+      }
+    }
+
+    header.addEventListener("mousedown", function(e) {
+      if (onDragStart(e.clientX, e.clientY, e.target)) {
+        e.preventDefault();
+      }
+    });
+
+    window.addEventListener("mousemove", function(e) {
+      onDragMove(e.clientX, e.clientY);
+    });
+
+    window.addEventListener("mouseup", onDragEnd);
+
+    header.addEventListener("touchstart", function(e) {
+      if (e.touches.length === 1) {
+        onDragStart(e.touches[0].clientX, e.touches[0].clientY, e.target);
+      }
+    });
+
+    window.addEventListener("touchmove", function(e) {
+      if (isDragging && e.touches.length === 1) {
+        onDragMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    });
+
+    window.addEventListener("touchend", onDragEnd);
+  }
+
+  makeLegendDraggable();
+
   $("#about-btn").click(function() { $("#aboutModal").modal("show"); return false; });
 
   // =========================================================================
@@ -408,8 +507,10 @@ $(document).ready(function () {
   });
 
   // =========================================================================
-  // 5. MARCADORES PERSONALIZADOS & HOVER EXPANSÍVEL
+  // 5. MARCADORES PERSONALIZADOS & EXIBIÇÃO GARANTIDA DE TODOS OS ANIMAIS NA TELA
   // =========================================================================
+  let rawMarkersGeoJson = null;
+
   var markersLayer = L.geoJson(null, {
     pointToLayer: function (feature, latlng) {
       const p = feature.properties;
@@ -478,10 +579,284 @@ $(document).ready(function () {
     }
   }).addTo(map);
 
+  const SUL_BOUNDS = {
+    minLat: -33.8,
+    maxLat: -22.5,
+    minLng: -57.7,
+    maxLng: -48.0
+  };
+
+  let debugPolygonsLayer = L.layerGroup().addTo(map);
+
+  function areaPolygonToTurf(polygonCoords) {
+    if (!polygonCoords || !Array.isArray(polygonCoords) || polygonCoords.length < 3) return null;
+    try {
+      const ring = polygonCoords.map(pt => [parseFloat(pt[1]), parseFloat(pt[0])]);
+      const first = ring[0];
+      const last = ring[ring.length - 1];
+      if (first[0] !== last[0] || first[1] !== last[1]) {
+        ring.push([first[0], first[1]]);
+      }
+      return turf.polygon([ring]);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function isPointInsidePolygon(lat, lng, polygonCoords) {
+    if (!polygonCoords || !Array.isArray(polygonCoords) || polygonCoords.length < 3) return true;
+
+    if (window.turf) {
+      try {
+        const pt = turf.point([parseFloat(lng), parseFloat(lat)]);
+        const poly = areaPolygonToTurf(polygonCoords);
+        if (poly) {
+          return turf.booleanPointInPolygon(pt, poly);
+        }
+      } catch (e) {
+        // Fallback para ray casting se turf falhar
+      }
+    }
+
+    let inside = false;
+    const pLat = parseFloat(lat);
+    const pLng = parseFloat(lng);
+    for (let i = 0, j = polygonCoords.length - 1; i < polygonCoords.length; j = i++) {
+      const xi = parseFloat(polygonCoords[i][0]), yi = parseFloat(polygonCoords[i][1]);
+      const xj = parseFloat(polygonCoords[j][0]), yj = parseFloat(polygonCoords[j][1]);
+      const intersect = ((yi > pLng) !== (yj > pLng)) && (pLat < (xj - xi) * (pLng - yi) / (yj - yi + 1e-12) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function getPolygonCentroid(polygonCoords) {
+    if (!polygonCoords || !Array.isArray(polygonCoords) || polygonCoords.length === 0) return null;
+    let sumLat = 0, sumLng = 0;
+    polygonCoords.forEach(pt => {
+      sumLat += parseFloat(pt[0]);
+      sumLng += parseFloat(pt[1]);
+    });
+    return [sumLat / polygonCoords.length, sumLng / polygonCoords.length];
+  }
+
+  function renderDebugPolygons() {
+    debugPolygonsLayer.clearLayers();
+    if (!$("#toggle-debug-areas").is(":checked") || !rawMarkersGeoJson || !rawMarkersGeoJson.features) {
+      return;
+    }
+
+    const renderedAnimals = new Set();
+    rawMarkersGeoJson.features.forEach(f => {
+      const p = f.properties;
+      const animalId = p.animal_id || p.id;
+      if (renderedAnimals.has(animalId)) return;
+      renderedAnimals.add(animalId);
+
+      if (p.area_polygon && Array.isArray(p.area_polygon) && p.area_polygon.length > 0) {
+        const rings = (Array.isArray(p.area_polygon[0]) && Array.isArray(p.area_polygon[0][0])) ? p.area_polygon : [p.area_polygon];
+        const strokeColor = p.area_polygon_color || '#FFAA44';
+
+        rings.forEach(ring => {
+          if (!ring || ring.length < 3) return;
+          const poly = L.polygon(ring, {
+            color: strokeColor,
+            fillColor: strokeColor,
+            fillOpacity: 0.3,
+            weight: 3,
+            dashArray: '6, 6'
+          }).addTo(debugPolygonsLayer);
+
+          poly.bindTooltip(`
+            <div style="font-weight: 800; color: ${strokeColor}; background: #1B1A22; padding: 4px 8px; border-radius: 6px; border: 1px solid ${strokeColor};">
+              <i class="fa-solid fa-draw-polygon me-1"></i> Área de Ocorrência: ${p.nome_comum}
+            </div>
+          `, { sticky: true });
+        });
+      }
+    });
+  }
+
+  $(document).on("change", "#toggle-debug-areas", function() {
+    renderDebugPolygons();
+  });
+
+  function findValidPointForAnimal(p, minLat, maxLat, minLng, maxLng, gridLat, gridLng) {
+    const rawPolygon = p.area_polygon;
+
+    if (!rawPolygon || !Array.isArray(rawPolygon) || rawPolygon.length === 0) {
+      return [
+        Math.max(minLat, Math.min(gridLat, maxLat)),
+        Math.max(minLng, Math.min(gridLng, maxLng))
+      ];
+    }
+
+    const rings = (Array.isArray(rawPolygon[0]) && Array.isArray(rawPolygon[0][0])) ? rawPolygon : [rawPolygon];
+    const validRings = rings.filter(r => r && r.length >= 3);
+
+    if (validRings.length === 0) {
+      return [
+        Math.max(minLat, Math.min(gridLat, maxLat)),
+        Math.max(minLng, Math.min(gridLng, maxLng))
+      ];
+    }
+
+    // 1. Testar se o ponto da grade cai em algum dos anéis de polígono
+    if (gridLat >= minLat && gridLat <= maxLat && gridLng >= minLng && gridLng <= maxLng) {
+      for (const ring of validRings) {
+        if (isPointInsidePolygon(gridLat, gridLng, ring)) {
+          return [gridLat, gridLng];
+        }
+      }
+    }
+
+    // 2. Amostragem em grade na tela visível
+    const steps = 8;
+    const stepLat = (maxLat - minLat) / steps;
+    const stepLng = (maxLng - minLng) / steps;
+
+    for (let r = 1; r < steps; r++) {
+      for (let c = 1; c < steps; c++) {
+        const testLat = minLat + r * stepLat;
+        const testLng = minLng + c * stepLng;
+        for (const ring of validRings) {
+          if (isPointInsidePolygon(testLat, testLng, ring)) {
+            return [testLat, testLng];
+          }
+        }
+      }
+    }
+
+    // 3. Vértices visíveis
+    for (const ring of validRings) {
+      for (let i = 0; i < ring.length; i++) {
+        const vLat = parseFloat(ring[i][0]);
+        const vLng = parseFloat(ring[i][1]);
+        if (vLat >= minLat && vLat <= maxLat && vLng >= minLng && vLng <= maxLng) {
+          if (isPointInsidePolygon(vLat, vLng, ring)) {
+            return [vLat, vLng];
+          }
+        }
+      }
+    }
+
+    // 4. Turf pointOnFeature para qualquer anel visível
+    if (window.turf) {
+      for (const ring of validRings) {
+        const poly = areaPolygonToTurf(ring);
+        if (poly) {
+          const pof = turf.pointOnFeature(poly);
+          const pofLat = pof.geometry.coordinates[1];
+          const pofLng = pof.geometry.coordinates[0];
+          if (pofLat >= minLat && pofLat <= maxLat && pofLng >= minLng && pofLng <= maxLng) {
+            return [pofLat, pofLng];
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function renderBiomeViewportMarkers() {
+    if (!rawMarkersGeoJson || !rawMarkersGeoJson.features) return;
+
+    markersLayer.clearLayers();
+    const zoom = map.getZoom();
+
+    // 1. Zoom Out (zoom < 9): Exibir exatamente no GeoJSON original
+    if (zoom < 9) {
+      markersLayer.addData(rawMarkersGeoJson);
+      return;
+    }
+
+    // 2. Zoom Alto (zoom >= 9): Calcular distribuição na tela
+    const bounds = map.getBounds();
+    const south = Math.max(SUL_BOUNDS.minLat, bounds.getSouth());
+    const north = Math.min(SUL_BOUNDS.maxLat, bounds.getNorth());
+    const west = Math.max(SUL_BOUNDS.minLng, bounds.getWest());
+    const east = Math.min(SUL_BOUNDS.maxLng, bounds.getEast());
+
+    if (south >= north || west >= east) {
+      markersLayer.addData(rawMarkersGeoJson);
+      return;
+    }
+
+    const padLat = (north - south) * 0.10;
+    const padLng = (east - west) * 0.10;
+
+    const minLat = south + padLat;
+    const maxLat = north - padLat;
+    const minLng = west + padLng;
+    const maxLng = east - padLng;
+
+    const animalGroups = {};
+    rawMarkersGeoJson.features.forEach(feature => {
+      if (!feature.geometry || !feature.geometry.coordinates) return;
+      const animalId = feature.properties.animal_id || feature.properties.id;
+      if (!animalGroups[animalId]) {
+        animalGroups[animalId] = [];
+      }
+      animalGroups[animalId].push(feature);
+    });
+
+    const activeAnimalIds = Object.keys(animalGroups);
+    const totalActive = activeAnimalIds.length;
+
+    if (totalActive === 0) return;
+
+    const aspect = Math.max(0.5, (maxLng - minLng) / Math.max(0.001, (maxLat - minLat)));
+    let cols = Math.ceil(Math.sqrt(totalActive * aspect));
+    let rows = Math.ceil(totalActive / cols);
+    cols = Math.max(1, cols);
+    rows = Math.max(1, rows);
+
+    const cellWidth = (maxLng - minLng) / cols;
+    const cellHeight = (maxLat - minLat) / rows;
+
+    const displayFeatures = [];
+
+    activeAnimalIds.forEach((animalIdStr, idx) => {
+      const group = animalGroups[animalIdStr];
+      const primaryFeature = group[0];
+      const p = primaryFeature.properties;
+      const animalId = parseInt(animalIdStr) || (idx + 1);
+
+      const colIdx = idx % cols;
+      const rowIdx = Math.floor(idx / cols);
+
+      const hashLat = (((animalId * 2654435761) % 1000) / 1000 - 0.5) * cellHeight * 0.35;
+      const hashLng = (((animalId * 1597334677) % 1000) / 1000 - 0.5) * cellWidth * 0.35;
+
+      const candidateLat = minLat + (rowIdx + 0.5) * cellHeight + hashLat;
+      const candidateLng = minLng + (colIdx + 0.5) * cellWidth + hashLng;
+
+      const pos = findValidPointForAnimal(
+        p, minLat, maxLat, minLng, maxLng, candidateLat, candidateLng
+      );
+
+      // Exibir o marcador APENAS se a área do animal estiver visível na tela
+      if (pos) {
+        displayFeatures.push({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [pos[1], pos[0]]
+          },
+          properties: p
+        });
+      }
+    });
+
+    markersLayer.addData({
+      type: 'FeatureCollection',
+      features: displayFeatures
+    });
+  }
+
   function loadMarkers() {
     $.getJSON("/api/markers", function (data) {
-      markersLayer.clearLayers();
-      markersLayer.addData(data);
+      rawMarkersGeoJson = data;
       markersData = data.features.map(f => {
         const p = f.properties;
         if (f.geometry && f.geometry.coordinates) {
@@ -490,8 +865,18 @@ $(document).ready(function () {
         }
         return p;
       });
+      renderBiomeViewportMarkers();
+      renderDebugPolygons();
     });
   }
+
+  let renderDebounceTimer = null;
+  map.on('moveend zoomend viewreset', function() {
+    if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
+    renderDebounceTimer = setTimeout(function() {
+      renderBiomeViewportMarkers();
+    }, 50);
+  });
 
   // =========================================================================
   // 6. MODO ADMINISTRADOR (Login, Context Menu & Modal Split-Screen)
@@ -507,10 +892,16 @@ $(document).ready(function () {
   function updateAdminUI() {
     if (isAdminModeActive()) {
       $("#admin-mode-badge").removeClass("d-none");
+      $("#admin-debug-toggle-container").removeClass("d-none");
+      $("#toggle-debug-areas").prop("checked", true);
+      renderDebugPolygons();
       $("#admin-btn").addClass("admin-active").attr("title", "Clique para encerrar o Modo Administrador");
       $("#admin-btn").attr("href", "#");
     } else {
       $("#admin-mode-badge").addClass("d-none");
+      $("#admin-debug-toggle-container").addClass("d-none");
+      $("#toggle-debug-areas").prop("checked", false);
+      renderDebugPolygons();
       $("#admin-btn").removeClass("admin-active").attr("title", "Acesso Administrador");
       $("#admin-btn").attr("href", "/admin/login");
       closeAdminDrawer();
@@ -636,6 +1027,31 @@ $(document).ready(function () {
     });
 
     initModalRightPanelMap(lat, lng);
+
+    if (props.area_polygon) {
+      let data = props.area_polygon;
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch(e){}
+      }
+      if (data && typeof data === 'object' && !Array.isArray(data) && data.polygons) {
+        modalPolygonColor = data.color || '#FFAA44';
+        modalDraftPolygonsList = data.polygons;
+      } else if (Array.isArray(data) && data.length > 0) {
+        modalPolygonColor = props.area_polygon_color || '#FFAA44';
+        if (Array.isArray(data[0]) && Array.isArray(data[0][0])) {
+          modalDraftPolygonsList = data;
+        } else {
+          modalDraftPolygonsList = [data];
+        }
+      } else {
+        modalDraftPolygonsList = [[]];
+      }
+      $('#modal-polygon-color-picker').val(modalPolygonColor);
+      redrawModalDraftPolygonLayers();
+    } else {
+      modalDraftPolygonsList = [[]];
+      redrawModalDraftPolygonLayers();
+    }
   }
 
   let modalRightMap = null;
@@ -830,12 +1246,31 @@ $(document).ready(function () {
             iconSize: [40, 40],
             iconAnchor: [20, 20]
           })
-        }).addTo(modalRightMap);
+        modalRightMap.on('click', function(e) {
+          if (isModalDrawingPolygon) {
+            saveModalPolygonHistoryState();
+            const lat = parseFloat(e.latlng.lat.toFixed(6));
+            const lng = parseFloat(e.latlng.lng.toFixed(6));
+            if (modalDraftPolygonsList.length === 0) modalDraftPolygonsList.push([]);
+            modalDraftPolygonsList[modalDraftPolygonsList.length - 1].push([lat, lng]);
+            redrawModalDraftPolygonLayers();
+          } else {
+            const latFixed = e.latlng.lat.toFixed(6);
+            const lngFixed = e.latlng.lng.toFixed(6);
+            $("#form-create-animal").find(".coord-lat").val(latFixed);
+            $("#form-create-animal").find(".coord-lng").val(lngFixed);
+            $("#modal-coordenadas-json-hidden").val(JSON.stringify([{ lat: parseFloat(latFixed), lng: parseFloat(lngFixed) }]));
+            if (modalRightMarker) {
+              modalRightMarker.setLatLng(e.latlng);
+            }
+          }
+        });
 
         modalRightMarker.on('dragend', function(e) {
           const pos = e.target.getLatLng();
           $("#form-create-animal").find(".coord-lat").val(pos.lat.toFixed(6));
           $("#form-create-animal").find(".coord-lng").val(pos.lng.toFixed(6));
+          $("#modal-coordenadas-json-hidden").val(JSON.stringify([{ lat: parseFloat(pos.lat.toFixed(6)), lng: parseFloat(pos.lng.toFixed(6)) }]));
         });
       } else {
         modalRightMap.invalidateSize();
@@ -844,8 +1279,226 @@ $(document).ready(function () {
           modalRightMarker.setLatLng([lat, lng]);
         }
       }
+      redrawModalDraftPolygonLayers();
     }, 200);
   }
+  let modalDraftPolygonsList = [[]];
+  let modalPolygonColor = '#FFAA44';
+  let modalPolygonHistory = [];
+  let modalPolygonRedo = [];
+  let modalPolygonLayersGroup = null;
+
+  function updateModalUndoRedoButtonsUI() {
+    $('#modal-btn-undo-polygon').prop('disabled', modalPolygonHistory.length === 0).toggleClass('opacity-50', modalPolygonHistory.length === 0);
+    $('#modal-btn-redo-polygon').prop('disabled', modalPolygonRedo.length === 0).toggleClass('opacity-50', modalPolygonRedo.length === 0);
+  }
+
+  function saveModalPolygonHistoryState() {
+    const stateCopy = {
+      color: modalPolygonColor,
+      polygons: JSON.parse(JSON.stringify(modalDraftPolygonsList))
+    };
+    modalPolygonHistory.push(stateCopy);
+    if (modalPolygonHistory.length > 50) modalPolygonHistory.shift();
+    modalPolygonRedo = [];
+    updateModalUndoRedoButtonsUI();
+  }
+
+  function undoModalPolygonState() {
+    if (modalPolygonHistory.length === 0) return;
+    const currentState = {
+      color: modalPolygonColor,
+      polygons: JSON.parse(JSON.stringify(modalDraftPolygonsList))
+    };
+    modalPolygonRedo.push(currentState);
+    const prevState = modalPolygonHistory.pop();
+    modalPolygonColor = prevState.color || '#FFAA44';
+    $('#modal-polygon-color-picker').val(modalPolygonColor);
+    modalDraftPolygonsList = prevState.polygons || [[]];
+    redrawModalDraftPolygonLayers();
+    updateModalUndoRedoButtonsUI();
+  }
+
+  function redoModalPolygonState() {
+    if (modalPolygonRedo.length === 0) return;
+    const currentState = {
+      color: modalPolygonColor,
+      polygons: JSON.parse(JSON.stringify(modalDraftPolygonsList))
+    };
+    modalPolygonHistory.push(currentState);
+    const nextState = modalPolygonRedo.pop();
+    modalPolygonColor = nextState.color || '#FFAA44';
+    $('#modal-polygon-color-picker').val(modalPolygonColor);
+    modalDraftPolygonsList = nextState.polygons || [[]];
+    redrawModalDraftPolygonLayers();
+    updateModalUndoRedoButtonsUI();
+  }
+
+  window.editModalPolygonRingByRef = function(ringIndex) {
+    saveModalPolygonHistoryState();
+    if (ringIndex >= 0 && ringIndex < modalDraftPolygonsList.length) {
+      const target = modalDraftPolygonsList.splice(ringIndex, 1)[0];
+      modalDraftPolygonsList.push(target);
+      redrawModalDraftPolygonLayers();
+    }
+    if (modalRightMap) modalRightMap.closePopup();
+  };
+
+  window.deleteModalPolygonRingByRef = function(ringIndex) {
+    saveModalPolygonHistoryState();
+    if (ringIndex >= 0 && ringIndex < modalDraftPolygonsList.length) {
+      modalDraftPolygonsList.splice(ringIndex, 1);
+    }
+    if (modalDraftPolygonsList.length === 0) {
+      modalDraftPolygonsList = [[]];
+    }
+    redrawModalDraftPolygonLayers();
+    if (modalRightMap) modalRightMap.closePopup();
+  };
+
+  function updateModalPolygonHiddenInput() {
+    const validPolygons = modalDraftPolygonsList.filter(ring => ring && ring.length >= 3);
+    const totalPoints = validPolygons.reduce((acc, ring) => acc + ring.length, 0);
+
+    if (validPolygons.length > 0) {
+      const payload = {
+        color: modalPolygonColor,
+        polygons: validPolygons
+      };
+      $('#modal-area-polygon-json-hidden').val(JSON.stringify(payload));
+      $('#modal-polygon-status-badge')
+        .text(`Área: ${validPolygons.length} área(s) (${totalPoints} pts)`)
+        .removeClass('bg-dark text-warning')
+        .addClass('bg-success text-white');
+    } else {
+      $('#modal-area-polygon-json-hidden').val('');
+      $('#modal-polygon-status-badge')
+        .text('Área: Todo o Mapa')
+        .removeClass('bg-success text-white')
+        .addClass('bg-dark text-warning');
+    }
+  }
+
+  function redrawModalDraftPolygonLayers() {
+    if (!modalRightMap) return;
+    if (!modalPolygonLayersGroup) {
+      modalPolygonLayersGroup = L.layerGroup().addTo(modalRightMap);
+    } else {
+      modalPolygonLayersGroup.clearLayers();
+    }
+
+    modalDraftPolygonsList.forEach((ring, idx) => {
+      if (!ring || ring.length === 0) return;
+      const isCurrentActive = (idx === modalDraftPolygonsList.length - 1);
+      let polyLayer = null;
+
+      if (ring.length >= 3) {
+        polyLayer = L.polygon(ring, {
+          color: modalPolygonColor,
+          fillColor: modalPolygonColor,
+          fillOpacity: isCurrentActive ? 0.4 : 0.25,
+          weight: isCurrentActive ? 3 : 2,
+          dashArray: isCurrentActive ? '5, 5' : null
+        }).addTo(modalPolygonLayersGroup);
+      } else if (ring.length > 0) {
+        polyLayer = L.polyline(ring, {
+          color: modalPolygonColor,
+          weight: 3,
+          dashArray: '5, 5'
+        }).addTo(modalPolygonLayersGroup);
+      }
+
+      if (polyLayer) {
+        const ringIndex = idx;
+        polyLayer.on('contextmenu', function(e) {
+          L.DomEvent.stopPropagation(e);
+          
+          const popupContent = `
+            <div style="text-align: center; padding: 4px; min-width: 140px;">
+              <strong style="color: ${modalPolygonColor}; font-size: 13px;">Área #${ringIndex + 1} (${ring.length} pts)</strong>
+              <div class="d-flex flex-column gap-2 mt-2">
+                <button type="button" class="btn btn-sm btn-info rounded-pill fw-bold text-dark" onclick="editModalPolygonRingByRef(${ringIndex})">
+                  <i class="fa-solid fa-pen me-1"></i> Editar Área
+                </button>
+                <button type="button" class="btn btn-sm btn-danger rounded-pill fw-bold" onclick="deleteModalPolygonRingByRef(${ringIndex})">
+                  <i class="fa-solid fa-trash me-1"></i> Excluir Área
+                </button>
+              </div>
+            </div>
+          `;
+
+          L.popup()
+            .setLatLng(e.latlng)
+            .setContent(popupContent)
+            .openOn(modalRightMap);
+        });
+      }
+    });
+
+    updateModalPolygonHiddenInput();
+  }
+
+  $(document).on('click', '#modal-btn-draw-polygon-mode', function() {
+    isModalDrawingPolygon = !isModalDrawingPolygon;
+    if (isModalDrawingPolygon) {
+      $(this).removeClass('btn-info text-dark').addClass('btn-success text-white');
+      $(this).html('<i class="fa-solid fa-check me-1"></i> Concluir Polígono');
+      if (modalRightMap) modalRightMap.getContainer().style.cursor = 'crosshair';
+    } else {
+      $(this).removeClass('btn-success text-white').addClass('btn-info text-dark');
+      $(this).html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
+      if (modalRightMap) modalRightMap.getContainer().style.cursor = '';
+    }
+  });
+
+  $(document).on('click', '#modal-btn-new-polygon-area', function() {
+    const lastRing = modalDraftPolygonsList[modalDraftPolygonsList.length - 1];
+    if (lastRing && lastRing.length >= 3) {
+      saveModalPolygonHistoryState();
+      modalDraftPolygonsList.push([]);
+      redrawModalDraftPolygonLayers();
+    } else {
+      alert('Complete pelo menos 3 pontos no polígono atual antes de iniciar uma nova área.');
+    }
+  });
+
+  $(document).on('click', '#modal-btn-undo-polygon', function() {
+    undoModalPolygonState();
+  });
+
+  $(document).on('click', '#modal-btn-redo-polygon', function() {
+    redoModalPolygonState();
+  });
+
+  $(document).on('change input', '#modal-polygon-color-picker', function() {
+    modalPolygonColor = $(this).val();
+    saveModalPolygonHistoryState();
+    redrawModalDraftPolygonLayers();
+  });
+
+  $(document).on('click', '#modal-btn-clear-polygon', function() {
+    saveModalPolygonHistoryState();
+    modalDraftPolygonsList = [[]];
+    if (modalPolygonLayersGroup) modalPolygonLayersGroup.clearLayers();
+    isModalDrawingPolygon = false;
+    $('#modal-btn-draw-polygon-mode').removeClass('btn-success text-white').addClass('btn-info text-dark')
+      .html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
+    if (modalRightMap) modalRightMap.getContainer().style.cursor = '';
+    updateModalPolygonHiddenInput();
+  });
+
+  $(document).on('keydown', function(e) {
+    if (!$('#species-admin-modal').is(':visible')) return;
+    if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
+      if (e.shiftKey) {
+        redoModalPolygonState();
+      } else {
+        undoModalPolygonState();
+      }
+    } else if (e.ctrlKey && (e.key === 'y' || e.key === 'Y')) {
+      redoModalPolygonState();
+    }
+  });
 
   function injectModalTreePatterns() {
     const svg = document.querySelector('#modal-right-panel-map svg');
@@ -896,6 +1549,101 @@ $(document).ready(function () {
     loadModalSpeciesCards();
   });
 
+  function getAnimalTextureClassApp(classe) {
+    if (!classe) return 'texture-default';
+    const c = classe.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (c.includes('mamif') || c.includes('mammal')) return 'texture-mamiferos';
+    if (c.includes('ave') || c.includes('bird')) return 'texture-aves';
+    if (c.includes('rept') || c.includes('reptil')) return 'texture-repteis';
+    if (c.includes('amfib') || c.includes('anfib') || c.includes('amphib')) return 'texture-anfibios';
+    if (c.includes('cartilag') || c.includes('chondrichthyes')) return 'texture-peixes-cartilaginosos';
+    if (c.includes('osse') || c.includes('osteichthyes') || c.includes('peix') || c.includes('fish')) return 'texture-peixes-osseos';
+    return 'texture-default';
+  }
+
+  function getAnimalImagesApp(animal) {
+    const images = [];
+    if (animal.imagens && Array.isArray(animal.imagens) && animal.imagens.length > 0) {
+      animal.imagens.forEach(imgObj => {
+        const raw = typeof imgObj === 'string' ? imgObj : imgObj.imagem;
+        if (raw && typeof raw === 'string' && raw.trim()) {
+          const u = raw.startsWith('http') || raw.startsWith('/') || raw.startsWith('data:') ? raw : `/media/${raw}`;
+          if (!images.includes(u)) images.push(u);
+        }
+      });
+    }
+    if (animal.icone) {
+      const u = animal.icone.startsWith('http') || animal.icone.startsWith('/') || animal.icone.startsWith('data:') ? animal.icone : `/media/${animal.icone}`;
+      if (!images.includes(u)) images.push(u);
+    }
+    if (animal.imagem) {
+      const u = animal.imagem.startsWith('http') || animal.imagem.startsWith('/') || animal.imagem.startsWith('data:') ? animal.imagem : `/media/${animal.imagem}`;
+      if (!images.includes(u)) images.push(u);
+    }
+    if (images.length === 0) {
+      images.push('/assets/img/logotipo.png');
+    }
+    return images;
+  }
+
+  let modalSlideshowInterval = null;
+  function startModalSlideshows() {
+    if (modalSlideshowInterval) clearInterval(modalSlideshowInterval);
+    modalSlideshowInterval = setInterval(() => {
+      $('#modalAnimalCardsGrid .species-card-slideshow').each(function() {
+        const container = $(this);
+        const imgs = container.find('.card-slide-img');
+        if (imgs.length <= 1) return;
+
+        const activeImg = container.find('.card-slide-img.active');
+        let nextImg = activeImg.next('.card-slide-img');
+        if (!nextImg.length) {
+          nextImg = imgs.first();
+        }
+
+        activeImg.removeClass('active').addClass('exit-left');
+        nextImg.removeClass('exit-left').addClass('active');
+
+        setTimeout(() => {
+          activeImg.removeClass('exit-left');
+        }, 800);
+      });
+    }, 3500);
+  }
+
+  function getAnimalBiomesHtmlApp(animal) {
+    if (!animal.biomas || !Array.isArray(animal.biomas) || animal.biomas.length === 0) {
+      return '<span class="mini-biome-chip mini-biome-chip-default">Geral</span>';
+    }
+
+    return animal.biomas.map(b => {
+      let bId = '';
+      let bName = '';
+      if (typeof b === 'object' && b !== null) {
+        bId = String(b.id || '');
+        bName = b.nome || '';
+      } else {
+        bId = String(b);
+        bName = String(b);
+      }
+
+      const nameLower = (bName || '').toLowerCase();
+      let cssClass = 'mini-biome-chip-default';
+      if (bId === '1' || nameLower.includes('mata')) {
+        cssClass = 'biome-chip-mata-atlantica';
+        bName = 'Mata Atlântica';
+      } else if (bId === '2' || nameLower.includes('pampa')) {
+        cssClass = 'biome-chip-pampa';
+        bName = 'Pampa';
+      } else if (bId === '3' || nameLower.includes('cerrado')) {
+        cssClass = 'biome-chip-cerrado';
+        bName = 'Cerrado';
+      }
+
+      return `<span class="mini-biome-chip ${cssClass}">${bName || 'Bioma'}</span>`;
+    }).join('');
+  }
+
   // Renderizar cards no modal com menu de 3 pontinhos e badge de extinção
   function loadModalSpeciesCards() {
     $.getJSON("/api/animals", function(data) {
@@ -905,35 +1653,55 @@ $(document).ready(function () {
         grid.html('<div class="col-12 text-center text-muted py-4"><p>Nenhum animal cadastrado.</p></div>');
         return;
       }
-      const colorClasses = ['card-color-brown', 'card-color-crimson', 'card-color-slate', 'card-color-green'];
-      data.forEach((animal, index) => {
-        const cardColor = colorClasses[index % colorClasses.length];
+      const isAdmin = isAdminModeActive();
+
+      data.forEach((animal) => {
+        const textureClass = getAnimalTextureClassApp(animal.classe);
         const formattedId = String(animal.id).padStart(4, '0');
         const dataFormatted = animal.created_at ? new Date(animal.created_at).toLocaleDateString('pt-BR') : '00/00/0000';
         const autor = animal.api_user ? (animal.api_user.username || 'adm123') : 'adm123';
         const sigla = (animal.api_nivelextincao ? animal.api_nivelextincao.sigla : (animal.nivel_sigla || 'CR')).toUpperCase();
         const extinctionColor = extinctionColorMap[sigla.toLowerCase()] || extinctionColorMap[String(animal.nivel_extincao_id)] || '#FF4068';
+        const biomasHtml = getAnimalBiomesHtmlApp(animal);
 
-        let imgUrl = animal.icone || (animal.imagens && animal.imagens.length > 0 ? animal.imagens[0].imagem : '/assets/img/logotipo.png');
+        const imgs = getAnimalImagesApp(animal);
+        const slidesHtml = imgs.map((src, i) => `
+          <img src="${src}" alt="${animal.nome_comum}" class="card-slide-img ${i === 0 ? 'active' : ''}">
+        `).join('');
+
+        const menuButtonHtml = isAdmin ? `
+          <button type="button" class="species-card-menu-btn" title="Opções">
+            <i class="fa-solid fa-ellipsis-vertical"></i>
+          </button>
+        ` : '';
+
+        const footerHtml = isAdmin ? `
+          <div class="species-card-footer">
+            <span class="species-card-id-pill">${formattedId}</span>
+            <div class="species-card-meta">
+              <div>@${autor}</div>
+              <div>${dataFormatted}</div>
+            </div>
+          </div>
+        ` : '';
 
         const card = $(`
-          <div class="species-card ${cardColor}" style="cursor: pointer;">
-            <button type="button" class="species-card-menu-btn" title="Opções">
-              <i class="fa-solid fa-ellipsis-vertical"></i>
-            </button>
-            <div class="species-card-avatar">
-              <img src="${imgUrl}" alt="${animal.nome_comum}">
+          <div class="species-card ${textureClass}" style="cursor: pointer; background-color: ${extinctionColor};">
+            ${menuButtonHtml}
+            <span class="species-card-extinction-badge" style="background-color: ${extinctionColor};">${sigla}</span>
+            <div class="species-card-slideshow">
+              ${slidesHtml}
+              <div class="species-card-slideshow-overlay"></div>
             </div>
-            <div class="species-card-name-wrapper">
-              <span class="species-card-name" title="${animal.nome_comum}">${animal.nome_comum}</span>
-              <span class="species-card-extinction-badge" style="background-color: ${extinctionColor};">${sigla}</span>
-            </div>
-            <div class="species-card-footer">
-              <span class="species-card-id-pill">${formattedId}</span>
-              <div class="species-card-meta">
-                <div>@${autor}</div>
-                <div>${dataFormatted}</div>
+            <div class="species-card-body">
+              <div class="species-card-name-wrapper">
+                <span class="species-card-name" title="${animal.nome_comum}">${animal.nome_comum}</span>
+                <span class="species-card-scientific-name" title="${animal.nome_cientifico || ''}">${animal.nome_cientifico || ''}</span>
               </div>
+              <div class="species-card-biomes-wrapper">
+                ${biomasHtml}
+              </div>
+              ${footerHtml}
             </div>
           </div>
         `);
@@ -972,6 +1740,7 @@ $(document).ready(function () {
 
         grid.append(card);
       });
+      startModalSlideshows();
     });
   }
 
@@ -1334,7 +2103,7 @@ $(document).ready(function () {
 
     const statusSigla = animal.nivel_sigla ? animal.nivel_sigla.toLowerCase() : 'dd';
     const statusConfig = {
-      'ex': { color: '#000000', icon: 'fa-skull' },
+      'ex': { color: '#403E4C', icon: 'fa-skull' },
       'ew': { color: '#831F34', icon: 'fa-skull-crossbones' },
       'cr': { color: '#FF4068', icon: 'fa-exclamation-triangle' },
       'en': { color: '#ff6426', icon: 'fa-triangle-exclamation' },

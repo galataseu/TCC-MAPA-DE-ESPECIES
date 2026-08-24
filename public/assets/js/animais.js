@@ -18,7 +18,7 @@ $(document).ready(function() {
 
     // Mapa de cores oficiais para níveis de extinção
     const extinctionColorMap = {
-        'ex': '#000000', 'ew': '#831F34', 'cr': '#FF4068', 'en': '#FF6426',
+        'ex': '#403E4C', 'ew': '#831F34', 'cr': '#FF4068', 'en': '#FF6426',
         'vu': '#FFA63A', 'nt': '#217757', 'lc': '#1A5FB4', 'dd': '#555555',
         '1': '#FF4068', // CR
         '2': '#FF6426', // EN
@@ -26,7 +26,7 @@ $(document).ready(function() {
         '4': '#217757', // NT
         '5': '#1A5FB4', // LC
         '6': '#555555', // DD
-        '7': '#000000', // EX
+        '7': '#403E4C', // EX
         '8': '#831F34'  // EW
     };
 
@@ -114,6 +114,102 @@ $(document).ready(function() {
         }
     });
 
+    // Mapeamento de classe de animal para textura em 45°
+    function getAnimalTextureClass(classe) {
+        if (!classe) return 'texture-default';
+        const c = classe.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (c.includes('mamif') || c.includes('mammal')) return 'texture-mamiferos';
+        if (c.includes('ave') || c.includes('bird')) return 'texture-aves';
+        if (c.includes('rept') || c.includes('reptil')) return 'texture-repteis';
+        if (c.includes('amfib') || c.includes('anfib') || c.includes('amphib')) return 'texture-anfibios';
+        if (c.includes('cartilag') || c.includes('chondrichthyes')) return 'texture-peixes-cartilaginosos';
+        if (c.includes('osse') || c.includes('osteichthyes') || c.includes('peix') || c.includes('fish')) return 'texture-peixes-osseos';
+        return 'texture-default';
+    }
+
+    function getAnimalImages(animal) {
+        const images = [];
+        if (animal.imagens && Array.isArray(animal.imagens) && animal.imagens.length > 0) {
+            animal.imagens.forEach(imgObj => {
+                const raw = typeof imgObj === 'string' ? imgObj : imgObj.imagem;
+                if (raw && typeof raw === 'string' && raw.trim()) {
+                    const u = raw.startsWith('http') || raw.startsWith('/') || raw.startsWith('data:') ? raw : `/media/${raw}`;
+                    if (!images.includes(u)) images.push(u);
+                }
+            });
+        }
+        if (animal.icone) {
+            const u = animal.icone.startsWith('http') || animal.icone.startsWith('/') || animal.icone.startsWith('data:') ? animal.icone : `/media/${animal.icone}`;
+            if (!images.includes(u)) images.push(u);
+        }
+        if (animal.imagem) {
+            const u = animal.imagem.startsWith('http') || animal.imagem.startsWith('/') || animal.imagem.startsWith('data:') ? animal.imagem : `/media/${animal.imagem}`;
+            if (!images.includes(u)) images.push(u);
+        }
+        if (images.length === 0) {
+            images.push('/assets/img/logotipo.png');
+        }
+        return images;
+    }
+
+    let cardSlideshowInterval = null;
+    function startCardSlideshows() {
+        if (cardSlideshowInterval) clearInterval(cardSlideshowInterval);
+        cardSlideshowInterval = setInterval(() => {
+            $('.species-card-slideshow').each(function() {
+                const container = $(this);
+                const imgs = container.find('.card-slide-img');
+                if (imgs.length <= 1) return;
+
+                const activeImg = container.find('.card-slide-img.active');
+                let nextImg = activeImg.next('.card-slide-img');
+                if (!nextImg.length) {
+                    nextImg = imgs.first();
+                }
+
+                activeImg.removeClass('active').addClass('exit-left');
+                nextImg.removeClass('exit-left').addClass('active');
+
+                setTimeout(() => {
+                    activeImg.removeClass('exit-left');
+                }, 800);
+            });
+        }, 3500);
+    }
+
+    function getAnimalBiomesHtml(animal) {
+        if (!animal.biomas || !Array.isArray(animal.biomas) || animal.biomas.length === 0) {
+            return '<span class="mini-biome-chip mini-biome-chip-default">Geral</span>';
+        }
+
+        return animal.biomas.map(b => {
+            let bId = '';
+            let bName = '';
+            if (typeof b === 'object' && b !== null) {
+                bId = String(b.id || '');
+                bName = b.nome || '';
+            } else {
+                bId = String(b);
+                bName = String(b);
+            }
+
+            const nameLower = (bName || '').toLowerCase();
+            let cssClass = 'mini-biome-chip-default';
+            if (bId === '1' || nameLower.includes('mata')) {
+                cssClass = 'biome-chip-mata-atlantica';
+                bName = 'Mata Atlântica';
+            } else if (bId === '2' || nameLower.includes('pampa')) {
+                cssClass = 'biome-chip-pampa';
+                bName = 'Pampa';
+            } else if (bId === '3' || nameLower.includes('cerrado')) {
+                cssClass = 'biome-chip-cerrado';
+                bName = 'Cerrado';
+            }
+
+            return `<span class="mini-biome-chip ${cssClass}">${bName || 'Bioma'}</span>`;
+        }).join('');
+    }
+
     // Renderizar os Cards Coloridos de Tamanho Fixo no Painel Direito
     function renderSpeciesGrid(filteredAnimals) {
         const gridContainer = $('#animalCardsGrid');
@@ -124,10 +220,8 @@ $(document).ready(function() {
             return;
         }
 
-        const colorClasses = ['card-color-brown', 'card-color-crimson', 'card-color-slate', 'card-color-green'];
-
-        filteredAnimals.forEach((animal, index) => {
-            const cardColor = colorClasses[index % colorClasses.length];
+        filteredAnimals.forEach((animal) => {
+            const textureClass = getAnimalTextureClass(animal.classe);
             const formattedId = String(animal.id).padStart(4, '0');
             const dataFormatted = animal.created_at ? new Date(animal.created_at).toLocaleDateString('pt-BR') : '00/00/0000';
             const autor = animal.api_user ? (animal.api_user.username || 'adm123') : 'adm123';
@@ -135,16 +229,12 @@ $(document).ready(function() {
             // Resgatar sigla de extinção e cor
             const sigla = (animal.api_nivelextincao ? animal.api_nivelextincao.sigla : (animal.nivel_sigla || 'CR')).toUpperCase();
             const extinctionColor = extinctionColorMap[sigla.toLowerCase()] || extinctionColorMap[String(animal.nivel_extincao_id)] || '#FF4068';
+            const biomasHtml = getAnimalBiomesHtml(animal);
 
-            let imgUrl = '/assets/img/logotipo.png';
-            if (animal.icone) {
-                imgUrl = animal.icone.startsWith('http') || animal.icone.startsWith('/') || animal.icone.startsWith('data:') ? animal.icone : `/media/${animal.icone}`;
-            } else if (animal.imagens && animal.imagens.length > 0) {
-                const raw = typeof animal.imagens[0] === 'string' ? animal.imagens[0] : animal.imagens[0].imagem;
-                imgUrl = raw ? (raw.startsWith('http') || raw.startsWith('/') ? raw : `/media/${raw}`) : '/assets/img/logotipo.png';
-            } else if (animal.imagem) {
-                imgUrl = animal.imagem.startsWith('http') || animal.imagem.startsWith('/') ? animal.imagem : `/media/${animal.imagem}`;
-            }
+            const imgs = getAnimalImages(animal);
+            const slidesHtml = imgs.map((src, i) => `
+                <img src="${src}" alt="${animal.nome_comum}" class="card-slide-img ${i === 0 ? 'active' : ''}">
+            `).join('');
 
             const menuButtonHtml = isAdmin ? `
                 <button type="button" class="species-card-menu-btn" title="Opções" onclick="event.stopPropagation(); toggleAnimalMenu('${animal.id}', this, event)">
@@ -152,27 +242,40 @@ $(document).ready(function() {
                 </button>
             ` : '';
 
+            const footerHtml = isAdmin ? `
+                <div class="species-card-footer">
+                    <span class="species-card-id-pill">${formattedId}</span>
+                    <div class="species-card-meta">
+                        <div>@${autor}</div>
+                        <div>${dataFormatted}</div>
+                    </div>
+                </div>
+            ` : '';
+
             const cardHtml = `
-                <div class="species-card ${cardColor}" data-id="${animal.id}" onclick="showDetails('${animal.id}')" style="cursor: pointer;">
+                <div class="species-card ${textureClass}" data-id="${animal.id}" onclick="showDetails('${animal.id}')" style="cursor: pointer; background-color: ${extinctionColor};">
                     ${menuButtonHtml}
-                    <div class="species-card-avatar">
-                        <img src="${imgUrl}" alt="${animal.nome_comum}">
+                    <span class="species-card-extinction-badge" style="background-color: ${extinctionColor};">${sigla}</span>
+                    <div class="species-card-slideshow">
+                        ${slidesHtml}
+                        <div class="species-card-slideshow-overlay"></div>
                     </div>
-                    <div class="species-card-name-wrapper">
-                        <span class="species-card-name" title="${animal.nome_comum}">${animal.nome_comum}</span>
-                        <span class="species-card-extinction-badge" style="background-color: ${extinctionColor};">${sigla}</span>
-                    </div>
-                    <div class="species-card-footer">
-                        <span class="species-card-id-pill">${formattedId}</span>
-                        <div class="species-card-meta">
-                            <div>@${autor}</div>
-                            <div>${dataFormatted}</div>
+                    <div class="species-card-body">
+                        <div class="species-card-name-wrapper">
+                            <span class="species-card-name" title="${animal.nome_comum}">${animal.nome_comum}</span>
+                            <span class="species-card-scientific-name" title="${animal.nome_cientifico || ''}">${animal.nome_cientifico || ''}</span>
                         </div>
+                        <div class="species-card-biomes-wrapper">
+                            ${biomasHtml}
+                        </div>
+                        ${footerHtml}
                     </div>
                 </div>
             `;
             gridContainer.append(cardHtml);
         });
+
+        startCardSlideshows();
     }
 
     // Menu de 3 Pontinhos no Card (Editar e Excluir)
@@ -270,12 +373,52 @@ $(document).ready(function() {
             $('#icon-preview-content').addClass('d-none');
         }
 
-        // Atualizar coordenadas no minimapa
-        let lat = -27.59;
-        let lng = -48.54;
-        if (rightPanelMap && rightPanelMarker) {
-            rightPanelMarker.setLatLng([lat, lng]);
-            rightPanelMap.setView([lat, lng], 8);
+        // Atualizar coordenadas e marcadores no minimapa
+        clearDraftMarkers();
+        $.getJSON('/api/markers', function(markersData) {
+            if (markersData && markersData.features) {
+                const animalFeatures = markersData.features.filter(f => f.properties.animal_id == id);
+                if (animalFeatures.length > 0) {
+                    animalFeatures.forEach(f => {
+                        const coords = f.geometry.coordinates; // [lng, lat]
+                        addDraftMarker(coords[1], coords[0]);
+                    });
+                    const first = animalFeatures[0].geometry.coordinates;
+                    if (rightPanelMap) rightPanelMap.setView([first[1], first[0]], 8);
+                } else {
+                    addDraftMarker(-27.59, -48.54);
+                }
+            } else {
+                addDraftMarker(-27.59, -48.54);
+            }
+        }).fail(function() {
+            addDraftMarker(-27.59, -48.54);
+        });
+
+        // Carregar polígono de área de ocorrência existente (se houver)
+        if (animal.area_polygon) {
+            let data = animal.area_polygon;
+            if (typeof data === 'string') {
+                try { data = JSON.parse(data); } catch(e){}
+            }
+            if (data && typeof data === 'object' && !Array.isArray(data) && data.polygons) {
+                polygonColor = data.color || '#FFAA44';
+                draftPolygonsList = data.polygons;
+            } else if (Array.isArray(data) && data.length > 0) {
+                polygonColor = animal.area_polygon_color || '#FFAA44';
+                if (Array.isArray(data[0]) && Array.isArray(data[0][0])) {
+                    draftPolygonsList = data;
+                } else {
+                    draftPolygonsList = [data];
+                }
+            } else {
+                draftPolygonsList = [[]];
+            }
+            $('#polygon-color-picker').val(polygonColor);
+            redrawDraftPolygonLayers();
+        } else {
+            draftPolygonsList = [[]];
+            redrawDraftPolygonLayers();
         }
     };
 
@@ -314,6 +457,303 @@ $(document).ready(function() {
         if (rightPanelMap) {
             setTimeout(() => rightPanelMap.invalidateSize(), 150);
         }
+    });
+
+    // Gerenciador de Polígonos de Ocorrência da Espécie (Multi-Áreas, Undo/Redo & Cores)
+    let isDrawingPolygon = false;
+    let draftPolygonsList = [[]];
+    let polygonColor = '#FFAA44';
+    let polygonHistory = [];
+    let polygonRedo = [];
+    let polygonLayersGroup = L.layerGroup();
+
+    function updateUndoRedoButtonsUI() {
+        $('#btn-undo-polygon').prop('disabled', polygonHistory.length === 0).toggleClass('opacity-50', polygonHistory.length === 0);
+        $('#btn-redo-polygon').prop('disabled', polygonRedo.length === 0).toggleClass('opacity-50', polygonRedo.length === 0);
+    }
+
+    function savePolygonHistoryState() {
+        const stateCopy = {
+            color: polygonColor,
+            polygons: JSON.parse(JSON.stringify(draftPolygonsList))
+        };
+        polygonHistory.push(stateCopy);
+        if (polygonHistory.length > 50) polygonHistory.shift();
+        polygonRedo = [];
+        updateUndoRedoButtonsUI();
+    }
+
+    function undoPolygonState() {
+        if (polygonHistory.length === 0) return;
+        const currentState = {
+            color: polygonColor,
+            polygons: JSON.parse(JSON.stringify(draftPolygonsList))
+        };
+        polygonRedo.push(currentState);
+        const prevState = polygonHistory.pop();
+        polygonColor = prevState.color || '#FFAA44';
+        $('#polygon-color-picker').val(polygonColor);
+        draftPolygonsList = prevState.polygons || [[]];
+        redrawDraftPolygonLayers();
+        updateUndoRedoButtonsUI();
+    }
+
+    function redoPolygonState() {
+        if (polygonRedo.length === 0) return;
+        const currentState = {
+            color: polygonColor,
+            polygons: JSON.parse(JSON.stringify(draftPolygonsList))
+        };
+        polygonHistory.push(currentState);
+        const nextState = polygonRedo.pop();
+        polygonColor = nextState.color || '#FFAA44';
+        $('#polygon-color-picker').val(polygonColor);
+        draftPolygonsList = nextState.polygons || [[]];
+        redrawDraftPolygonLayers();
+        updateUndoRedoButtonsUI();
+    }
+
+    function updatePolygonHiddenInput() {
+        const validPolygons = draftPolygonsList.filter(ring => ring && ring.length >= 3);
+        const totalPoints = validPolygons.reduce((acc, ring) => acc + ring.length, 0);
+
+        if (validPolygons.length > 0) {
+            const payload = {
+                color: polygonColor,
+                polygons: validPolygons
+            };
+            $('#area-polygon-json-hidden').val(JSON.stringify(payload));
+            $('#polygon-status-badge')
+                .text(`Área: ${validPolygons.length} área(s) (${totalPoints} pts)`)
+                .removeClass('bg-dark text-warning')
+                .addClass('bg-success text-white');
+        } else {
+            $('#area-polygon-json-hidden').val('');
+            $('#polygon-status-badge')
+                .text('Área: Todo o Mapa')
+                .removeClass('bg-success text-white')
+                .addClass('bg-dark text-warning');
+        }
+    }
+
+    window.editPolygonRingByRef = function(ringIndex) {
+        savePolygonHistoryState();
+        if (ringIndex >= 0 && ringIndex < draftPolygonsList.length) {
+            const target = draftPolygonsList.splice(ringIndex, 1)[0];
+            draftPolygonsList.push(target);
+            redrawDraftPolygonLayers();
+        }
+        if (rightPanelMap) rightPanelMap.closePopup();
+    };
+
+    window.deletePolygonRingByRef = function(ringIndex) {
+        savePolygonHistoryState();
+        if (ringIndex >= 0 && ringIndex < draftPolygonsList.length) {
+            draftPolygonsList.splice(ringIndex, 1);
+        }
+        if (draftPolygonsList.length === 0) {
+            draftPolygonsList = [[]];
+        }
+        redrawDraftPolygonLayers();
+        if (rightPanelMap) rightPanelMap.closePopup();
+    };
+
+    function redrawDraftPolygonLayers() {
+        if (!rightPanelMap) return;
+        polygonLayersGroup.clearLayers();
+        if (!rightPanelMap.hasLayer(polygonLayersGroup)) {
+            polygonLayersGroup.addTo(rightPanelMap);
+        }
+
+        draftPolygonsList.forEach((ring, idx) => {
+            if (!ring || ring.length === 0) return;
+            const isCurrentActive = (idx === draftPolygonsList.length - 1);
+            let polyLayer = null;
+
+            if (ring.length >= 3) {
+                polyLayer = L.polygon(ring, {
+                    color: polygonColor,
+                    fillColor: polygonColor,
+                    fillOpacity: isCurrentActive ? 0.4 : 0.25,
+                    weight: isCurrentActive ? 3 : 2,
+                    dashArray: isCurrentActive ? '5, 5' : null
+                }).addTo(polygonLayersGroup);
+            } else if (ring.length > 0) {
+                polyLayer = L.polyline(ring, {
+                    color: polygonColor,
+                    weight: 3,
+                    dashArray: '5, 5'
+                }).addTo(polygonLayersGroup);
+            }
+
+            if (polyLayer) {
+                const ringIndex = idx;
+                polyLayer.on('contextmenu', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    
+                    const popupContent = `
+                        <div style="text-align: center; padding: 4px; min-width: 140px;">
+                            <strong style="color: ${polygonColor}; font-size: 13px;">Área #${ringIndex + 1} (${ring.length} pts)</strong>
+                            <div class="d-flex flex-column gap-2 mt-2">
+                                <button type="button" class="btn btn-sm btn-info rounded-pill fw-bold text-dark" onclick="editPolygonRingByRef(${ringIndex})">
+                                    <i class="fa-solid fa-pen me-1"></i> Editar Área
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger rounded-pill fw-bold" onclick="deletePolygonRingByRef(${ringIndex})">
+                                    <i class="fa-solid fa-trash me-1"></i> Excluir Área
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                    L.popup()
+                        .setLatLng(e.latlng)
+                        .setContent(popupContent)
+                        .openOn(rightPanelMap);
+                });
+            }
+        });
+
+        updatePolygonHiddenInput();
+    }
+
+    $(document).on('click', '#btn-draw-polygon-mode', function() {
+        isDrawingPolygon = !isDrawingPolygon;
+        if (isDrawingPolygon) {
+            $(this).removeClass('btn-info text-dark').addClass('btn-success text-white');
+            $(this).html('<i class="fa-solid fa-check me-1"></i> Concluir Polígono');
+            if (rightPanelMap) rightPanelMap.getContainer().style.cursor = 'crosshair';
+        } else {
+            $(this).removeClass('btn-success text-white').addClass('btn-info text-dark');
+            $(this).html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
+            if (rightPanelMap) rightPanelMap.getContainer().style.cursor = '';
+        }
+    });
+
+    $(document).on('click', '#btn-new-polygon-area', function() {
+        const lastRing = draftPolygonsList[draftPolygonsList.length - 1];
+        if (lastRing && lastRing.length >= 3) {
+            savePolygonHistoryState();
+            draftPolygonsList.push([]);
+            redrawDraftPolygonLayers();
+        } else {
+            alert('Complete pelo menos 3 pontos no polígono atual antes de iniciar uma nova área.');
+        }
+    });
+
+    $(document).on('click', '#btn-undo-polygon', function() {
+        undoPolygonState();
+    });
+
+    $(document).on('click', '#btn-redo-polygon', function() {
+        redoPolygonState();
+    });
+
+    $(document).on('change input', '#polygon-color-picker', function() {
+        polygonColor = $(this).val();
+        savePolygonHistoryState();
+        redrawDraftPolygonLayers();
+    });
+
+    $(document).on('click', '#btn-clear-polygon', function() {
+        savePolygonHistoryState();
+        draftPolygonsList = [[]];
+        polygonLayersGroup.clearLayers();
+        isDrawingPolygon = false;
+        $('#btn-draw-polygon-mode').removeClass('btn-success text-white').addClass('btn-info text-dark')
+            .html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
+        if (rightPanelMap) rightPanelMap.getContainer().style.cursor = '';
+        updatePolygonHiddenInput();
+    });
+
+    // Atalhos de teclado Ctrl+Z e Ctrl+Y
+    $(document).on('keydown', function(e) {
+        if (!$('#panel-view-map').is(':visible')) return;
+        if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
+            if (e.shiftKey) {
+                redoPolygonState();
+            } else {
+                undoPolygonState();
+            }
+        } else if (e.ctrlKey && (e.key === 'y' || e.key === 'Y')) {
+            redoPolygonState();
+        }
+    });
+
+    // Marcador Único de Localização no Mini-Mapa
+    let draftLocationMarker = null;
+
+    function clearDraftMarkers() {
+        if (draftLocationMarker && rightPanelMap) {
+            rightPanelMap.removeLayer(draftLocationMarker);
+        }
+        draftLocationMarker = null;
+        $('#coordenadas-json-hidden').val('');
+        $('.coord-lat').val('-27.59');
+        $('.coord-lng').val('-48.54');
+    }
+
+    function addDraftMarker(lat, lng) {
+        if (!rightPanelMap) return;
+
+        if (draftLocationMarker) {
+            rightPanelMap.removeLayer(draftLocationMarker);
+            draftLocationMarker = null;
+        }
+
+        const latFixed = parseFloat(lat).toFixed(6);
+        const lngFixed = parseFloat(lng).toFixed(6);
+
+        draftLocationMarker = L.marker([lat, lng], {
+            draggable: true,
+            icon: L.divIcon({
+                className: 'custom-animal-marker',
+                html: `
+                    <div class="marker-container">
+                        <div class="marker-pin" style="border-color: #FFA63A; background: #9C5B1C;">
+                            <div class="marker-avatar">
+                                <i class="fa-solid fa-location-dot" style="color: #FFA63A; font-size: 16px;"></i>
+                            </div>
+                            <span class="marker-name-label" style="opacity: 1; max-width: 200px; padding-right: 6px;">Local de Ocorrência</span>
+                        </div>
+                    </div>
+                `,
+                iconSize: [40, 40],
+                iconAnchor: [20, 40]
+            })
+        }).addTo(rightPanelMap);
+
+        $('.coord-lat').val(latFixed);
+        $('.coord-lng').val(lngFixed);
+        $('#coordenadas-json-hidden').val(JSON.stringify([{ lat: parseFloat(latFixed), lng: parseFloat(lngFixed) }]));
+
+        draftLocationMarker.on('dragend', function(e) {
+            const pos = e.target.getLatLng();
+            $('.coord-lat').val(pos.lat.toFixed(6));
+            $('.coord-lng').val(pos.lng.toFixed(6));
+            $('#coordenadas-json-hidden').val(JSON.stringify([{ lat: parseFloat(pos.lat.toFixed(6)), lng: parseFloat(pos.lng.toFixed(6)) }]));
+        });
+    }
+
+    window.removeDraftMarkerByRef = function(btnEl) {
+        draftLocationMarkers.forEach((item, idx) => {
+            if (item.marker && item.marker.getPopup() && item.marker.getPopup()._contentNode && item.marker.getPopup()._contentNode.contains(btnEl)) {
+                rightPanelMap.removeLayer(item.marker);
+                draftLocationMarkers.splice(idx, 1);
+            }
+        });
+        updateDraftMarkersHiddenInput();
+    };
+
+    $(document).on('click', '#btn-add-location-marker', function() {
+        if (!rightPanelMap) return;
+        const center = rightPanelMap.getCenter();
+        const offset = (draftLocationMarkers.length * 0.04);
+        addDraftMarker(center.lat + offset, center.lng + offset);
+    });
+
+    $(document).on('click', '#btn-clear-location-markers', function() {
+        clearDraftMarkers();
+        addDraftMarker(-27.59, -48.54);
     });
 
     // 3. Inicialização do Mapa Sincronizado 100% IDÊNTICO ao Mapa Principal
@@ -444,35 +884,26 @@ $(document).ready(function() {
                     }
                 });
 
-                // Marcador arrastável para posicionar o novo animal
-                rightPanelMarker = L.marker([lat, lng], {
-                    draggable: true,
-                    icon: L.divIcon({
-                        className: 'custom-animal-marker',
-                        html: `
-                            <div class="marker-container">
-                                <div class="marker-pin" style="border-color: #FFA63A; background: #9C5B1C;">
-                                    <div class="marker-avatar">
-                                        <i class="fa-solid fa-crosshairs" style="color: #FFA63A; font-size: 16px;"></i>
-                                    </div>
-                                    <span class="marker-name-label" style="opacity: 1; max-width: 200px; padding-right: 6px;">Posição</span>
-                                </div>
-                            </div>
-                        `,
-                        iconSize: [40, 40],
-                        iconAnchor: [20, 40]
-                    })
-                }).addTo(rightPanelMap);
-
-                rightPanelMarker.on('dragend', function(e) {
-                    const pos = e.target.getLatLng();
-                    $('.coord-lat').val(pos.lat.toFixed(6));
-                    $('.coord-lng').val(pos.lng.toFixed(6));
+                // Evento de clique no mini-mapa para mover marcador de localização ou adicionar vértice ao polígono
+                rightPanelMap.on('click', function(e) {
+                    if (isDrawingPolygon) {
+                        savePolygonHistoryState();
+                        const lat = parseFloat(e.latlng.lat.toFixed(6));
+                        const lng = parseFloat(e.latlng.lng.toFixed(6));
+                        if (draftPolygonsList.length === 0) draftPolygonsList.push([]);
+                        draftPolygonsList[draftPolygonsList.length - 1].push([lat, lng]);
+                        redrawDraftPolygonLayers();
+                    } else {
+                        addDraftMarker(e.latlng.lat, e.latlng.lng);
+                    }
                 });
+
+                if (draftLocationMarkers.length === 0) {
+                    addDraftMarker(lat, lng);
+                }
             } else {
                 rightPanelMap.invalidateSize();
                 rightPanelMap.setView([lat, lng], 8);
-                if (rightPanelMarker) rightPanelMarker.setLatLng([lat, lng]);
             }
         }, 200);
     }
@@ -667,6 +1098,7 @@ $(document).ready(function() {
     function resetForm() {
         $('#form-species-create')[0].reset();
         $('#animal-id-hidden').val('');
+        $('#coordenadas-json-hidden').val('');
         $('#image-preview-img').addClass('d-none');
         $('#image-preview-content').removeClass('d-none');
         $('#icon-preview-img').addClass('d-none').css('transform', 'none');
@@ -677,6 +1109,8 @@ $(document).ready(function() {
         $('.card-back-1, .card-back-2').empty();
         $('.select-nivel-extincao').val('').css({ 'background-color': '#383642', 'border-color': '#484654', 'color': '#FFFFFF' });
         $('.biome-chip').attr('data-selected', 'false').find('.chip-icon').removeClass('fa-check').addClass('fa-plus');
+        clearDraftMarkers();
+        addDraftMarker(-27.59, -48.54);
     }
 
     $('#btn-reset-form').click(resetForm);
@@ -688,7 +1122,7 @@ $(document).ready(function() {
 
         const sigla = (animal.api_nivelextincao ? animal.api_nivelextincao.sigla : (animal.nivel_sigla || 'CR')).toLowerCase();
         const statusConfig = {
-            'ex': { color: '#000000', icon: 'fa-skull' },
+            'ex': { color: '#403E4C', icon: 'fa-skull' },
             'ew': { color: '#831F34', icon: 'fa-skull-crossbones' },
             'cr': { color: '#FF4068', icon: 'fa-exclamation-triangle' },
             'en': { color: '#ff6426', icon: 'fa-triangle-exclamation' },

@@ -478,6 +478,14 @@ html, body, #main-layout {
   font-size: 14px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
+  cursor: grab;
+  user-select: none;
+  display: flex;
+  align-items: center;
+}
+
+.legend-header:active {
+  cursor: grabbing;
 }
 
 .legend-section-title {
@@ -532,6 +540,32 @@ html, body, #main-layout {
   gap: 8px;
 }
 
+.legend-slider-container {
+  margin-top: 6px;
+}
+
+#marker-size-slider {
+  width: 100%;
+  accent-color: #FFAA44;
+  cursor: pointer;
+  height: 6px;
+  border-radius: 3px;
+  background: #3B3A48;
+}
+
+.legend-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: #A09FA9;
+  margin-top: 4px;
+}
+
+#marker-size-val {
+  color: #FFAA44;
+  font-weight: 800;
+}
+
 .extinction-legend-items .legend-item {
   gap: 8px;
   margin-bottom: 5px;
@@ -561,9 +595,16 @@ html, body, #main-layout {
   border: none;
 }
 
+.leaflet-marker-icon.custom-animal-marker {
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease !important;
+}
+
 .marker-container {
   position: relative;
   cursor: pointer;
+  transform: scale(var(--marker-scale, 1));
+  transform-origin: 50% 100%;
+  transition: transform 0.15s ease-out;
 }
 
 .marker-pin {
@@ -580,6 +621,28 @@ html, body, #main-layout {
   white-space: nowrap;
   user-select: none;
   transform-origin: 18px 36px;
+}
+
+/* Marcador Agrupado em Zoom Out (Centroid Cluster) */
+.cluster-marker-pin {
+  box-shadow: 0 0 0 4px rgba(255, 170, 68, 0.45), 0 6px 18px rgba(0,0,0,0.7) !important;
+  animation: clusterPulse 3s infinite alternate ease-in-out;
+}
+
+@keyframes clusterPulse {
+  0% { box-shadow: 0 0 0 2px rgba(255, 170, 68, 0.3), 0 6px 18px rgba(0,0,0,0.7); }
+  100% { box-shadow: 0 0 0 7px rgba(255, 170, 68, 0.65), 0 8px 24px rgba(0,0,0,0.85); }
+}
+
+.marker-cluster-badge {
+  background-color: #FFAA44;
+  color: #111115;
+  font-weight: 900;
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 12px;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
 }
 
 /* Ponta inferior do formato clássico de marcador de mapa */
@@ -1254,9 +1317,17 @@ html, body, #main-layout {
   pointer-events: none;
 }
 
-/* Grid de Cards de Espécies (Direita) */
+/* Painel e Grid de Cards de Espécies (Direita) */
+#panel-view-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .species-cards-scroll-area {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 5px;
 }
@@ -1267,137 +1338,273 @@ html, body, #main-layout {
   gap: 16px;
 }
 
-/* Card de Espécie (Tamanho Fixo e Rígido) */
+/* Card de Espécie (Tamanho Expandido com Textura, Slideshow Pan Horizontal e Biomas) */
 .species-card {
   border-radius: 18px;
-  padding: 16px 14px 12px 14px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   position: relative;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.25);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  height: 230px;
-  min-height: 230px;
-  max-height: 230px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  height: 310px;
+  min-height: 310px;
+  max-height: 310px;
   box-sizing: border-box;
   justify-content: space-between;
   overflow: hidden;
 }
 
 .species-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 22px rgba(0,0,0,0.4);
+  transform: translateY(-4px);
+  box-shadow: 0 14px 28px rgba(0,0,0,0.5);
 }
 
-/* Variações de Cores dos Cards */
-.card-color-brown { background-color: #8C511B; }
-.card-color-crimson { background-color: #7E2034; }
-.card-color-slate { background-color: #3C4350; }
-.card-color-green { background-color: #1E5A3D; }
+/* Pseudo-elemento de Textura em 45° com PNGs de /icons/ */
+.species-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background-size: 80px;
+  background-repeat: repeat;
+  opacity: 0.18;
+  transform: rotate(45deg);
+  z-index: 0;
+  pointer-events: none;
+}
 
-/* Botão de 3 Pontos */
+.texture-mamiferos::before { background-image: url('/icons/mamiferos.png'); }
+.texture-aves::before { background-image: url('/icons/aves.png'); }
+.texture-anfibios::before { background-image: url('/icons/anfibios.png'); }
+.texture-repteis::before { background-image: url('/icons/repteis.png'); }
+.texture-peixes-cartilaginosos::before { background-image: url('/icons/peixes cartilaginosos.png'); }
+.texture-peixes-osseos::before { background-image: url('/icons/peixes osseos.png'); }
+.texture-default::before { background-image: url('/icons/gralha azul contorno.png'); }
+
+.species-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Botão de 3 Pontos (Canto Superior Esquerdo) */
 .species-card-menu-btn {
   position: absolute;
   top: 10px;
-  right: 12px;
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 1.1rem;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+  font-size: 0.95rem;
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: 10;
+  backdrop-filter: blur(4px);
+  transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .species-card-menu-btn:hover {
   color: #FFFFFF;
-  background-color: rgba(255, 255, 255, 0.15);
+  background-color: rgba(0, 0, 0, 0.85);
+  transform: scale(1.1);
 }
 
-/* Foto/Avatar do Card (Tamanho 100% Rígido e Fixo) */
-.species-card-avatar {
-  width: 84px;
-  height: 84px;
-  min-width: 84px;
-  min-height: 84px;
-  max-width: 84px;
-  max-height: 84px;
-  border-radius: 50%;
-  background-color: #FFFFFF;
+/* Indicador do Nível de Extinção (Canto Superior Direito - Grande) */
+.species-card-extinction-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  min-width: 42px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 15px;
+  font-size: 0.9rem;
+  font-weight: 900;
+  color: #FFFFFF;
+  letter-spacing: 0.5px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(4px);
+  text-transform: uppercase;
   flex-shrink: 0;
 }
 
-.species-card-avatar img {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  object-position: center !important;
-  display: block;
+/* Slideshow na Metade Superior do Card (Altura Ampliada = 175px) */
+.species-card-slideshow {
+  width: 100%;
+  height: 175px;
+  min-height: 175px;
+  position: relative;
+  overflow: hidden;
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  background-color: #111115;
+  flex-shrink: 0;
+}
+
+.species-card-slideshow-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 55%;
+  background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.65) 100%);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Animação Contínua de Movimentação Horizontal Pan */
+@keyframes slideHorizontalPan {
+  0% {
+    transform: scale(1.1) translateX(-4%);
+  }
+  100% {
+    transform: scale(1.1) translateX(4%);
+  }
+}
+
+.card-slide-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0;
+  transform: scale(1.1) translateX(20px);
+  transition: opacity 0.9s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.9s cubic-bezier(0.25, 0.8, 0.25, 1);
+  z-index: 1;
+}
+
+.card-slide-img.active {
+  opacity: 1;
+  transform: scale(1.1) translateX(0);
+  animation: slideHorizontalPan 10s ease-in-out infinite alternate;
+}
+
+.card-slide-img.exit-left {
+  opacity: 0;
+  transform: scale(1.1) translateX(-30px);
+}
+
+/* Conteúdo da Metade Inferior do Card (Altura = 135px) */
+.species-card-body {
+  width: 100%;
+  height: 135px;
+  padding: 10px 12px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  box-sizing: border-box;
+  z-index: 2;
+  position: relative;
+  text-align: center;
 }
 
 .species-card-name-wrapper {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
   width: 100%;
   padding: 0 4px;
-  margin-bottom: 4px;
+  margin-top: 2px;
 }
 
 .species-card-name {
-  font-weight: 700;
-  font-size: 0.95rem;
+  font-weight: 800;
+  font-size: 1.15rem;
   color: #FFFFFF;
   text-align: center;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 130px;
+  max-width: 100%;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.7);
 }
 
-.species-card-extinction-badge {
+.species-card-scientific-name {
+  font-size: 0.82rem;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.88);
+  text-align: center;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  margin-top: 2px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+}
+
+/* Bloquinhos de Biomas (Chips Coloridos no Rodapé) */
+.species-card-biomes-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.mini-biome-chip {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 2px 7px;
+  padding: 3px 9px;
   border-radius: 12px;
   font-size: 0.72rem;
-  font-weight: 900;
+  font-weight: 700;
   color: #FFFFFF;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-  flex-shrink: 0;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  user-select: none;
+  line-height: 1;
 }
 
-/* Rodapé do Card */
+.mini-biome-chip-default {
+  background-color: #555555;
+}
+
+/* Rodapé do Card (Metadados para Admins) */
 .species-card-footer {
   width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .species-card-id-pill {
   font-family: monospace;
   font-weight: bold;
   letter-spacing: 0.5px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 1px 5px;
+  border-radius: 4px;
 }
 
 .species-card-meta {
   text-align: right;
-  line-height: 1.3;
+  line-height: 1.2;
 }
 
 /* Efeito Visual de Cartas Empilhadas "Tortas" (Tilted Card Stack) */
@@ -1509,10 +1716,17 @@ html, body, #main-layout {
   width: 100% !important;
   border-left: none !important;
   padding: 35px 50px !important;
+  min-height: 0 !important;
+}
+
+.user-mode-display-only #panel-view-list,
+.user-mode-display-only .species-cards-scroll-area {
+  min-height: 0 !important;
+  flex: 1 !important;
 }
 
 .user-mode-display-only .species-cards-grid {
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important;
   gap: 22px !important;
 }
 

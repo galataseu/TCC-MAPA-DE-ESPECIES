@@ -14,8 +14,8 @@ block content
       #search-results-dropdown.search-dropdown-menu.d-none
 
     #map-legend.leaflet-bar
-      .legend-header
-        i.fa-solid.fa-layer-group.me-1
+      .legend-header(title="Clique e arraste para mover a legenda na tela")
+        i.fa-solid.fa-grip-vertical.me-2
         | Legenda
       .legend-section-title Biomas
       .legend-items
@@ -59,6 +59,23 @@ block content
           span.extinction-badge(style="background-color: #555555;") DD
           span.legend-text Dados Insuficientes
 
+      hr.legend-divider
+
+      .legend-section-title Tamanho dos Marcadores
+      .legend-slider-container
+        input#marker-size-slider(type="range", min="0.5", max="2.0", step="0.05", value="1.0", title="Ajuste o tamanho dos marcadores no mapa")
+        .legend-slider-labels
+          span 50%
+          span#marker-size-val 100%
+          span 200%
+
+      .legend-toggle#admin-debug-toggle-container.d-none
+        hr.legend-divider
+        label.text-warning.fw-bold
+          input#toggle-debug-areas(type="checkbox")
+          i.fa-solid.fa-bug.me-1
+          | Exibir Áreas dos Animais (Debug)
+
     //- Indicador Visual do Modo Admin
     #admin-mode-badge.d-none
       i.fa-solid.fa-user-shield.me-2
@@ -86,8 +103,10 @@ block content
 
           form#form-create-animal(action="/api/v1/animais/", method="POST", enctype="multipart/form-data")
             input#animal-edit-id(type="hidden", name="animal_id")
-            input.coord-lat(type="hidden", name="lat")
-            input.coord-lng(type="hidden", name="lng")
+            input#modal-coordenadas-json-hidden(type="hidden", name="coordenadas_json")
+            input#modal-area-polygon-json-hidden(type="hidden", name="area_polygon_json")
+            input.coord-lat(type="hidden", name="lat", value="-27.59")
+            input.coord-lng(type="hidden", name="lng", value="-48.54")
 
             //- Seção de Uploads (Imagens e Ícone)
             .upload-previews-container
@@ -207,8 +226,27 @@ block content
                 | Animais Cadastrados
 
           //- VISÃO 1: MAPA DA LOCALIZAÇÃO (Padrão para clique direito)
-          #modal-panel-map.h-100
-            #modal-right-panel-map.h-100(style="border-radius: 16px; overflow: hidden; border: 1px solid #3B3A48;")
+          #modal-panel-map.h-100.d-flex.flex-column
+            .map-location-controls.d-flex.align-items-center.gap-2.mb-2.p-2.rounded-3.flex-wrap(style="background-color: #2B2A33;")
+              button#modal-btn-draw-polygon-mode.btn.btn-info.btn-sm.rounded-pill.fw-bold.text-dark(type="button")
+                i.fa-solid.fa-draw-polygon.me-1
+                | Desenhar Área
+              button#modal-btn-new-polygon-area.btn.btn-outline-warning.btn-sm.rounded-pill.fw-bold(type="button", title="Criar outra área separada")
+                i.fa-solid.fa-plus.me-1
+                | Nova Área
+              button#modal-btn-undo-polygon.btn.btn-dark.btn-sm.rounded-circle(type="button", title="Desfazer (Ctrl+Z)", style="width: 32px; height: 32px; padding: 0;")
+                i.fa-solid.fa-rotate-left
+              button#modal-btn-redo-polygon.btn.btn-dark.btn-sm.rounded-circle(type="button", title="Refazer (Ctrl+Y)", style="width: 32px; height: 32px; padding: 0;")
+                i.fa-solid.fa-rotate-right
+              .d-flex.align-items-center.gap-1.ms-1(title="Escolher Cor da Área")
+                label.small.text-light.mb-0 Cor:
+                input#modal-polygon-color-picker.form-control.form-control-color.p-0.border-0.rounded-circle(type="color", value="#FFAA44", style="width: 28px; height: 28px; cursor: pointer;")
+              button#modal-btn-clear-polygon.btn.btn-outline-danger.btn-sm.rounded-pill.ms-1(type="button")
+                i.fa-solid.fa-eraser.me-1
+                | Limpar
+              span#modal-polygon-status-badge.badge.bg-dark.text-warning.border.border-warning.ms-auto Área: Todo o Mapa
+            .flex-grow-1(style="min-height: 0;")
+              #modal-right-panel-map.h-100(style="border-radius: 16px; overflow: hidden; border: 1px solid #3B3A48;")
 
           //- VISÃO 2: LISTA DE ANIMAIS CADASTRADOS
           #modal-panel-list.h-100.d-flex.flex-column.d-none

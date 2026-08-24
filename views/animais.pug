@@ -9,6 +9,8 @@ block content
 
         form#form-species-create(action="/api/v1/animais/", method="POST", enctype="multipart/form-data")
           input#animal-id-hidden(type="hidden", name="animal_id")
+          input#coordenadas-json-hidden(type="hidden", name="coordenadas_json")
+          input#area-polygon-json-hidden(type="hidden", name="area_polygon_json")
           input.coord-lat(type="hidden", name="lat", value="-27.59")
           input.coord-lng(type="hidden", name="lng", value="-48.54")
 
@@ -140,8 +142,27 @@ block content
               //- Cards renderizados dinamicamente via JS
 
         //- VISÃO 2: MAPA DA LOCALIZAÇÃO
-        #panel-view-map.h-100.d-none
-          #right-panel-map-container
+        #panel-view-map.h-100.d-flex.flex-column.d-none
+          .map-location-controls.d-flex.align-items-center.gap-2.mb-2.p-2.rounded-3.flex-wrap(style="background-color: #2B2A33;")
+            button#btn-draw-polygon-mode.btn.btn-info.btn-sm.rounded-pill.fw-bold.text-dark(type="button")
+              i.fa-solid.fa-draw-polygon.me-1
+              | Desenhar Área
+            button#btn-new-polygon-area.btn.btn-outline-warning.btn-sm.rounded-pill.fw-bold(type="button", title="Criar outra área separada")
+              i.fa-solid.fa-plus.me-1
+              | Nova Área
+            button#btn-undo-polygon.btn.btn-dark.btn-sm.rounded-circle(type="button", title="Desfazer (Ctrl+Z)", style="width: 32px; height: 32px; padding: 0;")
+              i.fa-solid.fa-rotate-left
+            button#btn-redo-polygon.btn.btn-dark.btn-sm.rounded-circle(type="button", title="Refazer (Ctrl+Y)", style="width: 32px; height: 32px; padding: 0;")
+              i.fa-solid.fa-rotate-right
+            .d-flex.align-items-center.gap-1.ms-1(title="Escolher Cor da Área")
+              label.small.text-light.mb-0 Cor:
+              input#polygon-color-picker.form-control.form-control-color.p-0.border-0.rounded-circle(type="color", value="#FFAA44", style="width: 28px; height: 28px; cursor: pointer;")
+            button#btn-clear-polygon.btn.btn-outline-danger.btn-sm.rounded-pill.ms-1(type="button")
+              i.fa-solid.fa-eraser.me-1
+              | Limpar
+            span#polygon-status-badge.badge.bg-dark.text-warning.border.border-warning.ms-auto Área: Todo o Mapa
+          .flex-grow-1(style="min-height: 0;")
+            #right-panel-map-container
 
     //- Modal de Detalhes da Espécie (Card Completo)
     #animalModal.modal.fade(tabindex="-1", aria-hidden="true")

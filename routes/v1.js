@@ -145,6 +145,11 @@ router.post('/animais/', uploadFields, async (req, res) => {
     if (!iconPath && imgPath) iconPath = imgPath;
     if (!imgPath && iconPath) imgPath = iconPath;
 
+    let obsText = b.obs || '';
+    if (b.area_polygon_json && typeof b.area_polygon_json === 'string' && b.area_polygon_json.trim().length > 0) {
+      obsText = `${obsText} [[POLYGON_DATA]]${b.area_polygon_json.trim()}`;
+    }
+
     const animal = await prisma.api_animal.create({
       data: {
         nome_comum: b.nome_comum || 'Novo Animal',
@@ -155,7 +160,7 @@ router.post('/animais/', uploadFields, async (req, res) => {
         altura: b.altura ? parseFloat(b.altura) : null,
         dieta: b.dieta || null,
         habitos: b.habitos || null,
-        obs: b.obs || null,
+        obs: obsText || null,
         nivel_extincao_id: nivelExtincaoId,
         created_at: now,
         updated_at: now
@@ -200,18 +205,36 @@ router.post('/animais/', uploadFields, async (req, res) => {
       }
     }
 
-    // 5. Criar Marcador Geográfico no PostGIS
-    let lat = parseFloat(b.lat);
-    let lng = parseFloat(b.lng);
-    if (isNaN(lat) || isNaN(lng)) {
-      lat = -27.59;
-      lng = -48.54;
+    // 5. Criar Marcador(es) Geográfico(s) no PostGIS
+    let coordsList = [];
+    if (b.coordenadas_json) {
+      try {
+        coordsList = JSON.parse(b.coordenadas_json);
+      } catch (e) {
+        console.error("Error parsing coordenadas_json:", e);
+      }
     }
+    if (!Array.isArray(coordsList) || coordsList.length === 0) {
+      let lat = parseFloat(b.lat);
+      let lng = parseFloat(b.lng);
+      if (isNaN(lat) || isNaN(lng)) {
+        lat = -27.59;
+        lng = -48.54;
+      }
+      coordsList = [{ lat, lng }];
+    }
+
     const iconVal = iconPath || imgPath || '/assets/img/logotipo.png';
-    await prisma.$executeRawUnsafe(`
-      INSERT INTO public.api_marcador (animal_id, location, icone, created_at)
-      VALUES (${animal.id}, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326), '${iconVal}', NOW());
-    `);
+    for (const c of coordsList) {
+      let cLat = parseFloat(c.lat);
+      let cLng = parseFloat(c.lng);
+      if (!isNaN(cLat) && !isNaN(cLng)) {
+        await prisma.$executeRawUnsafe(`
+          INSERT INTO public.api_marcador (animal_id, location, icone, created_at)
+          VALUES (${animal.id}, ST_SetSRID(ST_MakePoint(${cLng}, ${cLat}), 4326), '${iconVal}', NOW());
+        `);
+      }
+    }
 
     res.status(201).json({ success: true, data: serialize(animal) });
   } catch (err) {
@@ -255,7 +278,13 @@ router.patch('/animais/:id/', uploadFields, async (req, res) => {
     if (b.altura !== undefined && b.altura !== '') updateData.altura = parseFloat(b.altura);
     if (b.dieta) updateData.dieta = b.dieta;
     if (b.habitos) updateData.habitos = b.habitos;
-    if (b.obs) updateData.obs = b.obs;
+    if (b.obs !== undefined || b.area_polygon_json !== undefined) {
+      let obsBase = b.obs !== undefined ? b.obs : '';
+      if (b.area_polygon_json && typeof b.area_polygon_json === 'string' && b.area_polygon_json.trim().length > 0) {
+        obsBase = `${obsBase} [[POLYGON_DATA]]${b.area_polygon_json.trim()}`;
+      }
+      updateData.obs = obsBase || null;
+    }
     if (b.nivel_extincao_id) updateData.nivel_extincao_id = BigInt(b.nivel_extincao_id);
 
     const animal = await prisma.api_animal.update({
@@ -302,31 +331,55 @@ router.patch('/animais/:id/', uploadFields, async (req, res) => {
       }
     }
 
-    // Atualizar posição e ícone do marcador no PostGIS
-    const lat = parseFloat(b.lat);
-    const lng = parseFloat(b.lng);
-    const hasCoords = !isNaN(lat) && !isNaN(lng);
+    // Atualizar posição(ões) e ícone dos marcadores no PostGIS
+    let coordsList = [];
+    if (b.coordenadas_json) {
+      try {
+        coordsList = JSON.parse(b.coordenadas_json);
+      } catch (e) {
+        console.error("Error parsing coordenadas_json:", e);
+      }
+    }
 
-    const existingMarker = await prisma.api_marcador.findFirst({ where: { animal_id: id } });
-    if (existingMarker) {
-      let setClauses = [];
-      if (hasCoords) {
-        setClauses.push(`location = ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)`);
+    const iconVal = iconPath || imgPath || '/assets/img/logotipo.png';
+
+    if (Array.isArray(coordsList) && coordsList.length > 0) {
+      await prisma.api_marcador.deleteMany({ where: { animal_id: id } });
+      for (const c of coordsList) {
+        let cLat = parseFloat(c.lat);
+        let cLng = parseFloat(c.lng);
+        if (!isNaN(cLat) && !isNaN(cLng)) {
+          await prisma.$executeRawUnsafe(`
+            INSERT INTO public.api_marcador (animal_id, location, icone, created_at)
+            VALUES (${id}, ST_SetSRID(ST_MakePoint(${cLng}, ${cLat}), 4326), '${iconVal}', NOW());
+          `);
+        }
       }
-      if (iconPath) {
-        setClauses.push(`icone = '${iconPath}'`);
+    } else {
+      const lat = parseFloat(b.lat);
+      const lng = parseFloat(b.lng);
+      const hasCoords = !isNaN(lat) && !isNaN(lng);
+
+      const existingMarker = await prisma.api_marcador.findFirst({ where: { animal_id: id } });
+      if (existingMarker) {
+        let setClauses = [];
+        if (hasCoords) {
+          setClauses.push(`location = ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)`);
+        }
+        if (iconPath) {
+          setClauses.push(`icone = '${iconPath}'`);
+        }
+        if (setClauses.length > 0) {
+          await prisma.$executeRawUnsafe(`UPDATE public.api_marcador SET ${setClauses.join(', ')} WHERE animal_id = ${id};`);
+        }
+      } else if (hasCoords || iconPath) {
+        const coordLat = hasCoords ? lat : -27.59;
+        const coordLng = hasCoords ? lng : -48.54;
+        await prisma.$executeRawUnsafe(`
+          INSERT INTO public.api_marcador (animal_id, location, icone, created_at)
+          VALUES (${id}, ST_SetSRID(ST_MakePoint(${coordLng}, ${coordLat}), 4326), '${iconVal}', NOW());
+        `);
       }
-      if (setClauses.length > 0) {
-        await prisma.$executeRawUnsafe(`UPDATE public.api_marcador SET ${setClauses.join(', ')} WHERE animal_id = ${id};`);
-      }
-    } else if (hasCoords || iconPath) {
-      const coordLat = hasCoords ? lat : -27.59;
-      const coordLng = hasCoords ? lng : -48.54;
-      const iconVal = iconPath || imgPath || '/assets/img/logotipo.png';
-      await prisma.$executeRawUnsafe(`
-        INSERT INTO public.api_marcador (animal_id, location, icone, created_at)
-        VALUES (${id}, ST_SetSRID(ST_MakePoint(${coordLng}, ${coordLat}), 4326), '${iconVal}', NOW());
-      `);
     }
 
     res.json({ success: true, data: serialize(animal) });

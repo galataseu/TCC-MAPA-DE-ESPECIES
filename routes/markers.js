@@ -71,6 +71,29 @@ router.get('/', async (req, res) => {
           }
         }
 
+        let areaPolygon = null;
+        let areaPolygonColor = "#FFAA44";
+        let cleanObs = m.obs;
+        if (m.obs && typeof m.obs === 'string' && m.obs.includes('[[POLYGON_DATA]]')) {
+          const parts = m.obs.split('[[POLYGON_DATA]]');
+          cleanObs = parts[0].trim();
+          try {
+            const parsed = JSON.parse(parts[1].trim());
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.polygons) {
+              areaPolygon = parsed.polygons;
+              areaPolygonColor = parsed.color || "#FFAA44";
+            } else if (Array.isArray(parsed) && parsed.length > 0) {
+              if (Array.isArray(parsed[0]) && Array.isArray(parsed[0][0])) {
+                areaPolygon = parsed;
+              } else {
+                areaPolygon = [parsed];
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing areaPolygon:", e);
+          }
+        }
+
         return {
           type: 'Feature',
           geometry: geometry,
@@ -85,7 +108,9 @@ router.get('/', async (req, res) => {
             habitos: m.habitos,
             altura: m.altura,
             peso: m.peso,
-            obs: m.obs,
+            obs: cleanObs,
+            area_polygon: areaPolygon,
+            area_polygon_color: areaPolygonColor,
             nivel_extincao_id: m.nivel_extincao_id ? m.nivel_extincao_id.toString() : null,
             nivel_extincao: m.nivel_extincao,
             nivel_sigla: m.nivel_sigla,
