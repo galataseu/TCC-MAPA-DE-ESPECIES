@@ -14,5 +14,5 @@ jobs:
       - name: Sincronizando com o original
         run: gh repo sync ${{ github.repository }} --branch main
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
 
