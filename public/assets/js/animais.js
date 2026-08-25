@@ -938,59 +938,136 @@ $(document).ready(function() {
     // =========================================================================
     // RECORTE E ARRASTE INTERATIVO DO ÍCONE
     // =========================================================================
+    let pageSelectedFiles = []; // Cada item: { id, file, currentX, currentY, scale }
     let iconCropState = {
         isDragging: false,
         startX: 0,
         startY: 0,
         currentX: 0,
-        currentY: 0
+        currentY: 0,
+        scale: 1.0
     };
 
-    $('#image-stack-trigger').click(() => $('#input-file-image').click());
+    $(document).on('click', '#btn-choose-icon', function(e) {
+        e.preventDefault();
+        $('#input-file-icon').click();
+    });
+
+    $(document).on('click', '#btn-add-images', function(e) {
+        e.preventDefault();
+        $('#input-file-image').click();
+    });
+
+    $('#input-file-image').change(function() {
+        if (this.files && this.files.length > 0) {
+            Array.from(this.files).forEach(f => {
+                pageSelectedFiles.push({
+                    id: 'pg_img_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+                    file: f,
+                    currentX: 0,
+                    currentY: 0,
+                    scale: 1.0
+                });
+            });
+            renderPageImageGallery();
+            this.value = '';
+        }
+    });
+
+    function renderPageImageGallery() {
+        const listContainer = $('#image-preview-list');
+        listContainer.empty();
+
+        if (!pageSelectedFiles || pageSelectedFiles.length === 0) {
+            $('#image-preview-placeholder').removeClass('d-none');
+        } else {
+            $('#image-preview-placeholder').addClass('d-none');
+            pageSelectedFiles.forEach((item, index) => {
+                const fileObj = item.file || item;
+                const url = typeof fileObj === 'string' ? fileObj : URL.createObjectURL(fileObj);
+                const card = $(`
+                    <div class="gallery-card-item position-relative flex-shrink-0 rounded-3 overflow-hidden border border-secondary shadow-sm" data-index="${index}" style="width: 130px; height: 130px; background: #121118; cursor: move; user-select: none; touch-action: none;" title="Arraste para mover • Roda do mouse para zoom">
+                        <img class="card-crop-img position-absolute" src="${url}" style="width: 100%; height: 100%; object-fit: cover; transform: translate(${item.currentX || 0}px, ${item.currentY || 0}px) scale(${item.scale || 1.0});">
+                        <div class="position-absolute bottom-0 start-0 end-0 p-1 text-center text-white-50" style="background: rgba(0,0,0,0.4); font-size: 9px; pointer-events: none;">Arraste/Zoom</div>
+                        <button type="button" class="btn-remove-page-img position-absolute top-0 end-0 m-1 rounded-circle border-0 d-flex align-items-center justify-content-center" data-index="${index}" style="width: 24px; height: 24px; background: #FF4068; color: white; font-size: 12px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.5);" title="Remover foto">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                `);
+
+                let isCardDragging = false;
+                let startX = 0, startY = 0;
+
+                card.on('mousedown touchstart', function(e) {
+                    if ($(e.target).closest('.btn-remove-page-img').length) return;
+                    isCardDragging = true;
+                    const clientX = e.type.startsWith('touch') ? (e.touches && e.touches[0] ? e.touches[0].clientX : 0) : e.clientX;
+                    const clientY = e.type.startsWith('touch') ? (e.touches && e.touches[0] ? e.touches[0].clientY : 0) : e.clientY;
+                    startX = clientX - (item.currentX || 0);
+                    startY = clientY - (item.currentY || 0);
+                    e.preventDefault();
+                });
+
+                $(window).on(`mousemove.${item.id} touchmove.${item.id}`, function(e) {
+                    if (!isCardDragging) return;
+                    const clientX = e.type.startsWith('touch') ? (e.touches && e.touches[0] ? e.touches[0].clientX : 0) : e.clientX;
+                    const clientY = e.type.startsWith('touch') ? (e.touches && e.touches[0] ? e.touches[0].clientY : 0) : e.clientY;
+                    item.currentX = clientX - startX;
+                    item.currentY = clientY - startY;
+                    card.find('.card-crop-img').css('transform', `translate(${item.currentX}px, ${item.currentY}px) scale(${item.scale || 1.0})`);
+                });
+
+                $(window).on(`mouseup.${item.id} touchend.${item.id}`, function() {
+                    isCardDragging = false;
+                });
+
+                card.on('wheel', function(e) {
+                    e.preventDefault();
+                    const step = e.originalEvent.deltaY < 0 ? 0.1 : -0.1;
+                    item.scale = Math.min(Math.max(0.4, (item.scale || 1.0) + step), 4.0);
+                    card.find('.card-crop-img').css('transform', `translate(${item.currentX || 0}px, ${item.currentY || 0}px) scale(${item.scale})`);
+                });
+
+                listContainer.append(card);
+            });
+        }
+    }
+
+    $(document).on('click', '.btn-remove-page-img', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const index = parseInt($(this).attr('data-index'));
+        if (!isNaN(index) && index >= 0 && index < pageSelectedFiles.length) {
+            const item = pageSelectedFiles[index];
+            if (item && item.id) {
+                $(window).off(`.${item.id}`);
+            }
+            pageSelectedFiles.splice(index, 1);
+            renderPageImageGallery();
+        }
+    });
+
     $('#icon-circle-trigger').click(function(e) {
         if (e.target.tagName !== 'IMG') {
             $('#input-file-icon').click();
         }
     });
 
-    $('#input-file-image').change(function() {
-        const files = this.files;
-        if (files && files.length > 0) {
-            const reader1 = new FileReader();
-            reader1.onload = (e) => {
-                $('#image-preview-img').attr('src', e.target.result).removeClass('d-none');
-                $('#image-preview-content').addClass('d-none');
-            };
-            reader1.readAsDataURL(files[0]);
-            if (files.length > 1) {
-                const reader2 = new FileReader();
-                reader2.onload = (e) => $('.card-back-1').html(`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;">`);
-                reader2.readAsDataURL(files[1]);
-            }
-            if (files.length > 2) {
-                const reader3 = new FileReader();
-                reader3.onload = (e) => $('.card-back-2').html(`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;">`);
-                reader3.readAsDataURL(files[2]);
-            }
-        }
-    });
-
     $('#input-file-icon').change(function() {
         if (this.files && this.files[0]) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = $('#icon-preview-img');
-                img.attr('src', e.target.result).removeClass('d-none');
-                $('#icon-preview-content').addClass('d-none');
-                iconCropState.currentX = 0;
-                iconCropState.currentY = 0;
-                img.css('transform', 'translate(0px, 0px)');
-            };
-            reader.readAsDataURL(this.files[0]);
+            const url = URL.createObjectURL(this.files[0]);
+            const img = $('#icon-preview-img');
+            img.attr('src', url).removeClass('d-none');
+            $('#icon-placeholder-content').addClass('d-none');
+            iconCropState.currentX = 0;
+            iconCropState.currentY = 0;
+            iconCropState.scale = 1.0;
+            img.css('transform', 'translate(0px, 0px) scale(1)');
+            generatePageIconBase64();
         }
     });
 
-    // Arraste com o ponteiro dentro do círculo
+    // Arraste e Zoom com a Roda do Mouse dentro do círculo
     const iconWrapper = document.getElementById('icon-circle-trigger');
     const iconImg = document.getElementById('icon-preview-img');
 
@@ -1007,18 +1084,28 @@ $(document).ready(function() {
             if (!iconCropState.isDragging) return;
             iconCropState.currentX = e.clientX - iconCropState.startX;
             iconCropState.currentY = e.clientY - iconCropState.startY;
-            iconImg.style.transform = `translate(${iconCropState.currentX}px, ${iconCropState.currentY}px)`;
+            iconImg.style.transform = `translate(${iconCropState.currentX}px, ${iconCropState.currentY}px) scale(${iconCropState.scale || 1.0})`;
         });
 
         window.addEventListener('mouseup', function() {
             if (iconCropState.isDragging) {
                 iconCropState.isDragging = false;
+                generatePageIconBase64();
             }
         });
+
+        iconWrapper.addEventListener('wheel', function(e) {
+            if (iconImg.classList.contains('d-none')) return;
+            e.preventDefault();
+            const step = e.deltaY < 0 ? 0.1 : -0.1;
+            iconCropState.scale = Math.min(Math.max(0.4, (iconCropState.scale || 1.0) + step), 4.0);
+            iconImg.style.transform = `translate(${iconCropState.currentX}px, ${iconCropState.currentY}px) scale(${iconCropState.scale})`;
+            generatePageIconBase64();
+        }, { passive: false });
     }
 
-    function getCroppedCanvasDataUrl(imgEl, cropState) {
-        if (!imgEl || imgEl.classList.contains('d-none') || !imgEl.src) return null;
+    function generatePageIconBase64() {
+        if (!iconImg || iconImg.classList.contains('d-none') || !iconImg.src) return;
         try {
             const canvas = document.createElement('canvas');
             canvas.width = 500;
@@ -1031,28 +1118,32 @@ $(document).ready(function() {
             ctx.closePath();
             ctx.clip();
 
-            const naturalW = imgEl.naturalWidth || 500;
-            const naturalH = imgEl.naturalHeight || 500;
+            const naturalW = iconImg.naturalWidth || 500;
+            const naturalH = iconImg.naturalHeight || 500;
             const aspect = naturalW / naturalH;
-            let drawW = 500;
-            let drawH = 500;
+            let drawW = 500, drawH = 500;
 
-            if (aspect > 1) {
-                drawW = 500 * aspect;
-            } else {
-                drawH = 500 / aspect;
-            }
+            if (aspect > 1) drawW = 500 * aspect;
+            else drawH = 500 / aspect;
 
-            const scaleRatio = 500 / 170;
-            const drawX = (500 - drawW) / 2 + (cropState.currentX * scaleRatio);
-            const drawY = (500 - drawH) / 2 + (cropState.currentY * scaleRatio);
+            const scaleRatio = 500 / 105;
+            drawW = drawW * (iconCropState.scale || 1.0);
+            drawH = drawH * (iconCropState.scale || 1.0);
 
-            ctx.drawImage(imgEl, drawX, drawY, drawW, drawH);
-            ctx.restore();
-            return canvas.toDataURL('image/png');
+            const drawX = (500 - drawW) / 2 + (iconCropState.currentX * scaleRatio);
+            const drawY = (500 - drawH) / 2 + (iconCropState.currentY * scaleRatio);
+
+            const tempImg = new Image();
+            tempImg.crossOrigin = 'anonymous';
+            tempImg.onload = function() {
+                ctx.drawImage(tempImg, drawX, drawY, drawW, drawH);
+                ctx.restore();
+                const dataUrl = canvas.toDataURL('image/png');
+                $('#input-icon-base64').val(dataUrl);
+            };
+            tempImg.src = iconImg.src;
         } catch(e) {
-            console.error('Error generating cropped canvas:', e);
-            return null;
+            console.error("Error generating icon base64:", e);
         }
     }
 
@@ -1061,12 +1152,14 @@ $(document).ready(function() {
         e.preventDefault();
         const formData = new FormData(this);
 
-        // Injetar crop do ícone imediatamente
-        const iconImgEl = document.getElementById('icon-preview-img');
-        const croppedDataUrl = getCroppedCanvasDataUrl(iconImgEl, iconCropState);
-        if (croppedDataUrl) {
-            formData.set('icone_base64', croppedDataUrl);
-        }
+        // Anexar arquivos da galeria
+        formData.delete('animal_imagem');
+        pageSelectedFiles.forEach(item => {
+            const fileObj = item.file || item;
+            if (typeof fileObj !== 'string') {
+                formData.append('animal_imagem', fileObj);
+            }
+        });
 
         // Mapear biomas selecionados
         formData.delete('biomas_ids');
@@ -1136,7 +1229,6 @@ $(document).ready(function() {
         const statusIcon = config.icon;
 
         let allImgs = [];
-        if (animal.icone) allImgs.push(animal.icone);
         const sourceImgs = animal.imagens || [];
         if (Array.isArray(sourceImgs)) {
             sourceImgs.forEach(img => {
@@ -1232,14 +1324,21 @@ $(document).ready(function() {
 
     window.changeModalImg = function(step) {
         const imgTag = $('#modalCarouselImg');
-        const imgs = JSON.parse(imgTag.attr('data-imgs'));
-        let current = parseInt(imgTag.attr('data-current'));
+        if (!imgTag.length) return;
+        const imgsStr = imgTag.attr('data-imgs');
+        if (!imgsStr) return;
+        const imgs = JSON.parse(imgsStr);
+        if (!imgs || imgs.length <= 1) return;
+
+        let current = parseInt(imgTag.attr('data-current')) || 0;
         let next = (current + step + imgs.length) % imgs.length;
+
+        // Synchronous immediate data-current update to fix double-click lag
+        imgTag.attr('data-current', next);
         
-        imgTag.fadeOut(150, function() {
+        imgTag.stop(true, true).fadeOut(120, function() {
             imgTag.attr('src', imgs[next]);
-            imgTag.attr('data-current', next);
-            imgTag.fadeIn(150);
+            imgTag.fadeIn(120);
         });
     };
 });

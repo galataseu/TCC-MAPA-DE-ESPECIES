@@ -109,7 +109,7 @@ router.get('/animais/', async (req, res) => {
 });
 
 const uploadFields = upload.fields([
-  { name: 'animal_imagem', maxCount: 5 },
+  { name: 'animal_imagem', maxCount: 10 },
   { name: 'animal_icone', maxCount: 1 }
 ]);
 
@@ -141,9 +141,8 @@ router.post('/animais/', uploadFields, async (req, res) => {
       iconPath = b.icone;
     }
 
-    // Fallback mútuo: Se enviou apenas ícone ou apenas imagem, aproveita para ambos
+    // Fallback: se não enviou ícone próprio, usa a primeira imagem como ícone do marcador
     if (!iconPath && imgPath) iconPath = imgPath;
-    if (!imgPath && iconPath) imgPath = iconPath;
 
     let obsText = b.obs || '';
     if (b.area_polygon_json && typeof b.area_polygon_json === 'string' && b.area_polygon_json.trim().length > 0) {
@@ -267,7 +266,6 @@ router.patch('/animais/:id/', uploadFields, async (req, res) => {
     }
 
     if (!iconPath && imgPath) iconPath = imgPath;
-    if (!imgPath && iconPath) imgPath = iconPath;
 
     const updateData = { updated_at: now };
     if (b.nome_comum) updateData.nome_comum = b.nome_comum;

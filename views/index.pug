@@ -108,31 +108,40 @@ block content
             input.coord-lat(type="hidden", name="lat", value="-27.59")
             input.coord-lng(type="hidden", name="lng", value="-48.54")
 
-            //- Seção de Uploads (Imagens e Ícone)
-            .upload-previews-container
-              .image-stack-section
-                span.section-subtitle Imagens
-                #modal-image-stack-trigger.image-stack-wrapper
-                  .image-card-stack.card-back-2
-                  .image-card-stack.card-back-1
-                  .image-card-stack.card-main
-                    #modal-image-preview-content.upload-placeholder-content
-                      i.fa-solid.fa-cloud-arrow-up
-                      .fw-bold Selecionar imagens
-                    img#modal-image-preview-img.d-none(src="", alt="Preview Imagem")
-                  input#modal-input-file-image.d-none(type="file", name="animal_imagem", accept="image/*", multiple)
-                  input#modal-input-url-image.d-none(type="hidden", name="imagem_url")
-                .dimension-label 1000px x 1000px
+            //- Seção de Uploads (Imagens e Ícone Recortáveis com Drag e Wheel Zoom)
+            .row.g-3.mb-4
+              .col-md-7
+                label.species-form-label.fw-bold.mb-2 Galeria de Imagens da Espécie (Arraste / Zoom no Card)
+                input#modal-input-file-image.d-none(type="file", name="animal_imagem", accept="image/*", multiple)
+                
+                .upload-gallery-container.p-3.rounded-4.border(style="background: #191820; border-color: #333240 !important;")
+                  .d-flex.flex-row.align-items-center.gap-3.overflow-x-auto.p-1#modal-image-preview-scroll(style="min-height: 145px; scrollbar-width: thin;")
+                    #modal-image-preview-list.d-flex.flex-row.gap-3.align-items-center
+                      //- Cards dinâmicos maiores (130x130) com drag + wheel zoom e botão X
+                    
+                    button#modal-btn-add-images.btn.d-flex.flex-column.align-items-center.justify-content-center.rounded-3.text-decoration-none(type="button", style="width: 130px; height: 130px; min-width: 130px; border: 2px dashed #1a5fb4; background: rgba(26, 95, 180, 0.12); color: #539bf5; transition: all 0.2s ease;")
+                      i.fa-solid.fa-plus.fs-3.mb-1
+                      span.fw-bold(style="font-size: 11px;") Adicionar Foto
 
-              .icon-upload-section
-                span.section-subtitle Ícone
-                #modal-icon-circle-trigger.icon-circle-wrapper(title="Clique para escolher ou arraste a imagem para enquadrar")
-                  #modal-icon-preview-content.upload-placeholder-content
-                    i.fa-solid.fa-paw(style="font-size: 2.5rem; color: #8C8B96;")
-                  img#modal-icon-preview-img.d-none.crop-draggable-img(src="", alt="Preview Ícone", draggable="false")
-                  input#modal-input-file-icon.d-none(type="file", name="animal_icone", accept="image/*")
-                  input#modal-input-icon-base64(type="hidden", name="icone_base64")
-                .dimension-label 500px x 500px (Arraste p/ enquadrar)
+                  span#modal-image-preview-placeholder.text-secondary.small.d-block.text-center.mt-2 Nenhuma foto selecionada. Clique no + para adicionar.
+
+              .col-md-5
+                label.species-form-label.fw-bold.mb-2 Ícone do Marcador
+                input#modal-input-file-icon.d-none(type="file", name="animal_icone", accept="image/*")
+                input#modal-input-icon-base64(type="hidden", name="icone_base64")
+
+                .d-flex.flex-column.align-items-center.justify-content-center.p-3.rounded-4.border(style="background: #191820; border-color: #333240 !important; min-height: 145px;")
+                  #modal-icon-circle-trigger.rounded-circle.overflow-hidden.position-relative.border.shadow-sm(style="width: 105px; height: 105px; border-color: #1a5fb4 !important; background: #121118; display: flex; align-items: center; justify-content: center; cursor: pointer;", title="Arraste para mover ou use a roda do mouse para zoom")
+                    #modal-icon-placeholder-content.text-center.text-secondary
+                      i.fa-solid.fa-paw.fs-3.mb-1.d-block(style="color: #539bf5;")
+                      span(style="font-size: 10px;") Sem Ícone
+                    img#modal-icon-preview-img.position-absolute.d-none(src="", alt="Preview Ícone", style="cursor: move; user-select: none; touch-action: none;")
+                  
+                  button#modal-btn-choose-icon.btn.btn-sm.btn-outline-primary.rounded-pill.mt-2.px-3(type="button")
+                    i.fa-solid.fa-folder-open.me-1
+                    span Escolher Ícone
+
+                  span.text-muted.mt-1(style="font-size: 10px;") Arraste p/ mover • Roda do mouse p/ zoom
 
             //- Linha 1: Nome Comum e Nome Científico
             .row.g-3.mb-3

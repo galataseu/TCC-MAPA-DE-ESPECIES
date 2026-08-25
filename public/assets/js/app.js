@@ -10,6 +10,8 @@ var cerradoPatternLayer;
 var rsGeometry = null;
 var prGeometry = null;
 var forestGeometry = null;
+var pampaGeometry = null;
+var cerradoGeometry = null;
 var stateLayers = [];
 var markersData = [];
 
@@ -79,7 +81,9 @@ $(document).ready(function () {
   });
 
   L.control.zoom({ position: "bottomright" }).addTo(map);
-  L.control.locate({ position: "bottomright", icon: 'fa-solid fa-location-arrow' }).addTo(map);
+  if (typeof L.control.locate === 'function') {
+    L.control.locate({ position: "bottomright", icon: 'fa-solid fa-location-arrow' }).addTo(map);
+  }
 
   /* 2. Inicialização das Camadas de Biomas e Máscara */
   var svgRenderer = L.svg({ padding: 0 });
@@ -198,17 +202,26 @@ $(document).ready(function () {
         var cleanForest = forestGeometry ? turf.simplify(turf.buffer(forestGeometry, 0), {tolerance: 0.003}) : null;
         if (rsGeometry && cleanForest) {
           var pampaDiff = turf.difference(turf.simplify(turf.buffer(rsGeometry, 0), {tolerance: 0.003}), cleanForest);
-          if (pampaDiff) { pampasLayer.addData(pampaDiff); pampasPatternLayer.addData(pampaDiff); }
+          if (pampaDiff) {
+            pampaGeometry = pampaDiff;
+            pampasLayer.addData(pampaDiff);
+            pampasPatternLayer.addData(pampaDiff);
+          }
         }
         if (prGeometry && cleanForest) {
           var cerradoDiff = turf.difference(turf.simplify(turf.buffer(prGeometry, 0), {tolerance: 0.003}), cleanForest);
-          if (cerradoDiff) { cerradoLayer.addData(cerradoDiff); cerradoPatternLayer.addData(cerradoDiff); }
+          if (cerradoDiff) {
+            cerradoGeometry = cerradoDiff;
+            cerradoLayer.addData(cerradoDiff);
+            cerradoPatternLayer.addData(cerradoDiff);
+          }
         }
       } catch (e) {}
 
       updateLayerStyles();
       reorderLayers();
       injectTreePattern();
+      renderBiomeViewportMarkers();
     });
   };
 
@@ -681,37 +694,118 @@ $(document).ready(function () {
     renderDebugPolygons();
   });
 
+  function isPointInsideGeometry(lat, lng, geom) {
+    if (!geom || !window.turf) return false;
+    try {
+      const pt = turf.point([lng, lat]);
+      if (geom.type === 'FeatureCollection') {
+        for (const f of geom.features) {
+          if (turf.booleanPointInPolygon(pt, f)) return true;
+        }
+        return false;
+      }
+      return turf.booleanPointInPolygon(pt, geom);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function isPointInsideAnimalBiomes(lat, lng, p) {
+    if (!p || !p.biomas || !Array.isArray(p.biomas) || p.biomas.length === 0) {
+      return true;
+    }
+
+    let hasAtlantic = false;
+    let hasPampa = false;
+    let hasCerrado = false;
+    let knownCount = 0;
+
+    p.biomas.forEach(b => {
+      let name = '';
+      let id = null;
+      if (typeof b === 'object' && b !== null) {
+        name = (b.nome || '').toLowerCase();
+        id = b.id;
+      } else if (typeof b === 'string') {
+        name = b.toLowerCase();
+      } else if (typeof b === 'number') {
+        id = b;
+      }
+
+      if (id === 1 || name.includes('atlantic') || name.includes('atlântica') || name.includes('mata')) {
+        hasAtlantic = true;
+        knownCount++;
+      }
+      if (id === 2 || name.includes('pampa')) {
+        hasPampa = true;
+        knownCount++;
+      }
+      if (id === 3 || name.includes('cerrado')) {
+        hasCerrado = true;
+        knownCount++;
+      }
+    });
+
+    if (knownCount === 0 || (hasAtlantic && hasPampa && hasCerrado)) {
+      return true;
+    }
+
+    if (!forestGeometry && !pampaGeometry && !cerradoGeometry) {
+      return true;
+    }
+
+    if (hasAtlantic && forestGeometry && isPointInsideGeometry(lat, lng, forestGeometry)) {
+      return true;
+    }
+    if (hasPampa && pampaGeometry && isPointInsideGeometry(lat, lng, pampaGeometry)) {
+      return true;
+    }
+    if (hasCerrado && cerradoGeometry && isPointInsideGeometry(lat, lng, cerradoGeometry)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function isPointValidForAnimal(lat, lng, p, validRings) {
+    // 1. Biome Restriction
+    if (!isPointInsideAnimalBiomes(lat, lng, p)) {
+      return false;
+    }
+
+    // 2. Custom Area Polygon Restriction (if defined)
+    if (validRings && validRings.length > 0) {
+      let insideAnyRing = false;
+      for (const ring of validRings) {
+        if (isPointInsidePolygon(lat, lng, ring)) {
+          insideAnyRing = true;
+          break;
+        }
+      }
+      if (!insideAnyRing) return false;
+    }
+
+    return true;
+  }
+
   function findValidPointForAnimal(p, minLat, maxLat, minLng, maxLng, gridLat, gridLng) {
     const rawPolygon = p.area_polygon;
+    let validRings = [];
 
-    if (!rawPolygon || !Array.isArray(rawPolygon) || rawPolygon.length === 0) {
-      return [
-        Math.max(minLat, Math.min(gridLat, maxLat)),
-        Math.max(minLng, Math.min(gridLng, maxLng))
-      ];
+    if (rawPolygon && Array.isArray(rawPolygon) && rawPolygon.length > 0) {
+      const rings = (Array.isArray(rawPolygon[0]) && Array.isArray(rawPolygon[0][0])) ? rawPolygon : [rawPolygon];
+      validRings = rings.filter(r => r && r.length >= 3);
     }
 
-    const rings = (Array.isArray(rawPolygon[0]) && Array.isArray(rawPolygon[0][0])) ? rawPolygon : [rawPolygon];
-    const validRings = rings.filter(r => r && r.length >= 3);
-
-    if (validRings.length === 0) {
-      return [
-        Math.max(minLat, Math.min(gridLat, maxLat)),
-        Math.max(minLng, Math.min(gridLng, maxLng))
-      ];
-    }
-
-    // 1. Testar se o ponto da grade cai em algum dos anéis de polígono
+    // 1. Test grid point
     if (gridLat >= minLat && gridLat <= maxLat && gridLng >= minLng && gridLng <= maxLng) {
-      for (const ring of validRings) {
-        if (isPointInsidePolygon(gridLat, gridLng, ring)) {
-          return [gridLat, gridLng];
-        }
+      if (isPointValidForAnimal(gridLat, gridLng, p, validRings)) {
+        return [gridLat, gridLng];
       }
     }
 
-    // 2. Amostragem em grade na tela visível
-    const steps = 8;
+    // 2. Sample grid across current viewport
+    const steps = 12;
     const stepLat = (maxLat - minLat) / steps;
     const stepLng = (maxLng - minLng) / steps;
 
@@ -719,37 +813,41 @@ $(document).ready(function () {
       for (let c = 1; c < steps; c++) {
         const testLat = minLat + r * stepLat;
         const testLng = minLng + c * stepLng;
-        for (const ring of validRings) {
-          if (isPointInsidePolygon(testLat, testLng, ring)) {
-            return [testLat, testLng];
-          }
+        if (isPointValidForAnimal(testLat, testLng, p, validRings)) {
+          return [testLat, testLng];
         }
       }
     }
 
-    // 3. Vértices visíveis
-    for (const ring of validRings) {
-      for (let i = 0; i < ring.length; i++) {
-        const vLat = parseFloat(ring[i][0]);
-        const vLng = parseFloat(ring[i][1]);
-        if (vLat >= minLat && vLat <= maxLat && vLng >= minLng && vLng <= maxLng) {
-          if (isPointInsidePolygon(vLat, vLng, ring)) {
-            return [vLat, vLng];
-          }
-        }
-      }
-    }
-
-    // 4. Turf pointOnFeature para qualquer anel visível
-    if (window.turf) {
+    // 3. Check vertices of custom area polygon inside viewport
+    if (validRings.length > 0) {
       for (const ring of validRings) {
-        const poly = areaPolygonToTurf(ring);
-        if (poly) {
-          const pof = turf.pointOnFeature(poly);
-          const pofLat = pof.geometry.coordinates[1];
-          const pofLng = pof.geometry.coordinates[0];
-          if (pofLat >= minLat && pofLat <= maxLat && pofLng >= minLng && pofLng <= maxLng) {
-            return [pofLat, pofLng];
+        for (let i = 0; i < ring.length; i++) {
+          const vLat = parseFloat(ring[i][0]);
+          const vLng = parseFloat(ring[i][1]);
+          if (vLat >= minLat && vLat <= maxLat && vLng >= minLng && vLng <= maxLng) {
+            if (isPointValidForAnimal(vLat, vLng, p, validRings)) {
+              return [vLat, vLng];
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Turf pointOnFeature for custom area polygon OR biome geometries inside viewport
+    if (window.turf) {
+      if (validRings.length > 0) {
+        for (const ring of validRings) {
+          const poly = areaPolygonToTurf(ring);
+          if (poly) {
+            const pof = turf.pointOnFeature(poly);
+            const pofLat = pof.geometry.coordinates[1];
+            const pofLng = pof.geometry.coordinates[0];
+            if (pofLat >= minLat && pofLat <= maxLat && pofLng >= minLng && pofLng <= maxLng) {
+              if (isPointValidForAnimal(pofLat, pofLng, p, validRings)) {
+                return [pofLat, pofLng];
+              }
+            }
           }
         }
       }
@@ -1000,12 +1098,33 @@ $(document).ready(function () {
       form.find(".select-nivel-extincao").val(props.nivel_extincao_id).trigger('change');
     }
 
-    let imgUrl = props.icone || (props.imagens && props.imagens.length > 0 ? props.imagens[0].imagem : (props.imagem || ''));
-    if (imgUrl) {
-      $('#modal-image-preview-img').attr('src', imgUrl).removeClass('d-none');
-      $('#modal-image-preview-content').addClass('d-none');
-      $('#modal-icon-preview-img').attr('src', imgUrl).removeClass('d-none').css('transform', 'none');
-      $('#modal-icon-preview-content').addClass('d-none');
+    modalSelectedFiles = [];
+    const imgsList = props.imagens || [];
+    if (Array.isArray(imgsList) && imgsList.length > 0) {
+      imgsList.forEach(img => {
+        let u = typeof img === 'string' ? img : (img && img.imagem ? img.imagem : '');
+        if (u) {
+          if (!u.startsWith('http') && !u.startsWith('/') && !u.startsWith('data:')) u = `/media/${u}`;
+          modalSelectedFiles.push({
+            id: String(Date.now() + Math.random()),
+            file: u,
+            currentX: 0,
+            currentY: 0,
+            scale: 1.0
+          });
+        }
+      });
+    }
+    renderModalImageGallery();
+
+    let iconUrl = props.icone;
+    if (iconUrl) {
+      if (!iconUrl.startsWith('http') && !iconUrl.startsWith('/') && !iconUrl.startsWith('data:')) iconUrl = `/media/${iconUrl}`;
+      $('#modal-icon-preview-img').attr('src', iconUrl).removeClass('d-none');
+      $('#modal-icon-placeholder-content').addClass('d-none');
+    } else {
+      $('#modal-icon-preview-img').attr('src', '').addClass('d-none');
+      $('#modal-icon-placeholder-content').removeClass('d-none');
     }
 
     loadAdminSelectOptions(function() {
@@ -1071,10 +1190,26 @@ $(document).ready(function () {
       form.find(".coord-lat").val(lat);
       form.find(".coord-lng").val(lng);
 
+      modalSelectedFiles = [];
+      renderModalImageGallery();
+      $('#modal-icon-preview-img').attr('src', '').addClass('d-none');
+      $('#modal-icon-placeholder-content').removeClass('d-none');
+      $('#modal-input-icon-base64').val('');
+
       $("#modal-toggle-map").addClass("active");
       $("#modal-toggle-list").removeClass("active");
       $("#modal-panel-map").removeClass("d-none");
       $("#modal-panel-list").addClass("d-none");
+
+      isModalDrawingPolygon = false;
+      $('#modal-btn-draw-polygon-mode')
+        .removeClass('btn-success text-white')
+        .addClass('btn-info text-dark')
+        .html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
+      modalDraftPolygonsList = [[]];
+      modalPolygonHistory = [];
+      modalPolygonRedo = [];
+      updateModalUndoRedoButtonsUI();
 
       initModalRightPanelMap(lat, lng);
       loadAdminSelectOptions();
@@ -1139,12 +1274,12 @@ $(document).ready(function () {
         });
 
         const svgRenderer = L.svg({ padding: 0 });
-        const pampasLayerM = L.geoJson(null, { renderer: svgRenderer, style: { color: "transparent", fillColor: "#3b7ba5", fillOpacity: 0.3 } }).addTo(modalRightMap);
-        const pampasPatternM = L.geoJson(null, { renderer: svgRenderer, style: { color: "transparent", fillColor: "url(#pampa-pattern-mod)", fillOpacity: 0.6 } }).addTo(modalRightMap);
-        const cerradoLayerM = L.geoJson(null, { renderer: svgRenderer, style: { color: "transparent", fillColor: "#E6C140", fillOpacity: 0.4 } }).addTo(modalRightMap);
-        const cerradoPatternM = L.geoJson(null, { renderer: svgRenderer, style: { color: "transparent", fillColor: "url(#cerrado-pattern-mod)", fillOpacity: 0.6 } }).addTo(modalRightMap);
-        const atlanticLayerM = L.geoJson(null, { renderer: svgRenderer, style: { color: "transparent", fillColor: "#287f5e", fillOpacity: 0.1 } }).addTo(modalRightMap);
-        const atlanticPatternM = L.geoJson(null, { renderer: svgRenderer, style: { color: "transparent", fillColor: "url(#tree-pattern-mod)", fillOpacity: 0.6 } }).addTo(modalRightMap);
+        const pampasLayerM = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "#3b7ba5", fillOpacity: 0.3 } }).addTo(modalRightMap);
+        const pampasPatternM = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "url(#pampa-pattern-mod)", fillOpacity: 0.6 } }).addTo(modalRightMap);
+        const cerradoLayerM = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "#E6C140", fillOpacity: 0.4 } }).addTo(modalRightMap);
+        const cerradoPatternM = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "url(#cerrado-pattern-mod)", fillOpacity: 0.6 } }).addTo(modalRightMap);
+        const atlanticLayerM = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "#287f5e", fillOpacity: 0.1 } }).addTo(modalRightMap);
+        const atlanticPatternM = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "url(#tree-pattern-mod)", fillOpacity: 0.6 } }).addTo(modalRightMap);
 
         const modalMask = L.polygon(maskPaths, {
           color: "transparent",
@@ -1246,6 +1381,8 @@ $(document).ready(function () {
             iconSize: [40, 40],
             iconAnchor: [20, 20]
           })
+        }).addTo(modalRightMap);
+
         modalRightMap.on('click', function(e) {
           if (isModalDrawingPolygon) {
             saveModalPolygonHistoryState();
@@ -1360,14 +1497,25 @@ $(document).ready(function () {
     const validPolygons = modalDraftPolygonsList.filter(ring => ring && ring.length >= 3);
     const totalPoints = validPolygons.reduce((acc, ring) => acc + ring.length, 0);
 
-    if (validPolygons.length > 0) {
+    const currentRing = modalDraftPolygonsList[modalDraftPolygonsList.length - 1];
+    const currentPts = (currentRing && currentRing.length > 0) ? currentRing.length : 0;
+
+    if (validPolygons.length > 0 || currentPts > 0) {
       const payload = {
         color: modalPolygonColor,
         polygons: validPolygons
       };
       $('#modal-area-polygon-json-hidden').val(JSON.stringify(payload));
+      
+      let badgeText = `Área: ${validPolygons.length} área(s) (${totalPoints} pts)`;
+      if (isModalDrawingPolygon && currentPts < 3) {
+        badgeText = `Desenhando: ${currentPts} ponto(s)... (mín 3)`;
+      } else if (isModalDrawingPolygon) {
+        badgeText = `Desenhando: ${currentPts} pts na área atual`;
+      }
+
       $('#modal-polygon-status-badge')
-        .text(`Área: ${validPolygons.length} área(s) (${totalPoints} pts)`)
+        .text(badgeText)
         .removeClass('bg-dark text-warning')
         .addClass('bg-success text-white');
     } else {
@@ -1392,23 +1540,36 @@ $(document).ready(function () {
       const isCurrentActive = (idx === modalDraftPolygonsList.length - 1);
       let polyLayer = null;
 
+      ring.forEach((pt) => {
+        L.circleMarker(pt, {
+          radius: 5,
+          color: modalPolygonColor,
+          fillColor: '#FFFFFF',
+          fillOpacity: 1,
+          weight: 2,
+          interactive: false
+        }).addTo(modalPolygonLayersGroup);
+      });
+
       if (ring.length >= 3) {
         polyLayer = L.polygon(ring, {
           color: modalPolygonColor,
           fillColor: modalPolygonColor,
           fillOpacity: isCurrentActive ? 0.4 : 0.25,
           weight: isCurrentActive ? 3 : 2,
-          dashArray: isCurrentActive ? '5, 5' : null
+          dashArray: isCurrentActive ? '5, 5' : null,
+          interactive: !isModalDrawingPolygon
         }).addTo(modalPolygonLayersGroup);
       } else if (ring.length > 0) {
         polyLayer = L.polyline(ring, {
           color: modalPolygonColor,
           weight: 3,
-          dashArray: '5, 5'
+          dashArray: '5, 5',
+          interactive: !isModalDrawingPolygon
         }).addTo(modalPolygonLayersGroup);
       }
 
-      if (polyLayer) {
+      if (polyLayer && !isModalDrawingPolygon) {
         const ringIndex = idx;
         polyLayer.on('contextmenu', function(e) {
           L.DomEvent.stopPropagation(e);
@@ -1449,6 +1610,7 @@ $(document).ready(function () {
       $(this).html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
       if (modalRightMap) modalRightMap.getContainer().style.cursor = '';
     }
+    redrawModalDraftPolygonLayers();
   });
 
   $(document).on('click', '#modal-btn-new-polygon-area', function() {
@@ -1745,120 +1907,232 @@ $(document).ready(function () {
   }
 
   // =========================================================================
-  // 7. UPLOAD E RECORTE INTERATIVO DO ÍCONE NO MODAL
+  // 7. GALERIA DE IMAGENS E CROP CIRCULAR DO ÍCONE NO MODAL
   // =========================================================================
+  // =========================================================================
+  // 7. GALERIA DE IMAGENS E CROP CIRCULAR DO ÍCONE NO MODAL
+  // =========================================================================
+  let modalSelectedFiles = []; // Armazena objetos { id, file, currentX, currentY, scale }
   let modalIconCropState = {
     isDragging: false,
     startX: 0,
     startY: 0,
     currentX: 0,
-    currentY: 0
+    currentY: 0,
+    scale: 1.0
   };
 
-  $("#modal-image-stack-trigger").click(function() {
-    $("#modal-input-file-image").click();
+  // Botão explícito de escolher ícone
+  $(document).on('click', '#modal-btn-choose-icon', function(e) {
+    e.preventDefault();
+    $('#modal-input-file-icon').click();
   });
 
-  $("#modal-icon-circle-trigger").click(function(e) {
+  // Botão + de adicionar fotos na galeria
+  $(document).on('click', '#modal-btn-add-images', function(e) {
+    e.preventDefault();
+    $('#modal-input-file-image').click();
+  });
+
+  // Atualizar lista ao selecionar novos arquivos
+  $('#modal-input-file-image').change(function() {
+    if (this.files && this.files.length > 0) {
+      Array.from(this.files).forEach(f => {
+        modalSelectedFiles.push({
+          id: 'img_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+          file: f,
+          currentX: 0,
+          currentY: 0,
+          scale: 1.0
+        });
+      });
+      renderModalImageGallery();
+      this.value = ''; // Reset input para permitir re-selecionar
+    }
+  });
+
+  function renderModalImageGallery() {
+    const listContainer = $('#modal-image-preview-list');
+    listContainer.empty();
+
+    if (!modalSelectedFiles || modalSelectedFiles.length === 0) {
+      $('#modal-image-preview-placeholder').removeClass('d-none');
+    } else {
+      $('#modal-image-preview-placeholder').addClass('d-none');
+      modalSelectedFiles.forEach((item, index) => {
+        const fileObj = item.file || item;
+        const url = typeof fileObj === 'string' ? fileObj : URL.createObjectURL(fileObj);
+        const card = $(`
+          <div class="gallery-card-item position-relative flex-shrink-0 rounded-3 overflow-hidden border border-secondary shadow-sm" data-index="${index}" style="width: 130px; height: 130px; background: #121118; cursor: move; user-select: none; touch-action: none;" title="Arraste para mover • Roda do mouse para zoom">
+            <img class="card-crop-img position-absolute" src="${url}" style="width: 100%; height: 100%; object-fit: cover; transform: translate(${item.currentX || 0}px, ${item.currentY || 0}px) scale(${item.scale || 1.0});">
+            <div class="position-absolute bottom-0 start-0 end-0 p-1 text-center text-white-50" style="background: rgba(0,0,0,0.4); font-size: 9px; pointer-events: none;">Arraste/Zoom</div>
+            <button type="button" class="btn-remove-modal-img position-absolute top-0 end-0 m-1 rounded-circle border-0 d-flex align-items-center justify-content-center" data-index="${index}" style="width: 24px; height: 24px; background: #FF4068; color: white; font-size: 12px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.5);" title="Remover foto">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        `);
+
+        let isCardDragging = false;
+        let startX = 0, startY = 0;
+
+        card.on('mousedown touchstart', function(e) {
+          if ($(e.target).closest('.btn-remove-modal-img').length) return;
+          isCardDragging = true;
+          const clientX = e.type.startsWith('touch') ? (e.touches && e.touches[0] ? e.touches[0].clientX : 0) : e.clientX;
+          const clientY = e.type.startsWith('touch') ? (e.touches && e.touches[0] ? e.touches[0].clientY : 0) : e.clientY;
+          startX = clientX - (item.currentX || 0);
+          startY = clientY - (item.currentY || 0);
+          e.preventDefault();
+        });
+
+        $(window).on(`mousemove.${item.id} touchmove.${item.id}`, function(e) {
+          if (!isCardDragging) return;
+          const clientX = e.type.startsWith('touch') ? (e.touches && e.touches[0] ? e.touches[0].clientX : 0) : e.clientX;
+          const clientY = e.type.startsWith('touch') ? (e.touches && e.touches[0] ? e.touches[0].clientY : 0) : e.clientY;
+          item.currentX = clientX - startX;
+          item.currentY = clientY - startY;
+          card.find('.card-crop-img').css('transform', `translate(${item.currentX}px, ${item.currentY}px) scale(${item.scale || 1.0})`);
+        });
+
+        $(window).on(`mouseup.${item.id} touchend.${item.id}`, function() {
+          isCardDragging = false;
+        });
+
+        card.on('wheel', function(e) {
+          e.preventDefault();
+          const step = e.originalEvent.deltaY < 0 ? 0.1 : -0.1;
+          item.scale = Math.min(Math.max(0.4, (item.scale || 1.0) + step), 4.0);
+          card.find('.card-crop-img').css('transform', `translate(${item.currentX || 0}px, ${item.currentY || 0}px) scale(${item.scale})`);
+        });
+
+        listContainer.append(card);
+      });
+    }
+  }
+
+  // Remover foto individual da lista ao clicar no X
+  $(document).on('click', '.btn-remove-modal-img', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const index = parseInt($(this).attr('data-index'));
+    if (!isNaN(index) && index >= 0 && index < modalSelectedFiles.length) {
+      const item = modalSelectedFiles[index];
+      if (item && item.id) {
+        $(window).off(`.${item.id}`);
+      }
+      modalSelectedFiles.splice(index, 1);
+      renderModalImageGallery();
+    }
+  });
+
+  // Interatividade com o Círculo do Ícone (Clique para escolher, arraste p/ recortar)
+  $('#modal-icon-circle-trigger').click(function(e) {
     if (e.target.tagName !== 'IMG') {
-      $("#modal-input-file-icon").click();
+      $('#modal-input-file-icon').click();
     }
   });
 
-  $("#modal-input-file-image").change(function() {
+  $('#modal-input-file-icon').change(function() {
     if (this.files && this.files[0]) {
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        $("#modal-image-preview-img").attr("src", e.target.result).removeClass("d-none");
-        $("#modal-image-preview-content").addClass("d-none");
-      };
-      reader.readAsDataURL(this.files[0]);
+      const url = URL.createObjectURL(this.files[0]);
+      const img = $('#modal-icon-preview-img');
+      img.attr('src', url).removeClass('d-none');
+      $('#modal-icon-placeholder-content').addClass('d-none');
+      modalIconCropState.currentX = 0;
+      modalIconCropState.currentY = 0;
+      modalIconCropState.scale = 1.0;
+      img.css('transform', 'translate(0px, 0px) scale(1)');
+      generateModalIconBase64();
     }
   });
 
-  $("#modal-input-file-icon").change(function() {
-    if (this.files && this.files[0]) {
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const img = $("#modal-icon-preview-img");
-        img.attr("src", e.target.result).removeClass("d-none");
-        $("#modal-icon-preview-content").addClass("d-none");
-        modalIconCropState.currentX = 0;
-        modalIconCropState.currentY = 0;
-        img.css('transform', 'translate(0px, 0px)');
-        generateModalIconBase64();
-      };
-      reader.readAsDataURL(this.files[0]);
-    }
-  });
-
-  const modalIconWrapper = document.getElementById('modal-icon-circle-trigger');
+  const modalIconTrigger = document.getElementById('modal-icon-circle-trigger');
   const modalIconImg = document.getElementById('modal-icon-preview-img');
 
-  if (modalIconWrapper && modalIconImg) {
-    modalIconWrapper.addEventListener('mousedown', function(e) {
+  if (modalIconTrigger && modalIconImg) {
+    const startDrag = function(clientX, clientY) {
       if (modalIconImg.classList.contains('d-none')) return;
       modalIconCropState.isDragging = true;
-      modalIconCropState.startX = e.clientX - modalIconCropState.currentX;
-      modalIconCropState.startY = e.clientY - modalIconCropState.currentY;
-      e.preventDefault();
-    });
+      modalIconCropState.startX = clientX - modalIconCropState.currentX;
+      modalIconCropState.startY = clientY - modalIconCropState.currentY;
+    };
 
-    window.addEventListener('mousemove', function(e) {
+    const moveDrag = function(clientX, clientY) {
       if (!modalIconCropState.isDragging) return;
-      modalIconCropState.currentX = e.clientX - modalIconCropState.startX;
-      modalIconCropState.currentY = e.clientY - modalIconCropState.startY;
-      modalIconImg.style.transform = `translate(${modalIconCropState.currentX}px, ${modalIconCropState.currentY}px)`;
-    });
+      modalIconCropState.currentX = clientX - modalIconCropState.startX;
+      modalIconCropState.currentY = clientY - modalIconCropState.startY;
+      modalIconImg.style.transform = `translate(${modalIconCropState.currentX}px, ${modalIconCropState.currentY}px) scale(${modalIconCropState.scale || 1.0})`;
+    };
 
-    window.addEventListener('mouseup', function() {
+    const endDrag = function() {
       if (modalIconCropState.isDragging) {
         modalIconCropState.isDragging = false;
         generateModalIconBase64();
       }
-    });
+    };
+
+    modalIconTrigger.addEventListener('mousedown', e => { startDrag(e.clientX, e.clientY); e.preventDefault(); });
+    window.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+    window.addEventListener('mouseup', endDrag);
+
+    modalIconTrigger.addEventListener('touchstart', e => { if (e.touches && e.touches[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY); });
+    window.addEventListener('touchmove', e => { if (e.touches && e.touches[0]) moveDrag(e.touches[0].clientX, e.touches[0].clientY); });
+    window.addEventListener('touchend', endDrag);
+
+    // Roda do mouse no círculo do ícone para Zoom
+    modalIconTrigger.addEventListener('wheel', e => {
+      if (modalIconImg.classList.contains('d-none')) return;
+      e.preventDefault();
+      const step = e.deltaY < 0 ? 0.1 : -0.1;
+      modalIconCropState.scale = Math.min(Math.max(0.4, (modalIconCropState.scale || 1.0) + step), 4.0);
+      modalIconImg.style.transform = `translate(${modalIconCropState.currentX}px, ${modalIconCropState.currentY}px) scale(${modalIconCropState.scale})`;
+      generateModalIconBase64();
+    }, { passive: false });
   }
 
   function generateModalIconBase64() {
     const img = document.getElementById('modal-icon-preview-img');
     if (!img || img.classList.contains('d-none') || !img.src) return;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = 500;
-    canvas.height = 500;
-    const ctx = canvas.getContext('2d');
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 500;
+      canvas.height = 500;
+      const ctx = canvas.getContext('2d');
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(250, 250, 250, 0, Math.PI * 2, true);
-    ctx.closePath();
-    ctx.clip();
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(250, 250, 250, 0, Math.PI * 2, true);
+      ctx.closePath();
+      ctx.clip();
 
-    const naturalW = img.naturalWidth || 500;
-    const naturalH = img.naturalHeight || 500;
-    const aspect = naturalW / naturalH;
-    let drawW = 500;
-    let drawH = 500;
+      const naturalW = img.naturalWidth || 500;
+      const naturalH = img.naturalHeight || 500;
+      const aspect = naturalW / naturalH;
+      let drawW = 500, drawH = 500;
 
-    if (aspect > 1) {
-      drawW = 500 * aspect;
-    } else {
-      drawH = 500 / aspect;
+      if (aspect > 1) drawW = 500 * aspect;
+      else drawH = 500 / aspect;
+
+      const scaleRatio = 500 / 105;
+      drawW = drawW * (modalIconCropState.scale || 1.0);
+      drawH = drawH * (modalIconCropState.scale || 1.0);
+
+      const drawX = (500 - drawW) / 2 + (modalIconCropState.currentX * scaleRatio);
+      const drawY = (500 - drawH) / 2 + (modalIconCropState.currentY * scaleRatio);
+
+      const tempImg = new Image();
+      tempImg.crossOrigin = 'anonymous';
+      tempImg.onload = function() {
+        ctx.drawImage(tempImg, drawX, drawY, drawW, drawH);
+        ctx.restore();
+        const dataUrl = canvas.toDataURL('image/png');
+        $('#modal-input-icon-base64').val(dataUrl);
+      };
+      tempImg.src = img.src;
+    } catch(e) {
+      console.error("Error generating icon base64:", e);
     }
-
-    const scaleRatio = 500 / 170;
-    const drawX = (500 - drawW) / 2 + (modalIconCropState.currentX * scaleRatio);
-    const drawY = (500 - drawH) / 2 + (modalIconCropState.currentY * scaleRatio);
-
-    const tempImage = new Image();
-    tempImage.crossOrigin = 'anonymous';
-    tempImage.onload = function() {
-      ctx.drawImage(tempImage, drawX, drawY, drawW, drawH);
-      ctx.restore();
-      const dataUrl = canvas.toDataURL('image/png');
-      $('#modal-input-icon-base64').val(dataUrl);
-    };
-    tempImage.src = img.src;
   }
 
   // Interatividade com os Chips de Biomas no Modal
@@ -1992,34 +2266,14 @@ $(document).ready(function () {
     e.preventDefault();
     const formData = new FormData(this);
 
-    // Gerar crop do ícone imediatamente
-    const iconImg = document.getElementById('modal-icon-preview-img');
-    if (iconImg && !iconImg.classList.contains('d-none') && iconImg.src) {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = 500;
-        canvas.height = 500;
-        const ctx = canvas.getContext('2d');
-        ctx.beginPath();
-        ctx.arc(250, 250, 250, 0, Math.PI * 2, true);
-        ctx.closePath();
-        ctx.clip();
-        const naturalW = iconImg.naturalWidth || 500;
-        const naturalH = iconImg.naturalHeight || 500;
-        const aspect = naturalW / naturalH;
-        let drawW = 500, drawH = 500;
-        if (aspect > 1) drawW = 500 * aspect;
-        else drawH = 500 / aspect;
-        const scaleRatio = 500 / 170;
-        const drawX = (500 - drawW) / 2 + (modalIconCropState.currentX * scaleRatio);
-        const drawY = (500 - drawH) / 2 + (modalIconCropState.currentY * scaleRatio);
-        ctx.drawImage(iconImg, drawX, drawY, drawW, drawH);
-        const dataUrl = canvas.toDataURL('image/png');
-        formData.set('icone_base64', dataUrl);
-      } catch(e) {
-        console.error('Error cropping modal icon:', e);
+    // Anexar todos os arquivos ativos da galeria
+    formData.delete('animal_imagem');
+    modalSelectedFiles.forEach(item => {
+      const fileObj = item.file || item;
+      if (typeof fileObj !== 'string') {
+        formData.append('animal_imagem', fileObj);
       }
-    }
+    });
 
     const selectedBiomas = [];
     $('#modal-biomes-tag-selector .biome-chip[data-selected="true"]').each(function() {
@@ -2117,7 +2371,6 @@ $(document).ready(function () {
     const statusIcon = config.icon;
 
     let allImgs = [];
-    if (animal.icone) allImgs.push(animal.icone);
     const sourceImgs = animal.imagens || [];
     if (Array.isArray(sourceImgs)) {
       sourceImgs.forEach(img => {
@@ -2241,14 +2494,21 @@ $(document).ready(function () {
 
   window.changeModalImg = function(step) {
     const imgTag = $('#modalCarouselImg');
-    const imgs = JSON.parse(imgTag.attr('data-imgs'));
-    let current = parseInt(imgTag.attr('data-current'));
+    if (!imgTag.length) return;
+    const imgsStr = imgTag.attr('data-imgs');
+    if (!imgsStr) return;
+    const imgs = JSON.parse(imgsStr);
+    if (!imgs || imgs.length <= 1) return;
+
+    let current = parseInt(imgTag.attr('data-current')) || 0;
     let next = (current + step + imgs.length) % imgs.length;
-    
-    imgTag.fadeOut(200, function() {
+
+    // Atualização SÍNCRONA imediata para evitar lag de duplo clique
+    imgTag.attr('data-current', next);
+
+    imgTag.stop(true, true).fadeOut(120, function() {
       imgTag.attr('src', imgs[next]);
-      imgTag.attr('data-current', next);
-      imgTag.fadeIn(200);
+      imgTag.fadeIn(120);
     });
   };
 

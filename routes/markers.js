@@ -24,8 +24,10 @@ router.get('/', async (req, res) => {
         a.obs,
         a.nivel_extincao_id,
         (
-          SELECT ai.imagem FROM api_animalimagem ai WHERE ai.animal_id = a.id ORDER BY ai.ordem ASC LIMIT 1
-        ) as imagem_relacionada,
+          SELECT json_agg(json_build_object('id', ai.id, 'imagem', ai.imagem, 'legenda', ai.legenda, 'ordem', ai.ordem) ORDER BY ai.ordem ASC)
+          FROM api_animalimagem ai
+          WHERE ai.animal_id = a.id
+        ) as imagens_relacionadas,
         n.nome as nivel_extincao,
         n.sigla as nivel_sigla,
         (
@@ -50,25 +52,30 @@ router.get('/', async (req, res) => {
           console.error("Error parsing geometry:", e);
         }
 
-        const rawImg = m.imagem_relacionada;
-        let imgUrl = '/assets/img/logotipo.png';
-        if (rawImg && typeof rawImg === 'string' && rawImg.trim().length > 0) {
-          const t = rawImg.trim();
-          if (t.startsWith('http') || t.startsWith('/') || t.startsWith('data:')) {
-            imgUrl = t;
-          } else if (t.includes('.')) {
-            imgUrl = `/media/${t}`;
-          }
+        let imagensList = [];
+        if (m.imagens_relacionadas && Array.isArray(m.imagens_relacionadas)) {
+          imagensList = m.imagens_relacionadas.map(img => {
+            let u = img.imagem ? img.imagem.trim() : '';
+            if (u && !u.startsWith('http') && !u.startsWith('/') && !u.startsWith('data:')) {
+              u = `/media/${u}`;
+            }
+            return {
+              id: img.id,
+              imagem: u || '/assets/img/logotipo.png',
+              legenda: img.legenda || m.nome_comum,
+              ordem: img.ordem || 1
+            };
+          });
         }
 
-        let iconUrl = imgUrl;
-        if (m.icone && typeof m.icone === 'string' && m.icone.trim().length > 0) {
-          const ic = m.icone.trim();
-          if (ic.startsWith('http') || ic.startsWith('/') || ic.startsWith('data:')) {
-            iconUrl = ic;
-          } else if (ic.includes('.')) {
-            iconUrl = `/media/${ic}`;
-          }
+        let imgUrl = imagensList.length > 0 ? imagensList[0].imagem : '/assets/img/logotipo.png';
+        if (imagensList.length === 0) {
+          imagensList = [{ id: 1, imagem: imgUrl, legenda: m.nome_comum, ordem: 1 }];
+        }
+
+        let iconUrl = m.icone && typeof m.icone === 'string' && m.icone.trim().length > 0 ? m.icone.trim() : imgUrl;
+        if (iconUrl && !iconUrl.startsWith('http') && !iconUrl.startsWith('/') && !iconUrl.startsWith('data:')) {
+          iconUrl = `/media/${iconUrl}`;
         }
 
         let areaPolygon = null;
@@ -117,12 +124,7 @@ router.get('/', async (req, res) => {
             icone: iconUrl,
             imagem: imgUrl,
             biomas: m.biomas || [],
-            imagens: [{
-              id: 1,
-              imagem: imgUrl,
-              legenda: m.nome_comum,
-              ordem: 1
-            }]
+            imagens: imagensList
           }
         };
       })
