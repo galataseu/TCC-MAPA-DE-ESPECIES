@@ -8,7 +8,7 @@ Este arquivo serve como a **Fonte de Verdade** para o desenvolvimento do projeto
 O projeto consiste em um **Mapa Interativo Web** focado na representação espacial de espécies ameaçadas de extinção na **região Sul do Brasil (PR, SC e RS)**. O objetivo é transformar dados técnicos (como os do ICMBio/SALVE) em uma interface didática e visual para o público geral.
 
 ### Objetivos Principais:
-- Conscientização ambiental através da visualização geográfica.
+- Conscientização ambiental através da visualização geográfica
 - Mapeamento de Animais, ONGs e Zonas de Preservação.
 - Interface minimalista, colorida e de fácil manuseio.
 
