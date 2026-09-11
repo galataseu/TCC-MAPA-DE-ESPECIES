@@ -3,16 +3,34 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+function getMediaDir() {
+  const localDir = path.join(__dirname, '..', 'public', 'media');
+  try {
+    if (!fs.existsSync(localDir)) {
+      fs.mkdirSync(localDir, { recursive: true });
+    }
+    fs.accessSync(localDir, fs.constants.W_OK);
+    return localDir;
+  } catch (e) {
+    const tmpDir = path.join(os.tmpdir(), 'media');
+    try {
+      if (!fs.existsSync(tmpDir)) {
+        fs.mkdirSync(tmpDir, { recursive: true });
+      }
+    } catch (err2) {
+      console.error('Erro ao preparar diretório de media temporário:', err2);
+    }
+    return tmpDir;
+  }
+}
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const dir = path.join(__dirname, '..', 'public', 'media');
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
+    cb(null, getMediaDir());
   },
   filename: function (req, file, cb) {
     const ext = path.extname(file.originalname) || '.png';
@@ -27,6 +45,18 @@ const serialize = (obj) => JSON.parse(JSON.stringify(obj, (key, value) =>
   typeof value === 'bigint' ? value.toString() : value
 ));
 
+function formatPrismaError(err) {
+  if (!err) return 'Erro desconhecido no servidor.';
+  if (err.code === 'P2002') {
+    const target = err.meta && err.meta.target ? ` (${Array.isArray(err.meta.target) ? err.meta.target.join(', ') : err.meta.target})` : '';
+    return `Já existe um registro com estes dados únicos${target}. Verifique o nome científico ou outros campos únicos.`;
+  }
+  if (err.code === 'P2003') {
+    return 'Erro de integridade referencial: um dos identificadores informados não foi encontrado.';
+  }
+  return err.message || 'Erro ao processar a requisição no banco de dados.';
+}
+
 // Helper para salvar imagem em base64 (crop de ícone)
 function saveBase64Image(dataString, prefix = 'icon') {
   if (!dataString || typeof dataString !== 'string' || !dataString.startsWith('data:image')) {
@@ -35,15 +65,17 @@ function saveBase64Image(dataString, prefix = 'icon') {
   const matches = dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
   if (!matches || matches.length !== 3) return null;
 
-  const ext = matches[1].includes('jpeg') ? '.jpg' : '.png';
-  const buffer = Buffer.from(matches[2], 'base64');
-  const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`;
-  const dir = path.join(__dirname, '..', 'public', 'media');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  try {
+    const ext = matches[1].includes('jpeg') ? '.jpg' : '.png';
+    const buffer = Buffer.from(matches[2], 'base64');
+    const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`;
+    const dir = getMediaDir();
+    fs.writeFileSync(path.join(dir, filename), buffer);
+    return `/media/${filename}`;
+  } catch (err) {
+    console.error('Erro ao salvar imagem base64:', err);
+    return null;
   }
-  fs.writeFileSync(path.join(dir, filename), buffer);
-  return `/media/${filename}`;
 }
 
 // GET /api/v1/niveis-extincao/
@@ -228,17 +260,18 @@ router.post('/animais/', uploadFields, async (req, res) => {
       let cLat = parseFloat(c.lat);
       let cLng = parseFloat(c.lng);
       if (!isNaN(cLat) && !isNaN(cLng)) {
-        await prisma.$executeRawUnsafe(`
+        await prisma.$executeRaw`
           INSERT INTO public.api_marcador (animal_id, location, icone, created_at)
-          VALUES (${animal.id}, ST_SetSRID(ST_MakePoint(${cLng}, ${cLat}), 4326), '${iconVal}', NOW());
-        `);
+          VALUES (${animal.id}, ST_SetSRID(ST_MakePoint(${cLng}, ${cLat}), 4326), ${iconVal}, NOW());
+        `;
       }
     }
 
     res.status(201).json({ success: true, data: serialize(animal) });
   } catch (err) {
     console.error('Error creating animal:', err);
-    res.status(500).json({ success: false, error: err.message });
+    const friendlyError = formatPrismaError(err);
+    res.status(500).json({ success: false, error: friendlyError, message: friendlyError });
   }
 });
 
@@ -347,10 +380,10 @@ router.patch('/animais/:id/', uploadFields, async (req, res) => {
         let cLat = parseFloat(c.lat);
         let cLng = parseFloat(c.lng);
         if (!isNaN(cLat) && !isNaN(cLng)) {
-          await prisma.$executeRawUnsafe(`
+          await prisma.$executeRaw`
             INSERT INTO public.api_marcador (animal_id, location, icone, created_at)
-            VALUES (${id}, ST_SetSRID(ST_MakePoint(${cLng}, ${cLat}), 4326), '${iconVal}', NOW());
-          `);
+            VALUES (${id}, ST_SetSRID(ST_MakePoint(${cLng}, ${cLat}), 4326), ${iconVal}, NOW());
+          `;
         }
       }
     } else {
@@ -360,30 +393,40 @@ router.patch('/animais/:id/', uploadFields, async (req, res) => {
 
       const existingMarker = await prisma.api_marcador.findFirst({ where: { animal_id: id } });
       if (existingMarker) {
-        let setClauses = [];
-        if (hasCoords) {
-          setClauses.push(`location = ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)`);
-        }
-        if (iconPath) {
-          setClauses.push(`icone = '${iconPath}'`);
-        }
-        if (setClauses.length > 0) {
-          await prisma.$executeRawUnsafe(`UPDATE public.api_marcador SET ${setClauses.join(', ')} WHERE animal_id = ${id};`);
+        if (hasCoords && iconPath) {
+          await prisma.$executeRaw`
+            UPDATE public.api_marcador 
+            SET location = ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326), icone = ${iconPath} 
+            WHERE animal_id = ${id};
+          `;
+        } else if (hasCoords) {
+          await prisma.$executeRaw`
+            UPDATE public.api_marcador 
+            SET location = ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326) 
+            WHERE animal_id = ${id};
+          `;
+        } else if (iconPath) {
+          await prisma.$executeRaw`
+            UPDATE public.api_marcador 
+            SET icone = ${iconPath} 
+            WHERE animal_id = ${id};
+          `;
         }
       } else if (hasCoords || iconPath) {
         const coordLat = hasCoords ? lat : -27.59;
         const coordLng = hasCoords ? lng : -48.54;
-        await prisma.$executeRawUnsafe(`
+        await prisma.$executeRaw`
           INSERT INTO public.api_marcador (animal_id, location, icone, created_at)
-          VALUES (${id}, ST_SetSRID(ST_MakePoint(${coordLng}, ${coordLat}), 4326), '${iconVal}', NOW());
-        `);
+          VALUES (${id}, ST_SetSRID(ST_MakePoint(${coordLng}, ${coordLat}), 4326), ${iconVal}, NOW());
+        `;
       }
     }
 
     res.json({ success: true, data: serialize(animal) });
   } catch (err) {
     console.error('Error updating animal:', err);
-    res.status(500).json({ success: false, error: err.message });
+    const friendlyError = formatPrismaError(err);
+    res.status(500).json({ success: false, error: friendlyError, message: friendlyError });
   }
 });
 
@@ -416,7 +459,8 @@ router.delete('/animais/:id/', async (req, res) => {
     res.json({ success: true, message: 'Animal excluído com sucesso!' });
   } catch (err) {
     console.error('Error deleting animal:', err);
-    res.status(500).json({ success: false, error: err.message });
+    const friendlyError = formatPrismaError(err);
+    res.status(500).json({ success: false, error: friendlyError, message: friendlyError });
   }
 });
 

@@ -19,9 +19,11 @@ app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+var os = require('os');
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/media', express.static(path.join(__dirname, 'backend', 'media')));
 app.use('/media', express.static(path.join(__dirname, 'public', 'media')));
+app.use('/media', express.static(path.join(os.tmpdir(), 'media')));
 
 
 var v1Router = require('./routes/v1');
@@ -51,15 +53,15 @@ app.use(function(req, res, next) {
 
 // error handler
 app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+  var status = err.status || 500;
+  var errorMessage = err.message || 'Erro interno no servidor';
+  console.error('Erro na aplicação Express:', err);
 
-  // send the error response
-  res.status(err.status || 500);
-  res.json({
-    message: err.message,
-    error: res.locals.error
+  res.status(status).json({
+    success: false,
+    message: errorMessage,
+    error: errorMessage,
+    details: req.app.get('env') === 'development' ? err.stack : undefined
   });
 });
 

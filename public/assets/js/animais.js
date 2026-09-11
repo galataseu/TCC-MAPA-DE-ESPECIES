@@ -30,6 +30,36 @@ $(document).ready(function() {
         '8': '#831F34'  // EW
     };
 
+    function formatErrorMessage(data, fallback = 'Tente novamente.') {
+        if (!data) return fallback;
+        if (typeof data === 'string') return data;
+        if (typeof data.error === 'string' && data.error.trim().length > 0) return data.error;
+        if (typeof data.message === 'string' && data.message.trim().length > 0) return data.message;
+        if (typeof data.detail === 'string' && data.detail.trim().length > 0) return data.detail;
+        if (data.error && typeof data.error === 'object') {
+            if (typeof data.error.message === 'string') return data.error.message;
+            if (typeof data.error.detail === 'string') return data.error.detail;
+            const keys = Object.keys(data.error);
+            if (keys.length > 0) {
+                return keys.map(k => `${k}: ${Array.isArray(data.error[k]) ? data.error[k].join(', ') : data.error[k]}`).join(' | ');
+            }
+        }
+        if (typeof data === 'object') {
+            const keys = Object.keys(data).filter(k => k !== 'success');
+            if (keys.length > 0) {
+                const msgs = [];
+                for (const k of keys) {
+                    const val = data[k];
+                    if (typeof val === 'string') msgs.push(`${k}: ${val}`);
+                    else if (Array.isArray(val)) msgs.push(`${k}: ${val.join(', ')}`);
+                    else if (val && typeof val === 'object') msgs.push(`${k}: ${JSON.stringify(val)}`);
+                }
+                if (msgs.length > 0) return msgs.join('\n');
+            }
+        }
+        return fallback;
+    }
+
     // Carregar animais da API imediatamente
     loadAnimals();
 
@@ -317,12 +347,12 @@ $(document).ready(function() {
                     }
                     loadAnimals();
                 } else {
-                    alert('Erro ao excluir: ' + (data.error || 'Tente novamente.'));
+                    alert('Erro ao excluir: ' + formatErrorMessage(data, 'Tente novamente.'));
                 }
             })
             .catch(err => {
                 console.error(err);
-                alert('Erro de conexão ao excluir animal.');
+                alert('Erro de conexão ao excluir animal: ' + (err.message || 'Falha de comunicação.'));
             });
     };
 
@@ -1179,12 +1209,12 @@ $(document).ready(function() {
                 resetForm();
                 loadAnimals();
             } else {
-                alert('Erro ao salvar espécie: ' + (data.error || 'Tente novamente.'));
+                alert('Erro ao salvar espécie: ' + formatErrorMessage(data, 'Tente novamente.'));
             }
         })
         .catch(err => {
             console.error('Erro na requisição:', err);
-            alert('Erro ao salvar espécie.');
+            alert('Erro ao salvar espécie: ' + (err.message || 'Falha de comunicação com o servidor.'));
         });
     });
 

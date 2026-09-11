@@ -32,6 +32,36 @@ const extinctionColorMap = {
   '4': '#217757', '5': '#1a5fb4', '6': '#555555', '7': '#403E4C', '8': '#831F34'
 };
 
+function formatErrorMessage(data, fallback = 'Tente novamente.') {
+  if (!data) return fallback;
+  if (typeof data === 'string') return data;
+  if (typeof data.error === 'string' && data.error.trim().length > 0) return data.error;
+  if (typeof data.message === 'string' && data.message.trim().length > 0) return data.message;
+  if (typeof data.detail === 'string' && data.detail.trim().length > 0) return data.detail;
+  if (data.error && typeof data.error === 'object') {
+    if (typeof data.error.message === 'string') return data.error.message;
+    if (typeof data.error.detail === 'string') return data.error.detail;
+    const keys = Object.keys(data.error);
+    if (keys.length > 0) {
+      return keys.map(k => `${k}: ${Array.isArray(data.error[k]) ? data.error[k].join(', ') : data.error[k]}`).join(' | ');
+    }
+  }
+  if (typeof data === 'object') {
+    const keys = Object.keys(data).filter(k => k !== 'success');
+    if (keys.length > 0) {
+      const msgs = [];
+      for (const k of keys) {
+        const val = data[k];
+        if (typeof val === 'string') msgs.push(`${k}: ${val}`);
+        else if (Array.isArray(val)) msgs.push(`${k}: ${val.join(', ')}`);
+        else if (val && typeof val === 'object') msgs.push(`${k}: ${JSON.stringify(val)}`);
+      }
+      if (msgs.length > 0) return msgs.join('\n');
+    }
+  }
+  return fallback;
+}
+
 // Cidades pré-configuradas do Sul para pesquisa instantânea
 const southCitiesList = [
   { name: "Curitiba, PR", lat: -25.4284, lng: -49.2733 },
@@ -2299,12 +2329,12 @@ $(document).ready(function () {
         $("#species-admin-modal").addClass("d-none");
         loadMarkers();
       } else {
-        alert('Erro: ' + (data.error || 'Tente novamente.'));
+        alert('Erro ao salvar espécie: ' + formatErrorMessage(data, 'Tente novamente.'));
       }
     })
     .catch(err => {
       console.error(err);
-      alert("Erro ao salvar espécie.");
+      alert("Erro ao salvar espécie: " + (err.message || 'Falha de comunicação com o servidor.'));
     });
   });
 
@@ -2532,12 +2562,12 @@ $(document).ready(function () {
         }
         loadMarkers();
       } else {
-        alert(`Erro ao excluir: ${data.error || 'Erro no servidor.'}`);
+        alert(`Erro ao excluir: ${formatErrorMessage(data, 'Erro no servidor.')}`);
       }
     })
     .catch(err => {
       console.error(err);
-      alert(`Erro de conexão ao tentar excluir "${nome}".`);
+      alert(`Erro de conexão ao tentar excluir "${nome}": ${err.message || 'Falha de rede.'}`);
     });
   };
 
