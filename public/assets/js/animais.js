@@ -161,25 +161,27 @@ $(document).ready(function() {
         const images = [];
         if (animal.imagens && Array.isArray(animal.imagens) && animal.imagens.length > 0) {
             animal.imagens.forEach(imgObj => {
-                const raw = typeof imgObj === 'string' ? imgObj : imgObj.imagem;
-                if (raw && typeof raw === 'string' && raw.trim()) {
+                const raw = typeof imgObj === 'string' ? imgObj : (imgObj && imgObj.imagem ? imgObj.imagem : '');
+                if (raw && typeof raw === 'string' && raw.trim() && !raw.includes('logotipo.png') && !raw.includes('falta_imagem') && !raw.includes('Falta_imagem')) {
                     const u = raw.startsWith('http') || raw.startsWith('/') || raw.startsWith('data:') ? raw : `/media/${raw}`;
                     if (!images.includes(u)) images.push(u);
                 }
             });
         }
-        if (animal.icone) {
-            const u = animal.icone.startsWith('http') || animal.icone.startsWith('/') || animal.icone.startsWith('data:') ? animal.icone : `/media/${animal.icone}`;
-            if (!images.includes(u)) images.push(u);
-        }
-        if (animal.imagem) {
+        if (animal.imagem && typeof animal.imagem === 'string' && !animal.imagem.includes('logotipo.png') && !animal.imagem.includes('falta_imagem') && !animal.imagem.includes('Falta_imagem')) {
             const u = animal.imagem.startsWith('http') || animal.imagem.startsWith('/') || animal.imagem.startsWith('data:') ? animal.imagem : `/media/${animal.imagem}`;
             if (!images.includes(u)) images.push(u);
         }
-        if (images.length === 0) {
-            images.push('/assets/img/logotipo.png');
+        if (animal.icone && typeof animal.icone === 'string' && !animal.icone.includes('logotipo.png') && !animal.icone.includes('falta_imagem') && !animal.icone.includes('Falta_imagem')) {
+            const u = animal.icone.startsWith('http') || animal.icone.startsWith('/') || animal.icone.startsWith('data:') ? animal.icone : `/media/${animal.icone}`;
+            if (!images.includes(u)) images.push(u);
         }
-        return images;
+        // De preferência de 1 a 3 imagens por card
+        const finalImgs = images.slice(0, 3);
+        if (finalImgs.length === 0) {
+            finalImgs.push('/assets/img/logotipo.png');
+        }
+        return finalImgs;
     }
 
     let cardSlideshowInterval = null;
@@ -196,6 +198,9 @@ $(document).ready(function() {
                 if (!nextImg.length) {
                     nextImg = imgs.first();
                 }
+
+                const nextIndex = nextImg.index('.card-slide-img');
+                container.find('.card-slide-dot').removeClass('active').eq(nextIndex).addClass('active');
 
                 activeImg.removeClass('active').addClass('exit-left');
                 nextImg.removeClass('exit-left').addClass('active');
@@ -266,6 +271,12 @@ $(document).ready(function() {
                 <img src="${src}" alt="${animal.nome_comum}" class="card-slide-img ${i === 0 ? 'active' : ''}">
             `).join('');
 
+            const dotsHtml = imgs.length > 1 ? `
+                <div class="card-slideshow-dots">
+                    ${imgs.map((_, idx) => `<span class="card-slide-dot ${idx === 0 ? 'active' : ''}"></span>`).join('')}
+                </div>
+            ` : '';
+
             const menuButtonHtml = isAdmin ? `
                 <button type="button" class="species-card-menu-btn" title="Opções" onclick="event.stopPropagation(); toggleAnimalMenu('${animal.id}', this, event)">
                     <i class="fa-solid fa-ellipsis-vertical"></i>
@@ -288,6 +299,7 @@ $(document).ready(function() {
                     <span class="species-card-extinction-badge" style="background-color: ${extinctionColor};">${sigla}</span>
                     <div class="species-card-slideshow">
                         ${slidesHtml}
+                        ${dotsHtml}
                         <div class="species-card-slideshow-overlay"></div>
                     </div>
                     <div class="species-card-body">
@@ -889,8 +901,19 @@ $(document).ready(function() {
                             pointToLayer: function(feature, latlng) {
                                 const p = feature.properties;
                                 const statusSigla = p.nivel_sigla ? p.nivel_sigla.toLowerCase() : 'dd';
-                                const borderColor = extinctionColorMap[statusSigla] || '#1a5fb4';
-                                const iconSrc = p.icone || (p.imagens && p.imagens.length > 0 ? p.imagens[0].imagem : '/assets/img/logotipo.png');
+                                let iconSrc = '/assets/img/logotipo.png';
+                                if (p.icone && typeof p.icone === 'string' && !p.icone.includes('logotipo.png')) {
+                                    iconSrc = p.icone;
+                                } else if (p.imagens && Array.isArray(p.imagens) && p.imagens.length > 0) {
+                                    const firstImg = p.imagens[0];
+                                    const u = typeof firstImg === 'string' ? firstImg : (firstImg && firstImg.imagem ? firstImg.imagem : '');
+                                    if (u && !u.includes('logotipo.png')) iconSrc = u;
+                                } else if (p.imagem && typeof p.imagem === 'string' && !p.imagem.includes('logotipo.png')) {
+                                    iconSrc = p.imagem;
+                                }
+                                if (iconSrc && !iconSrc.startsWith('http') && !iconSrc.startsWith('/') && !iconSrc.startsWith('data:')) {
+                                    iconSrc = `/media/${iconSrc}`;
+                                }
 
                                 return L.marker(latlng, {
                                     icon: L.divIcon({
@@ -1262,13 +1285,22 @@ $(document).ready(function() {
         const sourceImgs = animal.imagens || [];
         if (Array.isArray(sourceImgs)) {
             sourceImgs.forEach(img => {
-                if (typeof img === 'string') allImgs.push(img);
-                else if (img && img.imagem) allImgs.push(img.imagem);
+                let u = typeof img === 'string' ? img : (img && img.imagem ? img.imagem : '');
+                if (u && !u.includes('logotipo.png') && !u.includes('falta_imagem') && !u.includes('Falta_imagem') && !allImgs.includes(u)) {
+                    allImgs.push(u);
+                }
             });
         }
-        if (allImgs.length === 0) allImgs.push('/assets/img/logotipo.png');
-
+        if (animal.imagem && !animal.imagem.includes('logotipo.png') && !animal.imagem.includes('falta_imagem') && !animal.imagem.includes('Falta_imagem') && !allImgs.includes(animal.imagem)) {
+            allImgs.push(animal.imagem);
+        }
+        if (animal.icone && !animal.icone.includes('logotipo.png') && !animal.icone.includes('falta_imagem') && !animal.icone.includes('Falta_imagem') && !allImgs.includes(animal.icone)) {
+            allImgs.push(animal.icone);
+        }
         allImgs = allImgs.map(url => (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:') ? url : `/media/${url}`));
+        // De preferência de 1 a 3 fotos
+        allImgs = allImgs.slice(0, 3);
+        if (allImgs.length === 0) allImgs.push('/assets/img/logotipo.png');
 
         let biomas = (animal.biomas || []).map(b => (typeof b === 'object' ? b.nome : b)).join(', ') || 'Não informado';
 
@@ -1285,6 +1317,13 @@ $(document).ready(function() {
                     <button class="carousel-btn carousel-next" onclick="changeModalImg(1)" style="position: absolute; top: 50%; right: 10px; z-index: 10; border: none; background: ${statusColor}; color: white; border-radius: 50%; width: 36px; height: 36px; cursor: pointer;">
                       <i class="fas fa-chevron-right"></i>
                     </button>
+                    <div class="modal-carousel-indicators">
+                      ${allImgs.map((_, i) => `
+                        <span class="modal-thumb-dot ${i === 0 ? 'bg-primary text-white' : 'bg-dark text-muted'} border border-secondary" onclick="setModalImg(${i})">
+                          ${i + 1}
+                        </span>
+                      `).join('')}
+                    </div>
                   ` : ''}
                 </div>
               </div>
@@ -1352,6 +1391,24 @@ $(document).ready(function() {
         new bootstrap.Modal(document.getElementById('animalModal')).show();
     };
 
+    window.setModalImg = function(targetIndex) {
+        const imgTag = $('#modalCarouselImg');
+        if (!imgTag.length) return;
+        const imgsStr = imgTag.attr('data-imgs');
+        if (!imgsStr) return;
+        const imgs = JSON.parse(imgsStr);
+        if (!imgs || !imgs[targetIndex]) return;
+
+        imgTag.attr('data-current', targetIndex);
+        $('.modal-thumb-dot').removeClass('bg-primary text-white').addClass('bg-dark text-muted')
+            .eq(targetIndex).removeClass('bg-dark text-muted').addClass('bg-primary text-white');
+
+        imgTag.stop(true, true).fadeOut(120, function() {
+            imgTag.attr('src', imgs[targetIndex]);
+            imgTag.fadeIn(120);
+        });
+    };
+
     window.changeModalImg = function(step) {
         const imgTag = $('#modalCarouselImg');
         if (!imgTag.length) return;
@@ -1362,13 +1419,228 @@ $(document).ready(function() {
 
         let current = parseInt(imgTag.attr('data-current')) || 0;
         let next = (current + step + imgs.length) % imgs.length;
-
-        // Synchronous immediate data-current update to fix double-click lag
-        imgTag.attr('data-current', next);
-        
-        imgTag.stop(true, true).fadeOut(120, function() {
-            imgTag.attr('src', imgs[next]);
-            imgTag.fadeIn(120);
-        });
+        window.setModalImg(next);
     };
+
+    // ==========================================
+    // Módulo de Importação de Espécies do SALVE
+    // ==========================================
+    let selectedSalveFile = null;
+
+    $(document).on('show.bs.modal', '#modalImportSalve', function() {
+        selectedSalveFile = null;
+        $('#salve-file-input').val('');
+        $('#salve-preview-container').addClass('d-none');
+        $('#salve-progress-container').addClass('d-none');
+        $('#salve-result-container').addClass('d-none').empty();
+        $('#btn-execute-import-salve').prop('disabled', true);
+    });
+
+    $(document).on('click', '#btn-open-salve-modal', function() {
+        const modalEl = document.getElementById('modalImportSalve');
+        if (modalEl) {
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+    });
+
+    $(document).on('click', '#salve-drop-zone', function(e) {
+        if (e.target.id !== 'salve-file-input') {
+            $('#salve-file-input').trigger('click');
+        }
+    });
+
+    $(document).on('dragover dragenter', '#salve-drop-zone', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).addClass('border-warning').css('background', '#201f2b');
+    });
+
+    $(document).on('dragleave dragend', '#salve-drop-zone', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).removeClass('border-warning').css('background', '#191820');
+    });
+
+    $(document).on('drop', '#salve-drop-zone', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).removeClass('border-warning').css('background', '#191820');
+        const files = e.originalEvent.dataTransfer.files;
+        if (files && files.length > 0) {
+            handleSalveFileSelection(files[0]);
+        }
+    });
+
+    $(document).on('change', '#salve-file-input', function(e) {
+        if (this.files && this.files.length > 0) {
+            handleSalveFileSelection(this.files[0]);
+        }
+    });
+
+    function handleSalveFileSelection(file) {
+        if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') {
+            alert('Por favor, selecione um arquivo de planilha .csv válido.');
+            return;
+        }
+
+        selectedSalveFile = file;
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        $('#salve-file-badge').text(file.name);
+        $('#salve-file-info').text(`${fileSizeMB} MB`);
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            const content = evt.target.result || '';
+            renderSalvePreview(content);
+        };
+        reader.readAsText(file.slice(0, 50000));
+        $('#btn-execute-import-salve').prop('disabled', false);
+    }
+
+    function renderSalvePreview(textSnippet) {
+        const lines = textSnippet.split(/\r?\n/).filter(l => l.trim().length > 0);
+        if (lines.length === 0) return;
+
+        const firstLine = lines[0];
+        const delimiter = (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ';' : ',';
+
+        const parseLine = (line) => {
+            return line.split(delimiter).map(c => c.replace(/^"|"$/g, '').trim());
+        };
+
+        const headers = parseLine(lines[0]);
+        const theadHtml = '<tr>' + headers.slice(0, 7).map(h => `<th class="text-warning">${h}</th>`).join('') + '</tr>';
+        $('#salve-preview-thead').html(theadHtml);
+
+        let tbodyHtml = '';
+        for (let i = 1; i < Math.min(lines.length, 4); i++) {
+            const cells = parseLine(lines[i]);
+            tbodyHtml += '<tr>' + cells.slice(0, 7).map(c => `<td>${c || '-'}</td>`).join('') + '</tr>';
+        }
+        $('#salve-preview-tbody').html(tbodyHtml);
+        $('#salve-preview-container').removeClass('d-none');
+    }
+
+    $(document).on('click', '#btn-execute-import-salve', async function() {
+        if (!selectedSalveFile) return;
+
+        const btn = $(this);
+        btn.prop('disabled', true);
+        $('#salve-progress-container').removeClass('d-none');
+        $('#salve-result-container').addClass('d-none').empty();
+        $('#salve-progress-bar').css('width', '0%').text('0%').attr('aria-valuenow', 0);
+        $('#salve-progress-percent').text('0%');
+        $('#salve-progress-status').html('<i class="fa-solid fa-spinner fa-spin me-1"></i> Iniciando importação...');
+
+        const formData = new FormData();
+        formData.append('csv_file', selectedSalveFile);
+        formData.append('auto_images', $('#check-auto-images').is(':checked'));
+        formData.append('max_rows', $('#select-max-rows').val());
+
+        try {
+            const response = await fetch('/api/v1/animais/import-salve?stream=true', {
+                method: 'POST',
+                headers: { 'Accept': 'text/event-stream' },
+                body: formData
+            });
+
+            if (!response.ok && !response.body) {
+                throw new Error(`Erro no servidor: HTTP ${response.status}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let hasCompleted = false;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop();
+
+                for (const part of parts) {
+                    if (!part.trim()) continue;
+                    const lines = part.split('\n');
+                    let eventType = 'message';
+                    let dataStr = '';
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) eventType = line.replace('event: ', '').trim();
+                        else if (line.startsWith('data: ')) dataStr = line.replace('data: ', '').trim();
+                    }
+
+                    if (dataStr) {
+                        try {
+                            const payload = JSON.parse(dataStr);
+                            if (eventType === 'progress') {
+                                const pct = Math.max(0, Math.min(100, payload.percent || 0));
+                                $('#salve-progress-bar')
+                                    .css('width', pct + '%')
+                                    .text(pct + '%')
+                                    .attr('aria-valuenow', pct);
+                                $('#salve-progress-percent').text(pct + '%');
+                                $('#salve-progress-status').html(`
+                                    <i class="fa-solid fa-spinner fa-spin me-1"></i>
+                                    Processando: <strong>${payload.species || ''}</strong> (${payload.current}/${payload.total})
+                                `);
+                            } else if (eventType === 'done') {
+                                hasCompleted = true;
+                                $('#salve-progress-bar').css('width', '100%').text('100%');
+                                $('#salve-progress-percent').text('100%');
+                                setTimeout(() => {
+                                    $('#salve-progress-container').addClass('d-none');
+                                    btn.prop('disabled', false);
+
+                                    const summary = payload.data || {};
+                                    const html = `
+                                        <div class="alert alert-success border-0 mb-0" style="background: #1e3a29; color: #75b798;">
+                                            <div class="d-flex align-items-center gap-2 mb-2">
+                                                <i class="fa-solid fa-circle-check fs-5"></i>
+                                                <strong>${payload.message || 'Importação concluída com sucesso!'}</strong>
+                                            </div>
+                                            <ul class="mb-0 small ps-3">
+                                                <li><strong>Espécies identificadas:</strong> ${summary.totalParsed || 0}</li>
+                                                <li><strong>Novas inseridas:</strong> ${summary.inserted || 0}</li>
+                                                <li><strong>Atualizadas:</strong> ${summary.updated || 0}</li>
+                                                ${summary.skipped ? `<li><strong>Ignoradas/Sem nome válido:</strong> ${summary.skipped}</li>` : ''}
+                                            </ul>
+                                        </div>
+                                    `;
+                                    $('#salve-result-container').html(html).removeClass('d-none');
+                                    loadAnimals();
+                                }, 400);
+                            } else if (eventType === 'error') {
+                                throw new Error(payload.message || payload.error || 'Erro durante a importação.');
+                            }
+                        } catch (jsonErr) {
+                            if (eventType === 'error') throw jsonErr;
+                        }
+                    }
+                }
+            }
+
+            if (!hasCompleted) {
+                btn.prop('disabled', false);
+                $('#salve-progress-container').addClass('d-none');
+            }
+        } catch (err) {
+            $('#salve-progress-container').addClass('d-none');
+            btn.prop('disabled', false);
+
+            const html = `
+                <div class="alert alert-danger border-0 mb-0" style="background: #3e1f25; color: #ea868f;">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation fs-5"></i>
+                        <div>
+                            <strong>Falha na importação</strong>
+                            <div class="small mt-1">${formatErrorMessage(err, 'Erro ao enviar ou processar arquivo CSV.')}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            $('#salve-result-container').html(html).removeClass('d-none');
+        }
+    });
 });

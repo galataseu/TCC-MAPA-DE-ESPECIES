@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Dossiê Técnico — TCC Mapa de Espécies Ameaçadas</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  @page {
+    size: A4;
+    margin: 18mm 15mm 18mm 15mm;
+    @bottom-right {
+      content: counter(page);
+      font-family: 'Inter', sans-serif;
+      font-size: 8.5pt;
+      color: #64748b;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #1e293b;
+    background-color: #ffffff;
+    line-height: 1.6;
+    font-size: 10pt;
+  }
+
+  /* Capa */
+  .cover-page {
+    page-break-after: always;
+    min-height: 94vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 35px 25px;
+    border-left: 8px solid #1E7552;
+    background: linear-gradient(135deg, #f8faf9 0%, #edf5f1 100%);
+    border-radius: 4px;
+  }
+
+  .cover-header {
+    border-bottom: 2px solid #1E7552;
+    padding-bottom: 20px;
+  }
+
+  .cover-badge {
+    display: inline-block;
+    background-color: #1E7552;
+    color: white;
+    font-size: 8.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    padding: 5px 14px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+  }
+
+  .cover-title {
+    font-size: 25pt;
+    font-weight: 800;
+    color: #0f3d2a;
+    line-height: 1.25;
+    margin-bottom: 14px;
+    letter-spacing: -0.5px;
+  }
+
+  .cover-subtitle {
+    font-size: 12pt;
+    font-weight: 400;
+    color: #334155;
+    line-height: 1.5;
+  }
+
+  .cover-meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin: 35px 0;
+    background: white;
+    padding: 22px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+    border: 1px solid #d1e3d9;
+  }
+
+  .meta-item h4 {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #64748b;
+    margin-bottom: 4px;
+  }
+
+  .meta-item p {
+    font-size: 10pt;
+    font-weight: 600;
+    color: #0f3d2a;
+  }
+
+  .cover-footer {
+    border-top: 1px solid #cbdcd3;
+    padding-top: 15px;
+    font-size: 8.5pt;
+    color: #475569;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* Quebras e Seções */
+  .page-break {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  .section-container {
+    margin-bottom: 25px;
+  }
+
+  .keep-together {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  h1 {
+    font-size: 17pt;
+    font-weight: 800;
+    color: #124d35;
+    border-bottom: 2.5px solid #1E7552;
+    padding-bottom: 6px;
+    margin-top: 24px;
+    margin-bottom: 14px;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  h2 {
+    font-size: 12.5pt;
+    font-weight: 700;
+    color: #1a573d;
+    margin-top: 18px;
+    margin-bottom: 10px;
+    border-left: 4px solid #1E7552;
+    padding-left: 10px;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  h3 {
+    font-size: 10.5pt;
+    font-weight: 600;
+    color: #1e293b;
+    margin-top: 14px;
+    margin-bottom: 6px;
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  p {
+    margin-bottom: 10px;
+    text-align: justify;
+  }
+
+  ul, ol {
+    margin-left: 20px;
+    margin-bottom: 12px;
+  }
+
+  li {
+    margin-bottom: 5px;
+  }
+
+  strong {
+    color: #0f3624;
+    font-weight: 600;
+  }
+
+  /* Caixas de Destaque */
+  .callout {
+    padding: 12px 15px;
+    border-radius: 6px;
+    margin: 14px 0;
+    font-size: 9.5pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .callout-analogy {
+    background-color: #f0f7f4;
+    border: 1px solid #cce5d9;
+    border-left: 5px solid #1E7552;
+  }
+
+  .callout-analogy .callout-title {
+    font-weight: 700;
+    color: #124d35;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .callout-technical {
+    background-color: #f1f6fb;
+    border: 1px solid #d2e2f5;
+    border-left: 5px solid #2563eb;
+  }
+
+  .callout-technical .callout-title {
+    font-weight: 700;
+    color: #1e40af;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .callout-question {
+    background-color: #fffbeb;
+    border: 1px solid #fef3c7;
+    border-left: 5px solid #d97706;
+  }
+
+  .callout-question .callout-title {
+    font-weight: 700;
+    color: #92400e;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  /* Tabelas */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 8.5pt;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  th, td {
+    border: 1px solid #d8e2dc;
+    padding: 7px 9px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background-color: #1E7552;
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  tr:nth-child(even) {
+    background-color: #f8faf9;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 7.5pt;
+    font-weight: 700;
+    border-radius: 3px;
+    text-transform: uppercase;
+  }
+
+  .badge-django { background-color: #0c4b33; color: white; }
+  .badge-node { background-color: #2f855a; color: white; }
+  .badge-db { background-color: #1e40af; color: white; }
+  .badge-geo { background-color: #ea580c; color: white; }
+  .badge-front { background-color: #7c3aed; color: white; }
+
+  /* Diagramas em SVG */
+  .diagram-wrapper {
+    margin: 16px 0;
+    text-align: center;
+    background: #ffffff;
+    border: 1px solid #dce8e1;
+    border-radius: 8px;
+    padding: 14px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  }
+
+  .diagram-caption {
+    font-size: 8pt;
+    font-weight: 600;
+    color: #64748b;
+    margin-top: 8px;
+  }
+
+  /* Blocos de Código */
+  pre, code {
+    font-family: 'JetBrains Mono', Consolas, Monaco, monospace;
+    font-size: 8pt;
+  }
+
+  code {
+    background-color: #edf5f0;
+    color: #124d35;
+    padding: 2px 5px;
+    border-radius: 3px;
+  }
+
+  pre {
+    background-color: #0f172a;
+    color: #f1f5f9;
+    padding: 10px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    border: 1px solid #1e293b;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    line-height: 1.45;
+  }
+
+  /* Cards de Estudo */
+  .study-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #1E7552;
+    border-radius: 6px;
+    padding: 12px 15px;
+    margin-bottom: 12px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+  }
+
+  .study-card h4 {
+    color: #0f3d2a;
+    font-size: 10pt;
+    margin-bottom: 5px;
+  }
+
+  .study-card .answer-tag {
+    font-weight: 700;
+    color: #1E7552;
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .study-card ul {
+    margin-top: 5px;
+    margin-bottom: 0;
+  }
+
+  .study-card li {
+    font-size: 9pt;
+  }
+</style>
+</head>
+<body>
+
+<!-- CAPA -->
+<div class="cover-page">
+  <div class="cover-header">
+    <span class="cover-badge">Trabalho de Conclusão de Curso • Informática / Engenharia de Software</span>
+    <h1 class="cover-title" style="border:none; padding:0; margin:0;">DOSSIÊ TÉCNICO COMPLETO<br>MAPA DE ESPÉCIES AMEAÇADAS</h1>
+    <p class="cover-subtitle">Mapeamento Interativo Geoespacial da Biodiversidade na Região Sul do Brasil (PR, SC, RS): Arquitetura Híbrida de Software, Banco de Dados PostGIS, Ingestão SALVE/ICMBio e Fluxos de Integração.</p>
+  </div>
+
+  <div class="cover-meta-grid">
+    <div class="meta-item">
+      <h4>Sistema / Repositório</h4>
+      <p>TCC-MAPA-DE-ESPECIES</p>
+    </div>
+    <div class="meta-item">
+      <h4>Foco da Apresentação</h4>
+      <p>Apresentação Técnica & Defesa perante a Banca</p>
+    </div>
+    <div class="meta-item">
+      <h4>Arquitetura e Stack</h4>
+      <p>Node.js (BFF/Prisma) + Django REST + PostgreSQL/PostGIS + Leaflet.js</p>
+    </div>
+    <div class="meta-item">
+      <h4>Objetivo de Estudo</h4>
+      <p>Otimizado para Indexação no NotebookLM e Simulação de Perguntas</p>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <span>Instituição de Ensino • Trabalho de Conclusão de Curso (TCC)</span>
+    <span>Documento Técnico Oficial de Referência</span>
+  </div>
+</div>
+
+<!-- ÍNDICE TEMÁTICO -->
+<div class="section-container">
+  <h1>Índice Temático de Estudo e Revisão</h1>
+  <p>Este documento consolida a totalidade dos aspectos de arquitetura, código, banco de dados e engenharia de software do sistema <strong>TCC-MAPA-DE-ESPECIES</strong>. Ele foi projetado para leitura rápida antes da apresentação e para carregamento como fonte primária no <strong>NotebookLM</strong>, permitindo que você gere resumos em áudio, flashcards e simulações de perguntas e respostas.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 14%;">Seção</th>
+        <th style="width: 48%;">Conteúdo Abordado</th>
+        <th style="width: 38%;">Objetivo Central na Apresentação</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Seção 1</strong></td>
+        <td>Visão Geral do Projeto e Resolução do Problema</td>
+        <td>Apresentar a dor real dos dados ambientais e o impacto social da solução.</td>
+      </tr>
+      <tr>
+        <td><strong>Seção 2</strong></td>
+        <td>Arquitetura Técnica e Comunicação entre Módulos</td>
+        <td>Defender com clareza o uso da arquitetura híbrida (Django + Node.js BFF).</td>
+      </tr>
+      <tr>
+        <td><strong>Seção 3</strong></td>
+        <td>Ferramentas, Tecnologias e Bibliotecas Utilizadas</td>
+        <td>Demonstrar domínio sobre cada biblioteca, SGBD e API externa do projeto.</td>
+      </tr>
+      <tr>
+        <td><strong>Seção 4</strong></td>
+        <td>Estrutura Técnica, Camadas e Fluxos de Dados</td>
+        <td>Explicar o caminho da informação do clique do mouse até o disco rígido.</td>
+      </tr>
+      <tr>
+        <td><strong>Seção 5</strong></td>
+        <td>Glossário Didático de Termos Técnicos para Leigos</td>
+        <td>Traduzir jargões difíceis (PostGIS, GeoJSON, BFF, GiST) em analogias simples.</td>
+      </tr>
+      <tr>
+        <td><strong>Seção 6</strong></td>
+        <td>Simulado da Banca: 10 Perguntas e Respostas</td>
+        <td>Treinar respostas prontas para os questionamentos mais duros da avaliação.</td>
+      </tr>
+      <tr>
+        <td><strong>Seção 7</strong></td>
+        <td>Conclusão Técnica e Horizontes de Expansão</td>
+        <td>Finalizar com postura madura sobre escalabilidade futura do sistema.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- SEÇÃO 1 -->
+<div class="page-break"></div>
+<div class="section-container">
+  <h1>1. Visão Geral do Sistema e do Problema</h1>
+
+  <h2>1.1 O que é o Sistema?</h2>
+  <p>O <strong>Mapa de Espécies Ameaçadas</strong> é uma plataforma web interativa desenvolvida para mapear, catalogar e representar visualmente a distribuição espacial de animais ameaçados de extinção nos três estados da Região Sul do Brasil (<strong>Paraná, Santa Catarina e Rio Grande do Sul</strong>). A plataforma integra, em uma única interface cartográfica, três entidades fundamentais da conservação ambiental: <strong>Espécies Animais</strong>, <strong>Zonas de Preservação</strong> (Unidades de Conservação e Parques Naturais) e <strong>Organizações Não Governamentais (ONGs)</strong> atuantes na causa ecológica.</p>
+
+  <div class="callout callout-analogy">
+    <div class="callout-title">💡 Analogia Didática: Como explicar a ideia inicial para quem é leigo</div>
+    Imagine uma biblioteca gigantesca do governo com milhares de caixas cheias de relatórios técnicos em papel e tabelas frias de números que ninguém fora da academia consegue entender. O nosso sistema atua como um <strong>globo terrestre interativo e inteligente</strong>: ele pega essas milhares de linhas de tabelas, descobre onde cada bicho vive de verdade e coloca um alfinete com foto, hábitos e alertas de perigo diretamente sobre o mapa da nossa região.
+  </div>
+
+  <h2>1.2 Qual problema real o sistema resolve?</h2>
+  <p>A conservação da biodiversidade enfrenta desafios severos de <strong>engenharia e comunicação da informação</strong>:</p>
+  <ul>
+    <li><strong>Dispersão e Inacessibilidade de Dados Oficiais:</strong> Os dados do <em>SALVE (Sistema de Avaliação do Risco de Extinção da Biodiversidade)</em> mantidos pelo ICMBio e Ministério do Meio Ambiente (MMA) costumam ser publicados em planilhas CSV com milhares de linhas e códigos técnicos de difícil interpretação pelo cidadão comum, escolas ou mesmo profissionais em campo.</li>
+    <li><strong>Desconexão Espacial:</strong> Saber que uma espécie como a <em>Onça-pintada (Panthera onca)</em> está classificada como "Vulnerável" ou "Criticamente em Perigo" é um fato abstrato. Visualizar em um mapa que ela sobrevive apenas em pequenas manchas isoladas de Mata Atlântica e constatar visualmente onde há áreas de proteção integral transforma a informação em consciência prática.</li>
+    <li><strong>Escassez de Ferramentas Ágeis para Gestão:</strong> Fiscais ambientais e pesquisadores muitas vezes não dispõem de sistemas leves onde seja possível clicar diretamente no mapa e registrar imediatamente um novo animal, foto ou entidade de proteção com coordenadas precisas.</li>
+  </ul>
+
+  <h2>1.3 Perfis de Usuário e Regras de Negócio do Projeto</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 25%;">Perfil</th>
+        <th style="width: 20%;">Tipo de Permissão</th>
+        <th style="width: 55%;">Principais Funcionalidades Disponíveis</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Usuário Comum (Cidadão / Estudante)</strong></td>
+        <td>Somente Leitura (Read-Only)</td>
+        <td>
+          • Navegação livre pelo mapa interativo (zoom, pan, tela cheia).<br>
+          • Pesquisa instantânea por nome comum (ex: "Gato-maracajá") ou científico.<br>
+          • Filtros avançados por Bioma (Mata Atlântica, Pampa, Cerrado) e Nível de Risco.<br>
+          • Visualização de galeria de fotos, histórico e polígonos de distribuição.<br>
+          • Adição e gestão de animais na lista de Favoritos do usuário.
+        </td>
+      </tr>
+      <tr>
+        <td><strong>Administrador (Gestor / Pesquisador)</strong></td>
+        <td>CRUD Completo (Create, Read, Update, Delete)</td>
+        <td>
+          • Todas as funcionalidades do usuário comum.<br>
+          • <strong>Criação por Clique Direito (Contextmenu):</strong> captura automática da latitude e longitude exatas para criação instantânea de Animal, ONG ou Zona de Preservação.<br>
+          • <strong>Importador Automatizado do SALVE:</strong> upload de planilhas CSV com enriquecimento automático de imagens da Wikipédia e cálculo de coordenadas determinísticas.<br>
+          • Painel Administrativo nativo do Django para auditoria e controle de contas.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- SEÇÃO 2 -->
+<div class="page-break"></div>
+<div class="section-container">
+  <h1>2. Arquitetura Técnica e Comunicação entre Componentes</h1>
+
+  <h2>2.1 A Decisão de Engenharia: Por que uma Arquitetura Híbrida?</h2>
+  <p>Uma questão frequente em bancas avaliadoras é: <em>"Por que utilizar dois servidores backend (Django e Node.js) em vez de manter uma única tecnologia monolítica?"</em>. A resposta fundamenta-se no princípio de <strong>Separação de Responsabilidades Especializadas</strong>:</p>
+
+  <ul>
+    <li><strong>Django 6 (Python) — Núcleo de Governança, Regras de Negócio e Segurança:</strong> O Django é mundialmente reconhecido por sua robustez corporativa. Ele possui um sistema nativo de autenticação altamente seguro (hashing PBKDF2), gestão de grupos de usuários, geração automática de migrações de banco de dados e um <strong>Painel Administrativo completo pronto para uso</strong>, evitando que a equipe tivesse que construir um painel de retaguarda do zero.</li>
+    <li><strong>Node.js / Express 5 (JavaScript) — BFF (Backend for Frontend) de Alta Performance:</strong> Aplicações de mapas geográficos operam com um perfil de uso muito específico: o usuário arrasta e amplia a tela continuamente, disparando rajadas de requisições de coordenadas espaciais. O Node.js possui um modelo de concorrência assíncrono e não-bloqueante (Event Loop) que entrega dados GeoJSON com consumo ínfimo de memória e latência de milissegundos. Além disso, gerencia transmissões em tempo real via <em>Server-Sent Events (SSE)</em> para importações em lote.</li>
+  </ul>
+
+  <div class="callout callout-technical">
+    <div class="callout-title">⚙️ O Padrão Arquitetural BFF (Backend for Frontend)</div>
+    O padrão BFF determina que a API não deve ser genérica demais a ponto de forçar o navegador a fazer cálculos pesados. O servidor Node.js atua exatamente como esse facilitador: ele faz as consultas brutas no banco, calcula a agregação de fotos e formata tudo no padrão <strong>GeoJSON FeatureCollection</strong> que o Leaflet consome diretamente sem necessitar de nenhum processamento extra no cliente.
+  </div>
+
+  <div class="page-break"></div>
+  <div class="keep-together">
+    <h2>2.2 Diagrama Visual da Arquitetura do Sistema</h2>
+    <p>Abaixo está a representação gráfica de como os componentes de frontend, os dois servidores backend e o banco de dados PostGIS se articulam:</p>
+
+    <div class="diagram-wrapper">
+      <svg viewBox="0 0 760 440" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#1E7552" />
+          </marker>
+          <marker id="arr-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#1e40af" />
+          </marker>
+        </defs>
+
+        <!-- CAMADA 1: FRONTEND -->
+        <rect x="20" y="20" width="720" height="85" rx="8" fill="#f8faf9" stroke="#1E7552" stroke-width="2"/>
+        <text x="35" y="44" font-family="Inter, sans-serif" font-size="12" font-weight="800" fill="#124d35">CAMADA DE APRESENTAÇÃO (CLIENTE / NAVEGADOR WEB)</text>
+        
+        <rect x="35" y="55" width="160" height="36" rx="4" fill="#e8f4ed" stroke="#2d7a58"/>
+        <text x="47" y="78" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#124d35">Leaflet.js + CARTO Dark</text>
+
+        <rect x="210" y="55" width="165" height="36" rx="4" fill="#e8f4ed" stroke="#2d7a58"/>
+        <text x="222" y="78" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#124d35">MarkerCluster & Turf.js</text>
+
+        <rect x="390" y="55" width="165" height="36" rx="4" fill="#e8f4ed" stroke="#2d7a58"/>
+        <text x="402" y="78" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#124d35">Bootstrap 5 + Offcanvas</text>
+
+        <rect x="570" y="55" width="155" height="36" rx="4" fill="#e8f4ed" stroke="#2d7a58"/>
+        <text x="582" y="78" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" fill="#124d35">ContextMenu no Mapa</text>
+
+        <!-- CONEXÕES FRONTEND -> BACKENDS -->
+        <path d="M 200 105 L 200 150" fill="none" stroke="#1E7552" stroke-width="2" marker-end="url(#arr-green)"/>
+        <text x="208" y="132" font-family="JetBrains Mono, monospace" font-size="8.5" fill="#1E7552" font-weight="600">GeoJSON / REST / SSE</text>
+
+        <path d="M 550 105 L 550 150" fill="none" stroke="#1e40af" stroke-width="2" marker-end="url(#arr-blue)"/>
+        <text x="558" y="132" font-family="JetBrains Mono, monospace" font-size="8.5" fill="#1e40af" font-weight="600">Auth JWT / Django Admin</text>
+
+        <!-- CAMADA 2: BACKEND NODE -->
+        <rect x="20" y="150" width="350" height="145" rx="8" fill="#ffffff" stroke="#288056" stroke-width="1.8"/>
+        <text x="35" y="174" font-family="Inter, sans-serif" font-size="11.5" font-weight="700" fill="#124d35">BFF NODE.JS (Express 5 + Prisma ORM)</text>
+        <text x="35" y="190" font-family="Inter, sans-serif" font-size="8.5" fill="#64748b">Entrega Geoespacial em Alta Velocidade</text>
+        
+        <rect x="35" y="202" width="155" height="32" rx="4" fill="#f0f7f3" stroke="#bdd9cb"/>
+        <text x="43" y="222" font-family="JetBrains Mono, monospace" font-size="8" fill="#124d35">GET /api/markers (BBOX)</text>
+
+        <rect x="200" y="202" width="155" height="32" rx="4" fill="#f0f7f3" stroke="#bdd9cb"/>
+        <text x="208" y="222" font-family="JetBrains Mono, monospace" font-size="8" fill="#124d35">POST /import-salve (SSE)</text>
+
+        <rect x="35" y="244" width="320" height="36" rx="4" fill="#f0f7f3" stroke="#bdd9cb"/>
+        <text x="45" y="260" font-family="Inter, sans-serif" font-size="8.5" fill="#124d35">Módulos: SalveImporter • Coordenadas Determinísticas</text>
+        <text x="45" y="272" font-family="Inter, sans-serif" font-size="8" fill="#475569">Enriquecimento de Imagens via API da Wikipédia</text>
+
+        <!-- CAMADA 2: BACKEND DJANGO -->
+        <rect x="390" y="150" width="350" height="145" rx="8" fill="#ffffff" stroke="#1e40af" stroke-width="1.8"/>
+        <text x="405" y="174" font-family="Inter, sans-serif" font-size="11.5" font-weight="700" fill="#1e40af">CORE DJANGO (DRF + GeoDjango)</text>
+        <text x="405" y="190" font-family="Inter, sans-serif" font-size="8.5" fill="#64748b">Governança, Autenticação e Gestão de Usuários</text>
+        
+        <rect x="405" y="202" width="155" height="32" rx="4" fill="#eff6ff" stroke="#bfdbfe"/>
+        <text x="415" y="222" font-family="JetBrains Mono, monospace" font-size="8" fill="#1e40af">SimpleJWT (Tokens Bearer)</text>
+
+        <rect x="570" y="202" width="155" height="32" rx="4" fill="#eff6ff" stroke="#bfdbfe"/>
+        <text x="580" y="222" font-family="JetBrains Mono, monospace" font-size="8" fill="#1e40af">Painel Admin (/admin)</text>
+
+        <rect x="405" y="244" width="320" height="36" rx="4" fill="#eff6ff" stroke="#bfdbfe"/>
+        <text x="415" y="260" font-family="Inter, sans-serif" font-size="8.5" fill="#1e40af">Módulos: Modelos com SoftDelete • Permissões RBAC</text>
+        <text x="415" y="272" font-family="Inter, sans-serif" font-size="8" fill="#475569">Controle de Unicidade Científica e Integridade</text>
+
+        <!-- CONEXÕES BACKENDS -> BANCO -->
+        <path d="M 195 295 L 260 330" fill="none" stroke="#1E7552" stroke-width="2" marker-end="url(#arr-green)"/>
+        <path d="M 565 295 L 500 330" fill="none" stroke="#1e40af" stroke-width="2" marker-end="url(#arr-blue)"/>
+
+        <!-- CAMADA 3: BANCO DE DADOS POSTGIS -->
+        <rect x="140" y="335" width="480" height="85" rx="8" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+        <text x="160" y="360" font-family="Inter, sans-serif" font-size="12" font-weight="700" fill="#f8fafc">BANCO DE DADOS: PostgreSQL 16 + Extensão PostGIS</text>
+        
+        <rect x="160" y="372" width="205" height="36" rx="4" fill="#1e293b"/>
+        <text x="170" y="388" font-family="JetBrains Mono, monospace" font-size="8" fill="#38bdf8">GEOMETRY(Point, 4326)</text>
+        <text x="170" y="401" font-family="Inter, sans-serif" font-size="7.5" fill="#94a3b8">Marcadores de Animais e ONGs (GiST)</text>
+
+        <rect x="380" y="372" width="225" height="36" rx="4" fill="#1e293b"/>
+        <text x="390" y="388" font-family="JetBrains Mono, monospace" font-size="8" fill="#38bdf8">GEOMETRY(MultiPolygon, 4326)</text>
+        <text x="390" y="401" font-family="Inter, sans-serif" font-size="7.5" fill="#94a3b8">Zonas de Preservação e Biomas</text>
+      </svg>
+      <div class="diagram-caption">Figura 2.1 — Arquitetura Técnica Integrada do Sistema TCC-MAPA-DE-ESPECIES.</div>
+    </div>
+  </div>
+
+  <h2>2.3 Protocolos e Modos de Comunicação entre Componentes</h2>
+  <ol>
+    <li><strong>Frontend &harr; BFF Node.js:</strong> Quando o usuário movimenta o mapa, o Leaflet dispara uma requisição <code>GET /api/markers?bbox=minLng,minLat,maxLng,maxLat</code>. O Node.js executa a consulta espacial no PostGIS e responde com um objeto <strong>GeoJSON FeatureCollection</strong> contendo marcadores, fotos e biomas já agregados.</li>
+    <li><strong>Frontend &harr; Django API:</strong> O formulário de login de administração envia credenciais para o endpoint do Django, que valida o usuário e devolve um par de <strong>Tokens JWT (Access Token e Refresh Token)</strong>. Requisições administrativas passam a carregar o cabeçalho <code>Authorization: Bearer &lt;token&gt;</code>.</li>
+    <li><strong>Compartilhamento Transparente do Banco de Dados:</strong> O Django atua como o gestor oficial das tabelas (executando <code>python manage.py migrate</code>). O Prisma ORM no Node.js apenas faz a leitura estruturada do schema existente através de <code>npx prisma db pull</code>, garantindo que ambos operem sobre as mesmas tabelas sem qualquer conflito.</li>
+  </ol>
+</div>
+
+<!-- SEÇÃO 3 -->
+<div class="page-break"></div>
+<div class="section-container">
+  <h1>3. Ferramentas, Tecnologias e Bibliotecas Utilizadas</h1>
+  
+  <h2>3.1 Detalhamento por Categoria Tecnológica</h2>
+  <p>Abaixo detalha-se o papel de cada tecnologia adotada no ciclo de vida da aplicação:</p>
+
+  <h3>Linguagens de Programação</h3>
+  <ul>
+    <li><strong>JavaScript (Node.js no backend e ES6+ no navegador):</strong> Utilizado tanto para a lógica reativa do mapa quanto para o servidor BFF. O modelo assíncrono do JavaScript permite processar grandes volumes de objetos JSON e requisições concorrentes sem engargalar a CPU.</li>
+    <li><strong>Python 3.12+:</strong> Empregado no backend corporativo (Django). Proporciona sintaxe limpa, tipagem moderna e suporte maduro a bibliotecas científicas e de banco de dados através do driver <code>psycopg2</code>.</li>
+  </ul>
+
+  <h3>Frameworks e Camada Servidora</h3>
+  <ul>
+    <li><strong>Express.js (v5.2):</strong> Framework minimalista para Node.js que gerencia as rotas rápidas do BFF, upload de arquivos através do middleware <code>multer</code> e entrega de mídias estáticas.</li>
+    <li><strong>Django (v6.0) & Django REST Framework (v3.17):</strong> Framework Python "baterias inclusas" responsável pela API REST corporativa, autenticação criptográfica, migrações de banco e administração do sistema.</li>
+  </ul>
+
+  <h3>Banco de Dados e Extensão Espacial</h3>
+  <ul>
+    <li><strong>PostgreSQL 16 com PostGIS:</strong> O SGBD relacional de código aberto mais avançado do mundo. A extensão PostGIS adiciona tipos primitivos de geometria (como pontos e polígonos) e funções que calculam interseções e distâncias reais sobre o esferoide terrestre.</li>
+  </ul>
+
+  <h3>Mapeamento Objeto-Relacional (ORMs)</h3>
+  <ul>
+    <li><strong>Prisma ORM (v6):</strong> ORM moderno para Node.js com segurança de tipos. Utilizado para consultas padrão e complementado com <code>$queryRawUnsafe</code> para comandos que requerem operadores nativos do PostGIS.</li>
+    <li><strong>Django ORM / GeoDjango:</strong> Mapeia classes Python diretamente em tabelas com suporte a campos espaciais (<code>PointField</code> e <code>MultiPolygonField</code>).</li>
+  </ul>
+
+  <h3>Bibliotecas do Frontend e Visualização Cartográfica</h3>
+  <ul>
+    <li><strong>Leaflet.js (v1.9):</strong> Mecanismo de renderização do mapa no navegador. Extremamente leve (cerca de 38 KB gzip), é o padrão de ouro para mapas interativos web.</li>
+    <li><strong>Leaflet.markercluster:</strong> Plugin que agrupa dezenas de marcadores geograficamente próximos em um único círculo numérico, prevenindo degradação de performance quando o mapa está com zoom aberto.</li>
+    <li><strong>Turf.js:</strong> Biblioteca de geoprocessamento no cliente (navegador). Efetua análises espaciais rápidas sem precisar fazer requisições ao servidor a todo instante.</li>
+    <li><strong>Bootstrap 5.3 & FontAwesome 6.4:</strong> Componentes de interface (gaveta lateral Offcanvas, modais, sistema de grid responsivo e ícones temáticos).</li>
+    <li><strong>Pug 3 (Jade):</strong> Motor de templates do Node.js que renderiza a estrutura básica do HTML com sintaxe limpa baseada em indentação.</li>
+  </ul>
+
+  <div class="page-break"></div>
+  <h2>3.2 Tabela Resumo do Stack Tecnológico</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 18%;">Tecnologia</th>
+        <th style="width: 15%;">Categoria</th>
+        <th style="width: 40%;">Função no Sistema</th>
+        <th style="width: 27%;">Justificativa de Escolha</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Node.js + Express 5</strong></td>
+        <td><span class="badge badge-node">BFF / Server</span></td>
+        <td>Entrega de dados GeoJSON, upload de imagens e streaming Server-Sent Events (SSE).</td>
+        <td>I/O assíncrono não-bloqueante; alta taxa de transferência para dados espaciais.</td>
+      </tr>
+      <tr>
+        <td><strong>Django 6 + DRF</strong></td>
+        <td><span class="badge badge-django">Core / Auth</span></td>
+        <td>Autenticação JWT, regras de negócio, exclusão lógica (Soft Delete) e painel administrativo.</td>
+        <td>Segurança robusta por padrão e interface administrativa pronta para auditoria.</td>
+      </tr>
+      <tr>
+        <td><strong>PostgreSQL + PostGIS</strong></td>
+        <td><span class="badge badge-db">SGBD Espacial</span></td>
+        <td>Armazenamento de pontos (animais/ONGs) e polígonos (biomas/preservação) com índices GiST.</td>
+        <td>Padrão industrial para GIS; suporte a consultas espaciais ultrarrápidas na curvatura real da Terra.</td>
+      </tr>
+      <tr>
+        <td><strong>Prisma ORM</strong></td>
+        <td><span class="badge badge-node">ORM / Query</span></td>
+        <td>Execução de consultas tipadas no Node.js e gerenciamento de banco via Prisma Studio.</td>
+        <td>Alta produtividade e execução ágil de queries SQL espaciais combinadas.</td>
+      </tr>
+      <tr>
+        <td><strong>Leaflet.js + MarkerCluster</strong></td>
+        <td><span class="badge badge-front">GIS / Frontend</span></td>
+        <td>Renderização do mapa em tela cheia, azulejos de satélite/escuro e agrupamento de marcadores.</td>
+        <td>Leveza absoluta, código aberto, sem cobranças abusivas de API e alta velocidade de desenho em Canvas.</td>
+      </tr>
+      <tr>
+        <td><strong>Turf.js 6</strong></td>
+        <td><span class="badge badge-front">Análise Cliente</span></td>
+        <td>Cálculo geométrico no navegador (envelopes, distâncias e validação de coordenadas).</td>
+        <td>Execução local instantânea sem sobrecarregar a rede com chamadas desnecessárias ao servidor.</td>
+      </tr>
+      <tr>
+        <td><strong>Bootstrap 5 + FontAwesome</strong></td>
+        <td><span class="badge badge-front">UI / Design</span></td>
+        <td>Interface de controle, Offcanvas lateral de edição/criação, modais e iconografia.</td>
+        <td>Design limpo, intuitivo e responsivo para smartphones, tablets e computadores.</td>
+      </tr>
+      <tr>
+        <td><strong>Pug 3 (Jade)</strong></td>
+        <td><span class="badge badge-front">Template Engine</span></td>
+        <td>Geração do esqueleto HTML das páginas <code>index</code>, <code>animais</code> e <code>admin-login</code>.</td>
+        <td>Sintaxe expressiva e renderização eficiente integrada nativamente ao Express.</td>
+      </tr>
+      <tr>
+        <td><strong>API Wikipédia / Wikimedia</strong></td>
+        <td><span class="badge badge-geo">API Externa</span></td>
+        <td>Busca automatizada por nome científico de 1 a 3 fotos públicas de alta resolução por espécie.</td>
+        <td>Enriquecimento visual automático de bases governamentais brutas (SALVE/ICMBio).</td>
+      </tr>
+      <tr>
+        <td><strong>SimpleJWT</strong></td>
+        <td><span class="badge badge-django">Segurança</span></td>
+        <td>Geração e validação de tokens criptográficos Bearer para proteção de rotas administrativas.</td>
+        <td>Arquitetura stateless que permite autenticação unificada sem depender de sessões em disco.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- SEÇÃO 4 -->
+<div class="page-break"></div>
+<div class="section-container">
+  <h1>4. Estrutura Técnica, Camadas e Fluxos de Dados</h1>
+
+  <h2>4.1 Camada de Apresentação (Frontend no Navegador)</h2>
+  <p>A experiência do usuário gira em torno do mapa geográfico, que foi desenhado para ser interativo e extremamente rápido:</p>
+
+  <ul>
+    <li><strong>Renderização em HTML5 Canvas (Aceleração por Hardware):</strong> Ao configurar o Leaflet com <code>preferCanvas: true</code>, os marcadores de espécies não são criados como elementos HTML individuais no DOM (o que travaria o navegador com muitas entidades), mas sim desenhados diretamente em um elemento <code>&lt;canvas&gt;</code> acelerado pela GPU da máquina do usuário.</li>
+    <li><strong>Filtro de Bounding Box (BBOX) com Buffer de 20%:</strong> O navegador monitora a área visível da tela. Quando o usuário para de arrastar ou aproxima o zoom, o Leaflet dispara uma requisição contendo as coordenadas da tela. O backend calcula um <strong>buffer de expansão de 20%</strong> ao redor da área visível. Essa estratégia de pré-carregamento antecipa os próximos movimentos do usuário, garantindo que novos animais já estejam carregados na memória antes mesmo de entrarem na visão.</li>
+    <li><strong>Menu de Contexto e Modo Administrador (Evento <code>contextmenu</code>):</strong> O Leaflet escuta o clique com o botão direito do mouse no mapa. Se o usuário estiver autenticado com a permissão de administrador, o sistema captura a latitude e longitude exatas do clique e abre um menu flutuante. Ao selecionar <em>"Criar Animal"</em>, uma gaveta lateral (Offcanvas) se abre com as coordenadas já preenchidas no formulário, permitindo que o gestor adicione foto, nome científico e biomas em poucos segundos.</li>
+  </ul>
+
+  <div class="keep-together">
+    <h2>4.2 Diagrama de Sequência: Carregamento do Mapa (Fluxo BBOX)</h2>
+    <div class="diagram-wrapper">
+      <svg viewBox="0 0 740 280" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
+        <line x1="100" y1="40" x2="100" y2="260" stroke="#94a3b8" stroke-dasharray="4" stroke-width="1.5"/>
+        <line x1="330" y1="40" x2="330" y2="260" stroke="#94a3b8" stroke-dasharray="4" stroke-width="1.5"/>
+        <line x1="560" y1="40" x2="560" y2="260" stroke="#94a3b8" stroke-dasharray="4" stroke-width="1.5"/>
+
+        <rect x="25" y="10" width="150" height="30" rx="4" fill="#e8f4ed" stroke="#1E7552" stroke-width="1.5"/>
+        <text x="45" y="30" font-family="Inter, sans-serif" font-size="10.5" font-weight="700" fill="#124d35">Cliente (Leaflet.js)</text>
+
+        <rect x="250" y="10" width="160" height="30" rx="4" fill="#f0f7f3" stroke="#288056" stroke-width="1.5"/>
+        <text x="270" y="30" font-family="Inter, sans-serif" font-size="10.5" font-weight="700" fill="#124d35">BFF Node.js (Express)</text>
+
+        <rect x="475" y="10" width="170" height="30" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+        <text x="495" y="30" font-family="Inter, sans-serif" font-size="10.5" font-weight="700" fill="#ffffff">PostgreSQL + PostGIS</text>
+
+        <path d="M 100 70 L 330 70" fill="none" stroke="#1E7552" stroke-width="1.5" marker-end="url(#arr-green)"/>
+        <text x="110" y="63" font-family="Inter, sans-serif" font-size="8.5" fill="#124d35" font-weight="600">1. Movimento do Mapa: GET /api/markers?bbox=minLng,minLat,maxLng,maxLat</text>
+
+        <path d="M 330 110 L 560 110" fill="none" stroke="#1E7552" stroke-width="1.5" marker-end="url(#arr-green)"/>
+        <text x="340" y="103" font-family="Inter, sans-serif" font-size="8.5" fill="#124d35" font-weight="600">2. SQL: ST_Intersects(location, ST_MakeEnvelope(+20% buffer))</text>
+
+        <path d="M 560 150 L 330 150" fill="none" stroke="#1e40af" stroke-width="1.5" marker-end="url(#arr-blue)" stroke-dasharray="4"/>
+        <text x="360" y="143" font-family="Inter, sans-serif" font-size="8.5" fill="#1e40af" font-weight="600">3. Busca via Índice GiST + json_agg() de imagens/biomas</text>
+
+        <rect x="320" y="165" width="20" height="30" rx="2" fill="#cbe6d7"/>
+        <text x="345" y="184" font-family="Inter, sans-serif" font-size="8" fill="#334155">Serialização GeoJSON (Trata BigInt)</text>
+
+        <path d="M 330 210 L 100 210" fill="none" stroke="#1e40af" stroke-width="1.5" marker-end="url(#arr-blue)" stroke-dasharray="4"/>
+        <text x="120" y="203" font-family="Inter, sans-serif" font-size="8.5" fill="#1e40af" font-weight="600">4. Payload GeoJSON: FeatureCollection com Marcadores e Fotos</text>
+
+        <rect x="90" y="225" width="20" height="25" rx="2" fill="#cbe6d7"/>
+        <text x="120" y="242" font-family="Inter, sans-serif" font-size="8" fill="#334155">5. MarkerCluster agrupa pontos e Leaflet desenha em Canvas</text>
+      </svg>
+      <div class="diagram-caption">Figura 4.1 — Ciclo de Vida da Requisição Geoespacial por Bounding Box (BBOX).</div>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+  <h2>4.3 O Mecanismo de Importação SALVE e Streaming em Tempo Real (SSE)</h2>
+  <p>O arquivo <code>services/salveImporter.js</code> resolve um dos maiores desafios do projeto: processar bases governamentais brutas sem travar a interface.</p>
+  <ul>
+    <li><strong>Parser CSV Resiliente:</strong> Trata variações de delimitadores (<code>;</code>, <code>,</code> ou tabulações), aspas escapadas e codificações tanto em UTF-8 quanto em Latin-1 (ISO-8859-1).</li>
+    <li><strong>Algoritmo de Coordenadas Determinísticas (<code>getDistributedCoordinate</code>):</strong> Quando a planilha oficial informa apenas que a espécie ocorre na "Mata Atlântica em Santa Catarina", sem ponto GPS exato, o sistema calcula uma coordenada consistente e espalhada dentro do polígono oficial do bioma naquele estado, impedindo que centenas de animais fiquem empilhados em um único ponto.</li>
+    <li><strong>Server-Sent Events (SSE):</strong> Em vez de um upload tradicional onde o usuário fica olhando para uma tela congelada, o endpoint <code>POST /api/v1/animais/import-salve?stream=true</code> abre um fluxo de eventos HTTP contínuo. A cada espécie cadastrada e enriquecida com fotos da Wikipédia, o servidor despacha um evento JSON com a porcentagem atual e o nome da espécie, movimentando a barra de progresso no navegador de forma suave.</li>
+  </ul>
+
+  <div class="keep-together">
+    <h2>4.4 Diagrama do Fluxo de Importação SALVE com Server-Sent Events</h2>
+    <div class="diagram-wrapper">
+      <svg viewBox="0 0 740 220" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
+        <rect x="20" y="20" width="140" height="60" rx="6" fill="#e8f4ed" stroke="#1E7552" stroke-width="1.5"/>
+        <text x="35" y="45" font-family="Inter, sans-serif" font-size="10" font-weight="700" fill="#124d35">1. Upload CSV</text>
+        <text x="35" y="62" font-family="Inter, sans-serif" font-size="8" fill="#475569">Planilha SALVE/ICMBio</text>
+
+        <path d="M 160 50 L 200 50" fill="none" stroke="#1E7552" stroke-width="1.8" marker-end="url(#arr-green)"/>
+
+        <rect x="200" y="20" width="150" height="60" rx="6" fill="#f0f7f3" stroke="#288056" stroke-width="1.5"/>
+        <text x="215" y="45" font-family="Inter, sans-serif" font-size="10" font-weight="700" fill="#124d35">2. Parser & Regras</text>
+        <text x="215" y="62" font-family="Inter, sans-serif" font-size="8" fill="#475569">Limpeza e Mapeamento IUCN</text>
+
+        <path d="M 350 50 L 390 50" fill="none" stroke="#1E7552" stroke-width="1.8" marker-end="url(#arr-green)"/>
+
+        <rect x="390" y="20" width="160" height="60" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+        <text x="405" y="45" font-family="Inter, sans-serif" font-size="10" font-weight="700" fill="#1e40af">3. API da Wikipédia</text>
+        <text x="405" y="62" font-family="Inter, sans-serif" font-size="8" fill="#475569">Baixa 1 a 3 fotos livres</text>
+
+        <path d="M 550 50 L 590 50" fill="none" stroke="#1E7552" stroke-width="1.8" marker-end="url(#arr-green)"/>
+
+        <rect x="590" y="20" width="130" height="60" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+        <text x="605" y="45" font-family="Inter, sans-serif" font-size="10" font-weight="700" fill="#ffffff">4. PostGIS</text>
+        <text x="605" y="62" font-family="Inter, sans-serif" font-size="8" fill="#94a3b8">Gravação espacial</text>
+
+        <!-- Retorno SSE para o cliente -->
+        <path d="M 655 80 L 655 150 L 90 150 L 90 80" fill="none" stroke="#ea580c" stroke-width="1.8" stroke-dasharray="4" marker-end="url(#arr-green)"/>
+        <rect x="250" y="135" width="260" height="30" rx="4" fill="#fff7ed" stroke="#fdba74"/>
+        <text x="260" y="154" font-family="JetBrains Mono, monospace" font-size="8" fill="#9a3412">Streaming SSE: event: progress { percent: 45% }</text>
+      </svg>
+      <div class="diagram-caption">Figura 4.2 — Fluxo de Ingestão de Dados com Streaming de Eventos em Tempo Real (SSE).</div>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+  <h2>4.5 Modelagem de Dados e Padrão Soft Delete</h2>
+  <p>O modelo de dados implementado no PostgreSQL reúne informações taxonômicas, relações ecológicas e geometrias espaciais, contando com o padrão de <strong>Soft Delete</strong> para garantir que nenhuma exclusão acidental apague dados históricos de pesquisa:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 22%;">Entidade / Tabela</th>
+        <th style="width: 20%;">Chave Primária / Tipo</th>
+        <th style="width: 33%;">Campos Chave e Atributos</th>
+        <th style="width: 25%;">Relacionamentos</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>api_animal</strong></td>
+        <td><code>id (BigInt PK)</code></td>
+        <td><code>nome_comum</code>, <code>nome_cientifico</code> (Unique), <code>classe</code>, <code>dieta</code>, <code>deleted_at</code></td>
+        <td>FK para NivelExtincao, Microrregiao, User; N:N Biomas</td>
+      </tr>
+      <tr>
+        <td><strong>api_marcador</strong></td>
+        <td><code>id (BigInt PK)</code></td>
+        <td><code>location (Point, 4326)</code> [Índice GiST], <code>icone</code>, <code>created_at</code></td>
+        <td>FK para api_animal (1:N)</td>
+      </tr>
+      <tr>
+        <td><strong>api_animalimagem</strong></td>
+        <td><code>id (BigInt PK)</code></td>
+        <td><code>imagem (VarChar 500)</code>, <code>legenda</code>, <code>ordem</code></td>
+        <td>FK para api_animal (1:N)</td>
+      </tr>
+      <tr>
+        <td><strong>api_bioma</strong></td>
+        <td><code>id (BigInt PK)</code></td>
+        <td><code>nome (VarChar 100)</code>, <code>caract</code>, <code>nivel_destr</code></td>
+        <td>N:N com api_animal e api_estado</td>
+      </tr>
+      <tr>
+        <td><strong>api_ong</strong></td>
+        <td><code>id (BigInt PK)</code></td>
+        <td><code>nome</code>, <code>site</code>, <code>location (Point, 4326)</code>, <code>deleted_at</code></td>
+        <td>Entidade de conservação georreferenciada</td>
+      </tr>
+      <tr>
+        <td><strong>api_zonapreservacao</strong></td>
+        <td><code>id (BigInt PK)</code></td>
+        <td><code>nome</code>, <code>categoria</code>, <code>area (MultiPolygon, 4326)</code></td>
+        <td>Polígonos de Unidades de Conservação</td>
+      </tr>
+      <tr>
+        <td><strong>api_favorito</strong></td>
+        <td><code>id (BigInt PK)</code></td>
+        <td><code>user_id</code>, <code>animal_id</code>, <code>created_at</code></td>
+        <td>Vínculo entre api_user e api_animal</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- SEÇÃO 5 -->
+<div class="page-break"></div>
+<div class="section-container">
+  <h1>5. Glossário Didático de Termos Técnicos para Leigos</h1>
+  <p>Use este glossário quando precisar explicar conceitos avançados para membros da banca ou espectadores que não possuem formação em banco de dados ou geoprocessamento:</p>
+
+  <div class="callout callout-analogy">
+    <div class="callout-title">1. O que é GeoJSON?</div>
+    <p><strong>Definição Acadêmica:</strong> É uma especificação aberta (IETF RFC 7946) que padroniza a representação de entidades geográficas e seus atributos utilizando a sintaxe do formato JSON.</p>
+    <p><strong>Analogia para Leigos:</strong> É como a etiqueta de correio de um pacote digital. Em um arquivo de texto simples e leve, ele declara: <em>"Aqui dentro tem um Gato-Maracajá (nome e detalhes) e a casa dele fica exatamente nas coordenadas GPS: latitude -27.5, longitude -48.5"</em>. Qualquer aplicativo do mundo consegue ler essa etiqueta e cravar o alfinete no mapa na hora.</p>
+  </div>
+
+  <div class="callout callout-analogy">
+    <div class="callout-title">2. O que é PostGIS?</div>
+    <p><strong>Definição Acadêmica:</strong> É uma extensão espacial para o SGBD PostgreSQL que adiciona suporte a objetos geométricos e geográficos e provê funções de cálculo espacial em conformidade com os padrões da OGC (Open Geospatial Consortium).</p>
+    <p><strong>Analogia para Leigos:</strong> Um banco de dados normal é como uma planilha de escritório que só entende números e letras. O PostGIS é como colocar uma régua e um compasso geodésico dentro dessa planilha: ela passa a saber que a Terra é redonda, sabe calcular distâncias exatas em linha reta e consegue responder se uma floresta fica dentro ou fora de uma cidade em um piscar de olhos.</p>
+  </div>
+
+  <div class="callout callout-analogy">
+    <div class="callout-title">3. O que é Bounding Box (BBOX)?</div>
+    <p><strong>Definição Acadêmica:</strong> É o menor retângulo espacial alinhado aos eixos cartesianos que delimita um conjunto de geometrias ou o campo de visão atual de um viewport de exibição.</p>
+    <p><strong>Analogia para Leigos:</strong> Imagine olhar através de uma janela pequena para uma montanha. Você não vê o país inteiro, só vê o que cabe no retângulo de vidro daquela janela. O BBOX é o retângulo da janela do seu celular ou monitor. O sistema só carrega os animais que cabem naquela janela visível, economizando internet e bateria.</p>
+  </div>
+
+  <div class="page-break"></div>
+  <div class="callout callout-analogy">
+    <div class="callout-title">4. O que é Marker Clustering (Agrupamento de Marcadores)?</div>
+    <p><strong>Definição Acadêmica:</strong> Algoritmo de condensação visual que agrega marcadores geograficamente próximos em um único ponto agregador para preservar a legibilidade e evitar saturação do mecanismo de renderização do navegador.</p>
+    <p><strong>Analogia para Leigos:</strong> Quando você olha para uma floresta de dentro de um avião voando alto, você não consegue contar cada árvore ou cada macaco individualmente; você vê "um grupo de verde". Mas quando o avião pousa e você chega perto (zoom in), o grupo se desfaz e você vê cada árvore separadamente. Isso evita que o mapa vire um borrão vermelho ilegível.</p>
+  </div>
+
+  <div class="callout callout-analogy">
+    <div class="callout-title">5. O que é JWT (JSON Web Token)?</div>
+    <p><strong>Definição Acadêmica:</strong> Padrão de autenticação stateless (RFC 7519) que trafega asserções de segurança assinadas digitalmente por chave criptográfica entre cliente e servidor.</p>
+    <p><strong>Analogia para Leigos:</strong> É como uma <strong>pulseira de acesso VIP inviolável</strong> em um parque de diversões. Ao passar pela bilheteria (fazer login com senha), você recebe a pulseira. Em cada brinquedo que entrar depois, você não precisa assinar um livro ou mostrar seu documento novamente: basta exibir a pulseira para comprovar que tem permissão.</p>
+  </div>
+
+  <div class="callout callout-analogy">
+    <div class="callout-title">6. O que é Soft Delete (Exclusão Lógica)?</div>
+    <p><strong>Definição Acadêmica:</strong> Padrão de persistência em que a remoção de um registro é sinalizada por um marcador temporal (campo <code>deleted_at</code>), preservando fisicamente a linha no disco e a integridade referencial histórica.</p>
+    <p><strong>Analogia para Leigos:</strong> Em vez de rasgar uma folha de um livro e queimar no fogo (exclusão física), você coloca um carimbo vermelho escrito "arquivado" e guarda em uma pasta trancada. Para o público do mapa, o animal deixa de aparecer. Mas se um cientista precisar verificar dados históricos ou se alguém tiver clicado em excluir sem querer, a informação continua preservada no cofre do sistema.</p>
+  </div>
+</div>
+
+<!-- SEÇÃO 6 -->
+<div class="page-break"></div>
+<div class="section-container">
+  <h1>6. Guia de Estudo: 10 Perguntas e Respostas da Banca de TCC</h1>
+  <p>Revise este simulado técnico com atenção antes da apresentação. Ele cobre os questionamentos mais incisivos de arquitetura, banco e engenharia:</p>
+
+  <div class="study-card">
+    <h4>1. "Por que adotar uma arquitetura com dois servidores backend (Django e Node.js) em vez de manter uma única tecnologia?"</h4>
+    <p><span class="answer-tag">Resposta Ideal:</span> Adotamos o padrão <strong>BFF (Backend for Frontend)</strong>. O <strong>Django</strong> é a nossa plataforma corporativa de governança: ele fornece o Painel Administrativo nativo, segurança pronta contra SQL Injection, CSRF e XSS, e gestão madura de permissões de usuários. O <strong>Node.js</strong> foi inserido como duto de alta vazão para o mapa: por ter um Event Loop assíncrono, ele entrega GeoJSON com latência mínima e processa streaming Server-Sent Events (SSE) sem travar threads de processamento. Ambos os serviços acessam o mesmo banco PostgreSQL de forma coordenada.</p>
+  </div>
+
+  <div class="study-card">
+    <h4>2. "Por que usar o PostGIS em vez de armazenar Latitude e Longitude como duas colunas Float convencionais?"</h4>
+    <p><span class="answer-tag">Resposta Ideal:</span> Colunas numéricas (Float) tratam coordenadas como números planos bidimensionais e não possuem suporte a <strong>Índices Espaciais (GiST)</strong>. Para responder se um animal está dentro de uma reserva florestal irregular usando Float, o servidor precisaria carregar milhares de registros e calcular trigonometria esférica manualmente em código. Com o PostGIS, a localização é um tipo geométrico nativo (<code>Point</code>) indexado em árvore espacial (R-Tree), permitindo que o próprio banco responda a consultas espaciais como <code>ST_Intersects</code> em frações de milissegundos.</p>
+  </div>
+
+  <div class="study-card">
+    <h4>3. "Se o sistema tiver 50.000 animais cadastrados, como vocês garantem que o navegador não vai travar?"</h4>
+    <p><span class="answer-tag">Resposta Ideal:</span> Implementamos três mecanismos de contenção de sobrecarga:
+    <ul>
+      <li><strong>Bounding Box no Backend:</strong> O servidor só envia os pontos da área visível na tela mais 20% de margem, nunca os 50.000 de uma vez.</li>
+      <li><strong>Aceleração por Hardware via Canvas:</strong> O Leaflet usa <code>preferCanvas: true</code>, desenhando marcadores na GPU em vez de sobrecarregar a árvore de elementos HTML (DOM).</li>
+      <li><strong>Marker Clustering no Cliente:</strong> Em zoom afastado, os pontos próximos são unificados em bolhas quantitativas, reduzindo centenas de nós a um único elemento visual leve.</li>
+    </ul></p>
+  </div>
+
+  <div class="page-break"></div>
+  <div class="study-card">
+    <h4>4. "Como foi estruturada a segurança para evitar que usuários comuns alterem ou apaguem dados de espécies?"</h4>
+    <p><span class="answer-tag">Resposta Ideal:</span> A segurança baseia-se em <strong>Tokens JWT com Controle de Acesso Baseado em Papéis (RBAC)</strong>. Usuários comuns têm apenas permissões de leitura (Read-Only). O administrador realiza login e recebe um token assinado criptograficamente com <code>role='admin'</code>. No frontend, as opções de clique direito e importação só são exibidas se o token for válido. No backend, todos os endpoints de escrita (POST, PATCH, DELETE) interceptam a requisição e barram qualquer chamada sem a assinatura digital do token administrativo.</p>
+  </div>
+
+  <div class="study-card">
+    <h4>5. "Como o sistema resolve a ausência de coordenadas exatas de GPS nas planilhas oficiais do SALVE/ICMBio?"</h4>
+    <p><span class="answer-tag">Resposta Ideal:</span> Desenvolvemos a função <code>getDistributedCoordinate</code>. A planilha do governo frequentemente informa apenas o bioma e os estados onde a espécie habita (ex: "Mata Atlântica nos estados PR e SC"). O nosso algoritmo cruza esse registro com a malha poligonal oficial desses biomas e gera coordenadas geográficas determinísticas, plausíveis e espalhadas dentro da área natural no Sul do Brasil, impedindo que animais fiquem acumulados no oceano ou na coordenada zerada (0,0).</p>
+  </div>
+
+  <div class="study-card">
+    <h4>6. "Por que escolheram a biblioteca Leaflet.js em vez da API do Google Maps?"</h4>
+    <p><span class="answer-tag">Resposta Ideal:</span> Por três pilares fundamentais:
+    <ul>
+      <li><strong>Sustentabilidade Financeira:</strong> A API do Google Maps cobra em dólar por cada requisição acima de uma cota básica, inviabilizando projetos públicos e acadêmicos. O Leaflet é 100% livre e de código aberto.</li>
+      <li><strong>Independência de Fornecedor:</strong> Com o Leaflet podemos alternar livremente entre mapas escuros da CARTO, fotos aéreas ou OpenStreetMap.</li>
+      <li><strong>Eficiência de Código:</strong> O Leaflet possui um núcleo de apenas 38 KB e excelente compatibilidade com plugins como MarkerCluster e Canvas rendering.</li>
+    </ul></p>
+  </div>
+
+  <div class="study-card">
+    <h4>7. "Como funciona o fluxo de transmissão em tempo real durante a importação da planilha SALVE?"</h4>
+    <p><span class="answer-tag">Resposta Ideal:</span> Adotamos a tecnologia <strong>Server-Sent Events (SSE)</strong>. Diferente de uma requisição HTTP comum que faz o navegador esperar a planilha inteira terminar em silêncio, o SSE estabelece um canal contínuo unidirecional. A cada espécie lida, gravada no PostGIS e enriquecida com fotos da Wikipédia, o Node.js envia uma linha com o evento <code>progress</code> contendo a porcentagem concluída e o nome da espécie. O JavaScript no navegador escuta esse evento e anima a barra de progresso em tempo real sem travar.</p>
+  </div>
+
+  <div class="page-break"></div>
+  <div class="study-card">
+    <h4>8. "Por que adotar o Prisma ORM no Node.js se o Django já tem seu próprio ORM nativo?"</h4>
+    <p><span class="answer-tag">Resposta Ideal:</span> O Django ORM atua no ecossistema Python gerando as migrações e controlando o schema. O <strong>Prisma ORM</strong> foi adotado no Node.js por oferecer tipagem estática e segurança contra falhas de digitação em JavaScript. Em vez de escrever consultas SQL manuais para operações simples, usamos o Prisma Client com autocompletion. E para consultas espaciais avançadas com operadores do PostGIS, utilizamos o método <code>prisma.$queryRawUnsafe</code>, unindo segurança e desempenho.</p>
+  </div>
+
+  <div class="study-card">
+    <h4>9. "Como o sistema lida com a incompatibilidade de números inteiros de 64 bits (BigInt) entre o PostgreSQL e o JavaScript?"</h4>
+    <p><span class="answer-tag">Resposta Ideal:</span> Chaves primárias de bancos de dados modernos usam <code>BigInt</code> para evitar esgotamento de identificadores. No entanto, a função nativa <code>JSON.stringify()</code> do JavaScript lança um erro crítico ao tentar serializar valores BigInt para envio pela rede. Criamos uma função de serialização personalizada que inspeciona o objeto e converte automaticamente qualquer BigInt para String antes da transmissão HTTP, garantindo integridade numérica sem gerar exceções no servidor.</p>
+  </div>
+
+  <div class="study-card">
+    <h4>10. "Se um administrador apagar uma espécie sem querer, como o sistema garante que o dado não seja destruído?"</h4>
+    <p><span class="answer-tag">Resposta Ideal:</span> Aplicamos o padrão <strong>Soft Delete (Exclusão Lógica)</strong> no modelo <code>Animal</code>. O método <code>delete()</code> padrão foi sobrescrito para preencher o campo <code>deleted_at</code> com o horário atual, em vez de executar a instrução SQL destrutiva <code>DELETE</code>. O gerenciador de consultas padrão (Manager) filtra automaticamente as buscas para exibir apenas registros com <code>deleted_at</code> nulo. Assim, o registro desaparece imediatamente do mapa público, mas continua salvo no banco para auditoria ou restauração imediata via Painel Administrativo.</p>
+  </div>
+</div>
+
+<!-- SEÇÃO 7 -->
+<div class="page-break"></div>
+<div class="section-container">
+  <h1>7. Conclusão Técnica e Horizontes de Expansão</h1>
+
+  <h2>7.1 Balanço do Trabalho de Engenharia</h2>
+  <p>O desenvolvimento do <strong>TCC-MAPA-DE-ESPECIES</strong> consolidou a entrega de uma plataforma ambiental moderna, escalável e de alto impacto visual. O trabalho demonstrou que é plenamente viável transformar dados brutos e inacessíveis de órgãos de conservação em uma ferramenta visual interativa para a sociedade, ancorada em práticas de engenharia de software de padrão profissional:</p>
+  <ul>
+    <li><strong>Arquitetura Híbrida Harmoniosa:</strong> Integração estável entre Python/Django e Node.js/Express operando concorrentemente sobre o mesmo banco de dados PostgreSQL.</li>
+    <li><strong>Geoprocessamento Real com PostGIS:</strong> Superação de abordagens amadoras de coordenadas Float, adotando suporte geoespacial nativo com índices GiST e projeção geodésica SRID 4326.</li>
+    <li><strong>Automação de Ingestão e Enriquecimento:</strong> Capacidade de ler planilhas oficiais do governo (SALVE/ICMBio) e enriquecê-las instantaneamente com fotografias de licença livre da Wikipédia e coordenadas determinísticas.</li>
+    <li><strong>Desempenho Otimizado no Cliente:</strong> Renderização com aceleração por GPU via Canvas, clustering inteligente e pré-carregamento periférico por Bounding Box com buffer de 20%.</li>
+  </ul>
+
+  <h2>7.2 Horizontes de Expansão Futura do Software</h2>
+  <ol>
+    <li><strong>Camada de Cache Distribuído com Redis:</strong> Para suportar dezenas de milhares de usuários simultâneos em momentos de campanhas ecológicas, as respostas GeoJSON das cidades com maior densidade populacional (como Curitiba, Florianópolis e Porto Alegre) podem ser cacheadas em memória RAM no Redis.</li>
+    <li><strong>Sensoriamento Remoto e Satélites em Tempo Real:</strong> Sobreposição de camadas de dados de satélite (como imagens do satélite Sentinel do programa Copernicus) para exibir alertas de desmatamento recente ou focos de calor/queimadas diretamente sobre as áreas onde as espécies vivem.</li>
+    <li><strong>Aplicativo Mobile Offline com PWA:</strong> Permitir que agentes ambientais e biólogos realizem coletas de campo dentro de florestas sem sinal de internet, sincronizando os dados com o servidor central assim que o dispositivo recuperar conexão 4G/Wi-Fi.</li>
+  </ol>
+
+  <div class="callout callout-question" style="margin-top: 25px;">
+    <div class="callout-title">🎯 Dica Final para a Apresentação na Banca</div>
+    Mantenha a tranquilidade e fale com firmeza: destaque que <strong>a engenharia de software foi utilizada como um instrumento prático de cidadania e preservação da fauna brasileira</strong>. Enfatize que a arquitetura híbrida e a escolha do PostGIS foram decisões conscientes e fundamentadas para garantir que o sistema não seja apenas um protótipo visual, mas uma plataforma robusta pronta para produção. Muito sucesso na apresentação!
+  </div>
+</div>
+
+</body>
+</html>

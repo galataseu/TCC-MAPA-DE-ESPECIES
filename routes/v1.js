@@ -492,4 +492,79 @@ router.delete('/zonas-preservacao/:id/', async (req, res) => {
   }
 });
 
+// POST /api/v1/animais/import-salve (Importação de Planilha do SALVE)
+const { importSalveCSV } = require('../services/salveImporter');
+const uploadCSV = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }
+});
+
+router.post('/animais/import-salve', uploadCSV.single('csv_file'), async (req, res) => {
+  const isStream = req.query.stream === 'true' || req.headers['x-stream'] === 'true' || req.headers.accept?.includes('text/event-stream');
+
+  if (isStream) {
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (res.flushHeaders) res.flushHeaders();
+  }
+
+  const sendEvent = (event, data) => {
+    if (isStream) {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      if (typeof res.flush === 'function') res.flush();
+    }
+  };
+
+  try {
+    let csvContent = '';
+    if (req.file && req.file.buffer) {
+      csvContent = req.file.buffer.toString('utf-8');
+      if (csvContent.includes('\uFFFD')) {
+        csvContent = req.file.buffer.toString('latin1');
+      }
+    } else if (req.body && req.body.csv_text) {
+      csvContent = req.body.csv_text;
+    } else {
+      if (isStream) {
+        sendEvent('error', { success: false, message: 'Nenhum arquivo CSV ou texto foi enviado para importação.' });
+        return res.end();
+      }
+      return res.status(400).json({ success: false, message: 'Nenhum arquivo CSV ou texto foi enviado para importação.' });
+    }
+
+    const autoImages = req.body.auto_images !== 'false' && req.body.auto_images !== false;
+    const maxRows = parseInt(req.body.max_rows) || 5000;
+
+    const result = await importSalveCSV(csvContent, { autoImages, maxRows }, (progress) => {
+      sendEvent('progress', progress);
+    });
+
+    const successMessage = `Importação concluída com sucesso! ${result.inserted} adicionados, ${result.updated} atualizados.`;
+
+    if (isStream) {
+      sendEvent('done', {
+        success: true,
+        message: successMessage,
+        data: result
+      });
+      return res.end();
+    }
+
+    res.json({
+      success: true,
+      message: successMessage,
+      data: result
+    });
+  } catch (err) {
+    console.error('Erro na importação SALVE:', err);
+    if (isStream) {
+      sendEvent('error', { success: false, error: err.message, message: `Erro ao importar planilha: ${err.message}` });
+      return res.end();
+    }
+    res.status(500).json({ success: false, error: err.message, message: `Erro ao importar planilha: ${err.message}` });
+  }
+});
+
 module.exports = router;

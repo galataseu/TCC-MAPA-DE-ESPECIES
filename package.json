@@ -13,7 +13,10 @@
     "prisma:studio": "npx prisma studio",
     "prisma:pull": "npx prisma db pull",
     "prisma:generate": "npx prisma generate",
-    "prisma:seed": "npx prisma db seed"
+    "prisma:seed": "npx prisma db seed",
+    "fix:coords": "node scripts/fix_marker_coords.js",
+    "fix:coords:dry": "node scripts/fix_marker_coords.js --dry-run",
+    "enrich:images": "node scripts/enrich_images.js"
   },
   "overrides": {
     "shell-quote": "1.8.4"

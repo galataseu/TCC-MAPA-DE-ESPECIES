@@ -3,10 +3,42 @@ const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-/* GET markers listing as GeoJSON. */
+/**
+ * GET /api/markers
+ * Retorna marcadores como GeoJSON. Suporta filtro por bbox e zoom.
+ * 
+ * Query params:
+ *   bbox   — "minLng,minLat,maxLng,maxLat"  (opcional — sem bbox retorna todos)
+ *   zoom   — número inteiro                  (opcional — para filtros futuros)
+ *   limit  — máximo de registros             (padrão: 2000)
+ *   offset — paginação                       (padrão: 0)
+ */
 router.get('/', async (req, res) => {
   try {
-    // Fetch markers with animal info using raw query to get GeoJSON from PostGIS
+    const limit  = Math.min(parseInt(req.query.limit  || '2000', 10), 5000);
+    const offset = parseInt(req.query.offset || '0', 10);
+
+    // Filtro de bounding box (PostGIS ST_Within ou ST_Intersects)
+    let bboxClause = '';
+    const bboxParam = req.query.bbox;
+    if (bboxParam) {
+      const parts = bboxParam.split(',').map(Number);
+      if (parts.length === 4 && parts.every(n => !isNaN(n))) {
+        const [minLng, minLat, maxLng, maxLat] = parts;
+        // Expande 20% para pré-carregar marcadores além da borda
+        const padLat = (maxLat - minLat) * 0.2;
+        const padLng = (maxLng - minLng) * 0.2;
+        bboxClause = `AND ST_Intersects(
+          m.location,
+          ST_MakeEnvelope(
+            ${minLng - padLng}, ${minLat - padLat},
+            ${maxLng + padLng}, ${maxLat + padLat},
+            4326
+          )
+        )`;
+      }
+    }
+
     const markers = await prisma.$queryRawUnsafe(`
       SELECT 
         m.id,
@@ -40,97 +72,100 @@ router.get('/', async (req, res) => {
       JOIN api_animal a ON m.animal_id = a.id
       JOIN api_nivelextincao n ON a.nivel_extincao_id = n.id
       WHERE a.deleted_at IS NULL
+      ${bboxClause}
+      ORDER BY m.id ASC
+      LIMIT ${limit} OFFSET ${offset}
     `);
 
-    const featureCollection = {
-      type: 'FeatureCollection',
-      features: markers.map(m => {
-        let geometry = {};
+    const features = markers.map(m => {
+      let geometry = {};
+      try {
+        geometry = JSON.parse(m.geometry_str);
+      } catch (e) {
+        console.error("Error parsing geometry:", e);
+      }
+
+      let imagensList = [];
+      if (m.imagens_relacionadas && Array.isArray(m.imagens_relacionadas)) {
+        imagensList = m.imagens_relacionadas.map(img => {
+          let u = img.imagem ? img.imagem.trim() : '';
+          if (u && !u.startsWith('http') && !u.startsWith('/') && !u.startsWith('data:')) {
+            u = `/media/${u}`;
+          }
+          return {
+            id: img.id,
+            imagem: u || '/assets/img/logotipo.png',
+            legenda: img.legenda || m.nome_comum,
+            ordem: img.ordem || 1
+          };
+        });
+      }
+
+      let imgUrl = imagensList.length > 0 ? imagensList[0].imagem : '/assets/img/logotipo.png';
+      if (imagensList.length === 0) {
+        imagensList = [{ id: 1, imagem: imgUrl, legenda: m.nome_comum, ordem: 1 }];
+      } else {
+        // Limita a até 3 imagens por animal
+        imagensList = imagensList.slice(0, 3);
+      }
+
+      // Ícone do animal para o marcador: prioriza icone do banco se for foto real, senão primeira foto do animal
+      let iconUrl = (m.icone && typeof m.icone === 'string' && m.icone.trim().length > 0 && !m.icone.includes('logotipo.png'))
+        ? m.icone.trim()
+        : imgUrl;
+      if (iconUrl && !iconUrl.startsWith('http') && !iconUrl.startsWith('/') && !iconUrl.startsWith('data:')) {
+        iconUrl = `/media/${iconUrl}`;
+      }
+
+      // Extrai polígono de área (armazenado em obs com delimitador [[POLYGON_DATA]])
+      let areaPolygon = null;
+      let areaPolygonColor = "#FFAA44";
+      let cleanObs = m.obs;
+      if (m.obs && typeof m.obs === 'string' && m.obs.includes('[[POLYGON_DATA]]')) {
+        const parts = m.obs.split('[[POLYGON_DATA]]');
+        cleanObs = parts[0].trim();
         try {
-          geometry = JSON.parse(m.geometry_str);
+          const parsed = JSON.parse(parts[1].trim());
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.polygons) {
+            areaPolygon = parsed.polygons;
+            areaPolygonColor = parsed.color || "#FFAA44";
+          } else if (Array.isArray(parsed) && parsed.length > 0) {
+            areaPolygon = (Array.isArray(parsed[0]) && Array.isArray(parsed[0][0])) ? parsed : [parsed];
+          }
         } catch (e) {
-          console.error("Error parsing geometry:", e);
+          console.error("Error parsing areaPolygon:", e);
         }
+      }
 
-        let imagensList = [];
-        if (m.imagens_relacionadas && Array.isArray(m.imagens_relacionadas)) {
-          imagensList = m.imagens_relacionadas.map(img => {
-            let u = img.imagem ? img.imagem.trim() : '';
-            if (u && !u.startsWith('http') && !u.startsWith('/') && !u.startsWith('data:')) {
-              u = `/media/${u}`;
-            }
-            return {
-              id: img.id,
-              imagem: u || '/assets/img/logotipo.png',
-              legenda: img.legenda || m.nome_comum,
-              ordem: img.ordem || 1
-            };
-          });
+      return {
+        type: 'Feature',
+        geometry,
+        properties: {
+          id: m.id.toString(),
+          animal_id: m.animal_id.toString(),
+          nome_comum: m.nome_comum,
+          nome_cientifico: m.nome_cientifico,
+          classe: m.classe,
+          familia: m.familia,
+          dieta: m.dieta,
+          habitos: m.habitos,
+          altura: m.altura,
+          peso: m.peso,
+          obs: cleanObs,
+          area_polygon: areaPolygon,
+          area_polygon_color: areaPolygonColor,
+          nivel_extincao_id: m.nivel_extincao_id ? m.nivel_extincao_id.toString() : null,
+          nivel_extincao: m.nivel_extincao,
+          nivel_sigla: m.nivel_sigla,
+          icone: iconUrl,
+          imagem: imgUrl,
+          biomas: m.biomas || [],
+          imagens: imagensList
         }
+      };
+    });
 
-        let imgUrl = imagensList.length > 0 ? imagensList[0].imagem : '/assets/img/logotipo.png';
-        if (imagensList.length === 0) {
-          imagensList = [{ id: 1, imagem: imgUrl, legenda: m.nome_comum, ordem: 1 }];
-        }
-
-        let iconUrl = m.icone && typeof m.icone === 'string' && m.icone.trim().length > 0 ? m.icone.trim() : imgUrl;
-        if (iconUrl && !iconUrl.startsWith('http') && !iconUrl.startsWith('/') && !iconUrl.startsWith('data:')) {
-          iconUrl = `/media/${iconUrl}`;
-        }
-
-        let areaPolygon = null;
-        let areaPolygonColor = "#FFAA44";
-        let cleanObs = m.obs;
-        if (m.obs && typeof m.obs === 'string' && m.obs.includes('[[POLYGON_DATA]]')) {
-          const parts = m.obs.split('[[POLYGON_DATA]]');
-          cleanObs = parts[0].trim();
-          try {
-            const parsed = JSON.parse(parts[1].trim());
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.polygons) {
-              areaPolygon = parsed.polygons;
-              areaPolygonColor = parsed.color || "#FFAA44";
-            } else if (Array.isArray(parsed) && parsed.length > 0) {
-              if (Array.isArray(parsed[0]) && Array.isArray(parsed[0][0])) {
-                areaPolygon = parsed;
-              } else {
-                areaPolygon = [parsed];
-              }
-            }
-          } catch (e) {
-            console.error("Error parsing areaPolygon:", e);
-          }
-        }
-
-        return {
-          type: 'Feature',
-          geometry: geometry,
-          properties: {
-            id: m.id.toString(),
-            animal_id: m.animal_id.toString(),
-            nome_comum: m.nome_comum,
-            nome_cientifico: m.nome_cientifico,
-            classe: m.classe,
-            familia: m.familia,
-            dieta: m.dieta,
-            habitos: m.habitos,
-            altura: m.altura,
-            peso: m.peso,
-            obs: cleanObs,
-            area_polygon: areaPolygon,
-            area_polygon_color: areaPolygonColor,
-            nivel_extincao_id: m.nivel_extincao_id ? m.nivel_extincao_id.toString() : null,
-            nivel_extincao: m.nivel_extincao,
-            nivel_sigla: m.nivel_sigla,
-            icone: iconUrl,
-            imagem: imgUrl,
-            biomas: m.biomas || [],
-            imagens: imagensList
-          }
-        };
-      })
-    };
-
-    res.json(featureCollection);
+    res.json({ type: 'FeatureCollection', features });
   } catch (error) {
     console.error('Erro ao buscar marcadores:', error);
     res.status(500).json({ error: 'Erro ao buscar marcadores' });

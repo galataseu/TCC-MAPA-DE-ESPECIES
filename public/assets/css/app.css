@@ -384,6 +384,16 @@ html, body, #main-layout {
 }
 
 /* Modais */
+.modal {
+  --bs-modal-zindex: 3600 !important;
+  z-index: 3600 !important;
+}
+
+.modal-backdrop {
+  --bs-backdrop-zindex: 3550 !important;
+  z-index: 3550 !important;
+}
+
 .modal-content {
   background-color: #2B2A33;
   color: #eee;
@@ -1500,6 +1510,60 @@ html, body, #main-layout {
   transform: scale(1.1) translateX(-30px);
 }
 
+/* Indicadores de Múltiplas Imagens no Slideshow do Card (1 a 3 fotos) */
+.card-slideshow-dots {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  z-index: 5;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 3px 8px;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+}
+
+.card-slide-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  display: inline-block;
+}
+
+.card-slide-dot.active {
+  width: 16px;
+  border-radius: 4px;
+  background: #FFFFFF;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.85);
+}
+
+/* Indicador e Miniaturas no Modal de Detalhes */
+.modal-carousel-indicators {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 10;
+}
+
+.modal-thumb-dot {
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 14px;
+  padding: 2px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
 /* Conteúdo da Metade Inferior do Card (Altura = 135px) */
 .species-card-body {
   width: 100%;
@@ -1733,3 +1797,51 @@ html, body, #main-layout {
 
 
 
+
+/* =========================================================================
+   Leaflet Marker Cluster - Estilo customizado
+   ========================================================================= */
+.marker-cluster {
+  background: transparent !important;
+}
+
+.cluster-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 800;
+  font-family: 'Inter', sans-serif;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.45);
+  border: 3px solid rgba(255,255,255,0.25);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cluster-inner:hover {
+  transform: scale(1.12);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+}
+
+.cluster-inner.small {
+  width: 36px;
+  height: 36px;
+  font-size: 13px;
+  background: linear-gradient(135deg, #1E7552, #287f5e);
+  color: #fff;
+}
+
+.cluster-inner.medium {
+  width: 44px;
+  height: 44px;
+  font-size: 14px;
+  background: linear-gradient(135deg, #e67c13, #f09900);
+  color: #fff;
+}
+
+.cluster-inner.large {
+  width: 52px;
+  height: 52px;
+  font-size: 16px;
+  background: linear-gradient(135deg, #c0392b, #e74c3c);
+  color: #fff;
+}

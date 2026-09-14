@@ -5,7 +5,11 @@ block content
     .species-split-layout
       //- PAINEL ESQUERDO: FORMULÁRIO CADASTRAR ANIMAIS (RESTRITO A ADMINISTRADORES)
       #admin-species-form-panel.species-form-panel.d-none
-        h2.species-title CADASTRAR ANIMAIS
+        .d-flex.align-items-center.justify-content-between.mb-3
+          h2.species-title.mb-0 CADASTRAR ANIMAIS
+          button#btn-open-salve-modal.btn.btn-sm.btn-outline-warning.rounded-pill.px-3.fw-bold(type="button", data-bs-toggle="modal", data-bs-target="#modalImportSalve", title="Importar planilha de espécies do SALVE (ICMBio)")
+            i.fa-solid.fa-file-csv.me-1
+            span Importar SALVE
 
         form#form-species-create(action="/api/v1/animais/", method="POST", enctype="multipart/form-data")
           input#animal-id-hidden(type="hidden", name="animal_id")
@@ -173,17 +177,87 @@ block content
           .flex-grow-1(style="min-height: 0;")
             #right-panel-map-container
 
-    //- Modal de Detalhes da Espécie (Card Completo)
-    #animalModal.modal.fade(tabindex="-1", aria-hidden="true")
-      .modal-dialog.modal-xl.modal-dialog-centered
-        .modal-content.border-0.shadow-lg(style="background-color: #23222B;")
-          .modal-header.border-bottom.border-secondary
-            h5#modalAnimalName.modal-title.fw-bold
-            button.btn-close.btn-close-white(type="button", data-bs-dismiss="modal", aria-label="Close")
-          #modalBody.modal-body.p-0
-          .modal-footer.border-top.border-secondary.d-flex.justify-content-between
-            #modalAdminBtns.d-flex.gap-2
-            button.btn.btn-secondary(type="button", data-bs-dismiss="modal") Fechar
+  //- Modal de Detalhes da Espécie (Card Completo)
+  #animalModal.modal.fade(tabindex="-1", aria-hidden="true")
+    .modal-dialog.modal-xl.modal-dialog-centered
+      .modal-content.border-0.shadow-lg(style="background-color: #23222B;")
+        .modal-header.border-bottom.border-secondary
+          h5#modalAnimalName.modal-title.fw-bold
+          button.btn-close.btn-close-white(type="button", data-bs-dismiss="modal", aria-label="Close")
+        #modalBody.modal-body.p-0
+        .modal-footer.border-top.border-secondary.d-flex.justify-content-between
+          #modalAdminBtns.d-flex.gap-2
+          button.btn.btn-secondary(type="button", data-bs-dismiss="modal") Fechar
+
+  //- Modal de Importação de Planilha SALVE (ICMBio)
+  #modalImportSalve.modal.fade(tabindex="-1", aria-hidden="true")
+    .modal-dialog.modal-lg.modal-dialog-centered
+      .modal-content.border-0.shadow-lg(style="background-color: #23222B; color: #E0E0E0;")
+        .modal-header.border-bottom.border-secondary
+          .d-flex.align-items-center.gap-2
+            i.fa-solid.fa-cloud-arrow-up.fs-4.text-warning
+            h5.modal-title.fw-bold Importar Espécies do SALVE (ICMBio)
+          button.btn-close.btn-close-white(type="button", data-bs-dismiss="modal", aria-label="Close")
+        .modal-body.p-4
+          p.text-light.small.mb-3
+            | Selecione ou arraste a 
+            strong Planilha de Espécies (.csv)
+            |  exportada do site oficial do 
+            strong SALVE (ICMBio)
+            |. As espécies do Sul do Brasil terão suas categorias de extinção, biomas, polígonos de ocorrência (Pampa/Mata Atlântica) e fotos atribuídos automaticamente.
+
+          //- Área de Drag and Drop
+          #salve-drop-zone.border.border-2.border-dashed.rounded-4.p-4.text-center.mb-3(style="background: #191820; border-color: #555465 !important; cursor: pointer; transition: all 0.2s ease;")
+            i.fa-solid.fa-file-csv.fs-1.mb-2.d-block(style="color: #FFAA44;")
+            h6.fw-bold.mb-1 Arraste o arquivo CSV aqui ou clique para selecionar
+            p.text-muted.small.mb-0 Suporta CSV exportado do SALVE (delimitado por ';' ou ',')
+            input#salve-file-input.d-none(type="file", accept=".csv,text/csv")
+
+          //- Opções de Importação
+          .row.g-3.mb-3
+            .col-md-7
+              .form-check.form-switch
+                input#check-auto-images.form-check-input(type="checkbox", checked)
+                label.form-check-label.small.text-light(for="check-auto-images")
+                  | Buscar fotos automaticamente na Wikipédia / Wikimedia (acesso aberto)
+            .col-md-5
+              .d-flex.align-items-center.gap-2
+                label.small.text-nowrap.text-light Limite:
+                select#select-max-rows.form-select.form-select-sm.dark-pill-select(style="background: #191820; color: #FFF; border-color: #444;")
+                  option(value="50") 50 espécies (Rápido)
+                  option(value="200") 200 espécies
+                  option(value="1000") 1.000 espécies
+                  option(value="5000", selected) Todas do arquivo
+
+          //- Prévia do Arquivo Selecionado
+          #salve-preview-container.d-none.p-3.rounded-3.mb-3(style="background: #121118; border: 1px solid #333240;")
+            .d-flex.align-items-center.justify-content-between.mb-2
+              span.badge.bg-success#salve-file-badge Arquivo Carregado
+              span#salve-file-info.small.text-muted
+            .table-responsive.small(style="max-height: 120px; scrollbar-width: thin;")
+              table#salve-preview-table.table.table-dark.table-sm.table-bordered.mb-0(style="font-size: 11px;")
+                thead#salve-preview-thead
+                tbody#salve-preview-tbody
+
+          //- Barra de Progresso com Porcentagem
+          #salve-progress-container.d-none.mb-3
+            .d-flex.justify-content-between.align-items-center.mb-1
+              span#salve-progress-status.small.text-warning.text-truncate(style="max-width: 80%;")
+                i.fa-solid.fa-spinner.fa-spin.me-1
+                | Processando espécies e associando biomas...
+              span#salve-progress-percent.small.fw-bold.text-warning 0%
+            .progress(style="height: 18px; background: #191820; border-radius: 9px; border: 1px solid #333240;")
+              #salve-progress-bar.progress-bar.progress-bar-striped.progress-bar-animated.bg-warning.text-dark.fw-bold(role="progressbar", style="width: 0%; font-size: 11px; transition: width 0.2s ease;", aria-valuenow="0", aria-valuemin="0", aria-valuemax="100") 0%
+
+          //- Relatório de Resultado
+          #salve-result-container.d-none.p-3.rounded-3.mb-3
+            //- Preenchido via JavaScript
+
+        .modal-footer.border-top.border-secondary.d-flex.justify-content-between
+          button.btn.btn-outline-secondary.rounded-pill.px-4(type="button", data-bs-dismiss="modal") Fechar
+          button#btn-execute-import-salve.btn.btn-warning.fw-bold.rounded-pill.px-4(type="button", disabled)
+            i.fa-solid.fa-play.me-1
+            | Iniciar Importação
 
 block scripts
   script(src="/assets/js/animais.js")

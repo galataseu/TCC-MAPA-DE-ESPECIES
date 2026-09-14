@@ -550,74 +550,113 @@ $(document).ready(function () {
   });
 
   // =========================================================================
-  // 5. MARCADORES PERSONALIZADOS & EXIBIÇÃO GARANTIDA DE TODOS OS ANIMAIS NA TELA
+  // 5. MARCADORES COM CLUSTERING — suporta milhares de animais sem travar
   // =========================================================================
-  let rawMarkersGeoJson = null;
 
-  var markersLayer = L.geoJson(null, {
-    pointToLayer: function (feature, latlng) {
-      const p = feature.properties;
-      const statusSigla = p.nivel_sigla ? p.nivel_sigla.toLowerCase() : 'dd';
-      const borderColor = extinctionColorMap[statusSigla] || '#1a5fb4';
-      const iconUrl = p.icone || (p.imagens && p.imagens.length > 0 ? p.imagens[0].imagem : '/assets/img/logotipo.png');
+  /**
+   * Cache de features por bbox (chave = string arredondada).
+   * Evita re-requisitar a mesma área ao pan/zoom.
+   */
+  const _markerCache = new Map(); // chave → Set de animal_ids já carregados
+  const _allFeatures  = new Map(); // animal_id → feature (deduplica)
+  let _loadingMarkers = false;
+  let rawMarkersGeoJson = { type: 'FeatureCollection', features: [] };
 
-      return L.marker(latlng, {
-        icon: L.divIcon({
-          className: 'custom-animal-marker',
-          html: `
-            <div class="marker-container">
-              <div class="marker-pin" style="border-color: ${borderColor};">
-                <div class="marker-avatar">
-                  <img src="${iconUrl}" alt="${p.nome_comum}">
-                </div>
-                <span class="marker-name-label">${p.nome_comum}</span>
-              </div>
+  /**
+   * Cria o ícone customizado de marcador.
+   */
+  function createAnimalIcon(p) {
+    const statusSigla = p.nivel_sigla ? p.nivel_sigla.toLowerCase() : 'dd';
+    const borderColor = extinctionColorMap[statusSigla] || '#1a5fb4';
+    let iconUrl = '/assets/img/logotipo.png';
+    if (p.icone && typeof p.icone === 'string' && !p.icone.includes('logotipo.png')) {
+      iconUrl = p.icone;
+    } else if (p.imagens && Array.isArray(p.imagens) && p.imagens.length > 0) {
+      const firstImg = p.imagens[0];
+      const u = typeof firstImg === 'string' ? firstImg : (firstImg && firstImg.imagem ? firstImg.imagem : '');
+      if (u && !u.includes('logotipo.png')) iconUrl = u;
+    } else if (p.imagem && typeof p.imagem === 'string' && !p.imagem.includes('logotipo.png')) {
+      iconUrl = p.imagem;
+    }
+    if (iconUrl && !iconUrl.startsWith('http') && !iconUrl.startsWith('/') && !iconUrl.startsWith('data:')) {
+      iconUrl = `/media/${iconUrl}`;
+    }
+    return L.divIcon({
+      className: 'custom-animal-marker',
+      html: `
+        <div class="marker-container">
+          <div class="marker-pin" style="border-color: ${borderColor};">
+            <div class="marker-avatar">
+              <img src="${iconUrl}" alt="${p.nome_comum || ''}" loading="lazy">
             </div>
-          `,
-          iconSize: [36, 36],
-          iconAnchor: [18, 36]
-        })
+            <span class="marker-name-label">${p.nome_comum || ''}</span>
+          </div>
+        </div>
+      `,
+      iconSize: [36, 36],
+      iconAnchor: [18, 36]
+    });
+  }
+
+  /**
+   * Cria um marcador Leaflet a partir de uma feature GeoJSON.
+   */
+  function createMarkerFromFeature(feature) {
+    const coords = feature.geometry && feature.geometry.coordinates;
+    if (!coords) return null;
+    const latlng = L.latLng(coords[1], coords[0]);
+    const p = feature.properties;
+    const marker = L.marker(latlng, { icon: createAnimalIcon(p) });
+
+    marker.on('click', function () {
+      showDetails(p.animal_id);
+    });
+
+    marker.on('contextmenu', function (e) {
+      if (!isAdminModeActive()) return;
+      L.DomEvent.stopPropagation(e);
+      const containerPoint = map.latLngToContainerPoint(e.latlng);
+      const menu = $("#admin-context-menu");
+      menu.html(`
+        <div class="admin-menu-item" id="menu-edit-entity">
+          <i class="fa-solid fa-pen-to-square text-warning me-2"></i>
+          <span>Editar ${p.nome_comum || 'Entidade'}</span>
+        </div>
+        <div class="admin-menu-item text-danger" id="menu-delete-entity">
+          <i class="fa-solid fa-trash me-2"></i>
+          <span>Excluir ${p.nome_comum || 'Entidade'}</span>
+        </div>
+      `);
+      menu.css({ left: containerPoint.x + 'px', top: containerPoint.y + 'px' }).removeClass('d-none');
+      $('#menu-edit-entity').off('click').on('click', function () {
+        menu.addClass('d-none');
+        openAdminDrawerForEdit(feature);
       });
-    },
-    onEachFeature: function (feature, layer) {
-      const props = feature.properties;
-      layer.on('click', function() {
-        showDetails(props.animal_id);
+      $('#menu-delete-entity').off('click').on('click', function () {
+        menu.addClass('d-none');
+        deleteEntityWithConfirmation(feature);
       });
+    });
 
-      // Clique direito no marcador para editar no Modo Administrador
-      layer.on('contextmenu', function(e) {
-        if (isAdminModeActive()) {
-          L.DomEvent.stopPropagation(e);
-          var containerPoint = map.latLngToContainerPoint(e.latlng);
-          var menu = $("#admin-context-menu");
-          
-          menu.html(`
-            <div class="admin-menu-item" id="menu-edit-entity">
-              <i class="fa-solid fa-pen-to-square text-warning me-2"></i>
-              <span>Editar ${props.nome_comum || 'Entidade'}</span>
-            </div>
-            <div class="admin-menu-item text-danger" id="menu-delete-entity">
-              <i class="fa-solid fa-trash me-2"></i>
-              <span>Excluir ${props.nome_comum || 'Entidade'}</span>
-            </div>
-          `);
+    return marker;
+  }
 
-          menu.css({
-            left: containerPoint.x + "px",
-            top: containerPoint.y + "px"
-          }).removeClass("d-none");
-
-          $("#menu-edit-entity").off("click").on("click", function() {
-            menu.addClass("d-none");
-            openAdminDrawerForEdit(feature);
-          });
-
-          $("#menu-delete-entity").off("click").on("click", function() {
-            menu.addClass("d-none");
-            deleteEntityWithConfirmation(feature);
-          });
-        }
+  /**
+   * Cluster group principal — agrupa marcadores próximos automaticamente.
+   */
+  var markersCluster = L.markerClusterGroup({
+    chunkedLoading: true,       // carrega em chunks sem bloquear a UI
+    chunkInterval: 100,         // ms entre chunks
+    chunkDelay: 50,
+    maxClusterRadius: 60,       // raio de agrupamento em pixels
+    showCoverageOnHover: false,
+    iconCreateFunction: function (cluster) {
+      const count = cluster.getChildCount();
+      let cls = count < 10 ? 'small' : count < 50 ? 'medium' : 'large';
+      return L.divIcon({
+        html: `<div class="cluster-inner cluster-${cls}"><span>${count}</span></div>`,
+        className: 'marker-cluster',
+        iconSize: L.point(40, 40)
       });
     }
   }).addTo(map);
@@ -886,124 +925,122 @@ $(document).ready(function () {
     return null;
   }
 
-  function renderBiomeViewportMarkers() {
-    if (!rawMarkersGeoJson || !rawMarkersGeoJson.features) return;
+  /**
+   * Converte bbox em chave de cache (arredondada a 1 decimal para maior hit rate).
+   */
+  function _bboxKey(b) {
+    return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
+      .map(n => Math.round(n * 10) / 10).join(',');
+  }
 
-    markersLayer.clearLayers();
-    const zoom = map.getZoom();
-
-    // 1. Zoom Out (zoom < 9): Exibir exatamente no GeoJSON original
-    if (zoom < 9) {
-      markersLayer.addData(rawMarkersGeoJson);
-      return;
-    }
-
-    // 2. Zoom Alto (zoom >= 9): Calcular distribuição na tela
+  /**
+   * Carrega marcadores da API para o viewport atual.
+   * Usa cache para evitar re-requests da mesma área.
+   */
+  function loadMarkersForViewport() {
+    if (_loadingMarkers) return;
     const bounds = map.getBounds();
-    const south = Math.max(SUL_BOUNDS.minLat, bounds.getSouth());
-    const north = Math.min(SUL_BOUNDS.maxLat, bounds.getNorth());
-    const west = Math.max(SUL_BOUNDS.minLng, bounds.getWest());
-    const east = Math.min(SUL_BOUNDS.maxLng, bounds.getEast());
+    const key = _bboxKey(bounds);
 
-    if (south >= north || west >= east) {
-      markersLayer.addData(rawMarkersGeoJson);
-      return;
-    }
+    if (_markerCache.has(key)) return; // já carregado
+    _loadingMarkers = true;
+    _markerCache.set(key, true);
 
-    const padLat = (north - south) * 0.10;
-    const padLng = (east - west) * 0.10;
+    const bbox = [
+      bounds.getWest().toFixed(4),
+      bounds.getSouth().toFixed(4),
+      bounds.getEast().toFixed(4),
+      bounds.getNorth().toFixed(4)
+    ].join(',');
 
-    const minLat = south + padLat;
-    const maxLat = north - padLat;
-    const minLng = west + padLng;
-    const maxLng = east - padLng;
+    $.getJSON(`/api/markers?bbox=${bbox}`, function (data) {
+      const newMarkers = [];
+      (data.features || []).forEach(feature => {
+        const id = feature.properties.animal_id;
+        if (_allFeatures.has(id)) return; // já existe no mapa
+        _allFeatures.set(id, feature);
 
-    const animalGroups = {};
-    rawMarkersGeoJson.features.forEach(feature => {
-      if (!feature.geometry || !feature.geometry.coordinates) return;
-      const animalId = feature.properties.animal_id || feature.properties.id;
-      if (!animalGroups[animalId]) {
-        animalGroups[animalId] = [];
-      }
-      animalGroups[animalId].push(feature);
-    });
-
-    const activeAnimalIds = Object.keys(animalGroups);
-    const totalActive = activeAnimalIds.length;
-
-    if (totalActive === 0) return;
-
-    const aspect = Math.max(0.5, (maxLng - minLng) / Math.max(0.001, (maxLat - minLat)));
-    let cols = Math.ceil(Math.sqrt(totalActive * aspect));
-    let rows = Math.ceil(totalActive / cols);
-    cols = Math.max(1, cols);
-    rows = Math.max(1, rows);
-
-    const cellWidth = (maxLng - minLng) / cols;
-    const cellHeight = (maxLat - minLat) / rows;
-
-    const displayFeatures = [];
-
-    activeAnimalIds.forEach((animalIdStr, idx) => {
-      const group = animalGroups[animalIdStr];
-      const primaryFeature = group[0];
-      const p = primaryFeature.properties;
-      const animalId = parseInt(animalIdStr) || (idx + 1);
-
-      const colIdx = idx % cols;
-      const rowIdx = Math.floor(idx / cols);
-
-      const hashLat = (((animalId * 2654435761) % 1000) / 1000 - 0.5) * cellHeight * 0.35;
-      const hashLng = (((animalId * 1597334677) % 1000) / 1000 - 0.5) * cellWidth * 0.35;
-
-      const candidateLat = minLat + (rowIdx + 0.5) * cellHeight + hashLat;
-      const candidateLng = minLng + (colIdx + 0.5) * cellWidth + hashLng;
-
-      const pos = findValidPointForAnimal(
-        p, minLat, maxLat, minLng, maxLng, candidateLat, candidateLng
-      );
-
-      // Exibir o marcador APENAS se a área do animal estiver visível na tela
-      if (pos) {
-        displayFeatures.push({
-          type: 'Feature',
-          geometry: {
-            type: 'Point',
-            coordinates: [pos[1], pos[0]]
-          },
-          properties: p
-        });
-      }
-    });
-
-    markersLayer.addData({
-      type: 'FeatureCollection',
-      features: displayFeatures
-    });
-  }
-
-  function loadMarkers() {
-    $.getJSON("/api/markers", function (data) {
-      rawMarkersGeoJson = data;
-      markersData = data.features.map(f => {
-        const p = f.properties;
-        if (f.geometry && f.geometry.coordinates) {
-          p.lng = f.geometry.coordinates[0];
-          p.lat = f.geometry.coordinates[1];
+        // Atualiza markersData para pesquisa
+        const p = feature.properties;
+        if (feature.geometry && feature.geometry.coordinates) {
+          p.lng = feature.geometry.coordinates[0];
+          p.lat = feature.geometry.coordinates[1];
         }
-        return p;
+        markersData.push(p);
+
+        const marker = createMarkerFromFeature(feature);
+        if (marker) newMarkers.push(marker);
       });
-      renderBiomeViewportMarkers();
+
+      if (newMarkers.length > 0) {
+        markersCluster.addLayers(newMarkers); // batch add — muito mais rápido
+      }
+
+      // Atualiza rawMarkersGeoJson para renderDebugPolygons
+      rawMarkersGeoJson = {
+        type: 'FeatureCollection',
+        features: Array.from(_allFeatures.values())
+      };
       renderDebugPolygons();
+    }).always(function () {
+      _loadingMarkers = false;
     });
   }
 
-  let renderDebounceTimer = null;
-  map.on('moveend zoomend viewreset', function() {
-    if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
-    renderDebounceTimer = setTimeout(function() {
-      renderBiomeViewportMarkers();
-    }, 50);
+  /**
+   * Carregamento inicial: busca todos os marcadores de uma vez (sem bbox)
+   * para preencher o mapa rapidamente ao abrir.
+   */
+  function loadMarkers() {
+    _loadingMarkers = true;
+    $.getJSON('/api/markers', function (data) {
+      const markers = [];
+      (data.features || []).forEach(feature => {
+        const id = feature.properties.animal_id;
+        if (_allFeatures.has(id)) return;
+        _allFeatures.set(id, feature);
+
+        const p = feature.properties;
+        if (feature.geometry && feature.geometry.coordinates) {
+          p.lng = feature.geometry.coordinates[0];
+          p.lat = feature.geometry.coordinates[1];
+        }
+        markersData.push(p);
+
+        const marker = createMarkerFromFeature(feature);
+        if (marker) markers.push(marker);
+      });
+
+      markersCluster.addLayers(markers);
+      rawMarkersGeoJson = {
+        type: 'FeatureCollection',
+        features: Array.from(_allFeatures.values())
+      };
+      renderDebugPolygons();
+    }).always(function () {
+      _loadingMarkers = false;
+      // Marca bbox inicial como carregado para não re-buscar
+      _markerCache.set(_bboxKey(map.getBounds()), true);
+    });
+  }
+
+  /**
+   * Recarrega todos os marcadores do zero (limpa cache).
+   * Usar após criar, editar ou excluir um animal.
+   */
+  function reloadMarkers() {
+    _markerCache.clear();
+    _allFeatures.clear();
+    markersData.length = 0;
+    markersCluster.clearLayers();
+    loadMarkers();
+  }
+
+  // Ao mover/zoom: carrega marcadores das novas áreas (debounced)
+  let _viewportTimer = null;
+  map.on('moveend zoomend', function () {
+    clearTimeout(_viewportTimer);
+    _viewportTimer = setTimeout(loadMarkersForViewport, 300);
   });
 
   // =========================================================================
@@ -1757,25 +1794,27 @@ $(document).ready(function () {
     const images = [];
     if (animal.imagens && Array.isArray(animal.imagens) && animal.imagens.length > 0) {
       animal.imagens.forEach(imgObj => {
-        const raw = typeof imgObj === 'string' ? imgObj : imgObj.imagem;
-        if (raw && typeof raw === 'string' && raw.trim()) {
+        const raw = typeof imgObj === 'string' ? imgObj : (imgObj && imgObj.imagem ? imgObj.imagem : '');
+        if (raw && typeof raw === 'string' && raw.trim() && !raw.includes('logotipo.png') && !raw.includes('falta_imagem') && !raw.includes('Falta_imagem')) {
           const u = raw.startsWith('http') || raw.startsWith('/') || raw.startsWith('data:') ? raw : `/media/${raw}`;
           if (!images.includes(u)) images.push(u);
         }
       });
     }
-    if (animal.icone) {
-      const u = animal.icone.startsWith('http') || animal.icone.startsWith('/') || animal.icone.startsWith('data:') ? animal.icone : `/media/${animal.icone}`;
-      if (!images.includes(u)) images.push(u);
-    }
-    if (animal.imagem) {
+    if (animal.imagem && typeof animal.imagem === 'string' && !animal.imagem.includes('logotipo.png') && !animal.imagem.includes('falta_imagem') && !animal.imagem.includes('Falta_imagem')) {
       const u = animal.imagem.startsWith('http') || animal.imagem.startsWith('/') || animal.imagem.startsWith('data:') ? animal.imagem : `/media/${animal.imagem}`;
       if (!images.includes(u)) images.push(u);
     }
-    if (images.length === 0) {
-      images.push('/assets/img/logotipo.png');
+    if (animal.icone && typeof animal.icone === 'string' && !animal.icone.includes('logotipo.png') && !animal.icone.includes('falta_imagem') && !animal.icone.includes('Falta_imagem')) {
+      const u = animal.icone.startsWith('http') || animal.icone.startsWith('/') || animal.icone.startsWith('data:') ? animal.icone : `/media/${animal.icone}`;
+      if (!images.includes(u)) images.push(u);
     }
-    return images;
+    // De preferência de 1 a 3 imagens por card
+    const finalImgs = images.slice(0, 3);
+    if (finalImgs.length === 0) {
+      finalImgs.push('/assets/img/logotipo.png');
+    }
+    return finalImgs;
   }
 
   let modalSlideshowInterval = null;
@@ -1792,6 +1831,9 @@ $(document).ready(function () {
         if (!nextImg.length) {
           nextImg = imgs.first();
         }
+
+        const nextIndex = nextImg.index('.card-slide-img');
+        container.find('.card-slide-dot').removeClass('active').eq(nextIndex).addClass('active');
 
         activeImg.removeClass('active').addClass('exit-left');
         nextImg.removeClass('exit-left').addClass('active');
@@ -1861,6 +1903,12 @@ $(document).ready(function () {
           <img src="${src}" alt="${animal.nome_comum}" class="card-slide-img ${i === 0 ? 'active' : ''}">
         `).join('');
 
+        const dotsHtml = imgs.length > 1 ? `
+          <div class="card-slideshow-dots">
+            ${imgs.map((_, idx) => `<span class="card-slide-dot ${idx === 0 ? 'active' : ''}"></span>`).join('')}
+          </div>
+        ` : '';
+
         const menuButtonHtml = isAdmin ? `
           <button type="button" class="species-card-menu-btn" title="Opções">
             <i class="fa-solid fa-ellipsis-vertical"></i>
@@ -1883,6 +1931,7 @@ $(document).ready(function () {
             <span class="species-card-extinction-badge" style="background-color: ${extinctionColor};">${sigla}</span>
             <div class="species-card-slideshow">
               ${slidesHtml}
+              ${dotsHtml}
               <div class="species-card-slideshow-overlay"></div>
             </div>
             <div class="species-card-body">
@@ -2327,7 +2376,7 @@ $(document).ready(function () {
       if (data.success) {
         alert(editId ? "Espécie atualizada com sucesso!" : "Espécie cadastrada com sucesso!");
         $("#species-admin-modal").addClass("d-none");
-        loadMarkers();
+        reloadMarkers();
       } else {
         alert('Erro ao salvar espécie: ' + formatErrorMessage(data, 'Tente novamente.'));
       }
@@ -2404,13 +2453,22 @@ $(document).ready(function () {
     const sourceImgs = animal.imagens || [];
     if (Array.isArray(sourceImgs)) {
       sourceImgs.forEach(img => {
-        if (typeof img === 'string') allImgs.push(img);
-        else if (img && img.imagem) allImgs.push(img.imagem);
+        let u = typeof img === 'string' ? img : (img && img.imagem ? img.imagem : '');
+        if (u && !u.includes('logotipo.png') && !u.includes('falta_imagem') && !u.includes('Falta_imagem') && !allImgs.includes(u)) {
+          allImgs.push(u);
+        }
       });
     }
-    if (allImgs.length === 0) allImgs.push('/assets/img/logotipo.png');
-
+    if (animal.imagem && !animal.imagem.includes('logotipo.png') && !animal.imagem.includes('falta_imagem') && !animal.imagem.includes('Falta_imagem') && !allImgs.includes(animal.imagem)) {
+      allImgs.push(animal.imagem);
+    }
+    if (animal.icone && !animal.icone.includes('logotipo.png') && !animal.icone.includes('falta_imagem') && !animal.icone.includes('Falta_imagem') && !allImgs.includes(animal.icone)) {
+      allImgs.push(animal.icone);
+    }
     allImgs = allImgs.map(url => (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:') ? url : `/media/${url}`));
+    // De preferência de 1 a 3 fotos
+    allImgs = allImgs.slice(0, 3);
+    if (allImgs.length === 0) allImgs.push('/assets/img/logotipo.png');
 
     let biomas = (animal.biomas || []).map(b => b.nome).join(', ') || 'Não informado';
 
@@ -2427,6 +2485,13 @@ $(document).ready(function () {
                 <button class="carousel-btn carousel-next" onclick="changeModalImg(1)" style="position: absolute; top: 50%; right: 10px; z-index: 10; border: none; background: ${statusColor}; color: white; border-radius: 50%; width: 36px; height: 36px; cursor: pointer;">
                   <i class="fas fa-chevron-right"></i>
                 </button>
+                <div class="modal-carousel-indicators">
+                  ${allImgs.map((_, i) => `
+                    <span class="modal-thumb-dot ${i === 0 ? 'bg-primary text-white' : 'bg-dark text-muted'} border border-secondary" onclick="setModalImg(${i})">
+                      ${i + 1}
+                    </span>
+                  `).join('')}
+                </div>
               ` : ''}
             </div>
           </div>
@@ -2522,6 +2587,24 @@ $(document).ready(function () {
     new bootstrap.Modal(document.getElementById('animalModal')).show();
   };
 
+  window.setModalImg = function(targetIndex) {
+    const imgTag = $('#modalCarouselImg');
+    if (!imgTag.length) return;
+    const imgsStr = imgTag.attr('data-imgs');
+    if (!imgsStr) return;
+    const imgs = JSON.parse(imgsStr);
+    if (!imgs || !imgs[targetIndex]) return;
+
+    imgTag.attr('data-current', targetIndex);
+    $('.modal-thumb-dot').removeClass('bg-primary text-white').addClass('bg-dark text-muted')
+      .eq(targetIndex).removeClass('bg-dark text-muted').addClass('bg-primary text-white');
+
+    imgTag.stop(true, true).fadeOut(120, function() {
+      imgTag.attr('src', imgs[targetIndex]);
+      imgTag.fadeIn(120);
+    });
+  };
+
   window.changeModalImg = function(step) {
     const imgTag = $('#modalCarouselImg');
     if (!imgTag.length) return;
@@ -2532,14 +2615,7 @@ $(document).ready(function () {
 
     let current = parseInt(imgTag.attr('data-current')) || 0;
     let next = (current + step + imgs.length) % imgs.length;
-
-    // Atualização SÍNCRONA imediata para evitar lag de duplo clique
-    imgTag.attr('data-current', next);
-
-    imgTag.stop(true, true).fadeOut(120, function() {
-      imgTag.attr('src', imgs[next]);
-      imgTag.fadeIn(120);
-    });
+    window.setModalImg(next);
   };
 
   window.deleteEntityWithConfirmation = function(entity) {
@@ -2560,7 +2636,7 @@ $(document).ready(function () {
           const bsModal = bootstrap.Modal.getInstance(modalEl);
           if (bsModal) bsModal.hide();
         }
-        loadMarkers();
+        reloadMarkers();
       } else {
         alert(`Erro ao excluir: ${formatErrorMessage(data, 'Erro no servidor.')}`);
       }
@@ -2571,7 +2647,202 @@ $(document).ready(function () {
     });
   };
 
+  // --------------------------------------------------
+  // Módulo de Importação de Espécies do SALVE (ICMBio)
+  // --------------------------------------------------
+  let selectedSalveFile = null;
+
+  $(document).on('show.bs.modal', '#modalImportSalve', function() {
+    selectedSalveFile = null;
+    $('#salve-file-input').val('');
+    $('#salve-preview-container').addClass('d-none');
+    $('#salve-progress-container').addClass('d-none');
+    $('#salve-result-container').addClass('d-none').empty();
+    $('#btn-execute-import-salve').prop('disabled', true);
+  });
+
+  $(document).on('click', '#btn-open-salve-modal', function(e) {
+    const modalEl = document.getElementById('modalImportSalve');
+    if (modalEl) {
+      const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      modal.show();
+    }
+  });
+
+  $(document).on('click', '#salve-drop-zone', function(e) {
+    if (e.target.id !== 'salve-file-input') {
+      $('#salve-file-input').trigger('click');
+    }
+  });
+
+  $(document).on('dragover dragenter', '#salve-drop-zone', function(e) {
+    e.preventDefault(); e.stopPropagation();
+    $(this).addClass('border-warning').css('background', '#201f2b');
+  });
+
+  $(document).on('dragleave dragend', '#salve-drop-zone', function(e) {
+    e.preventDefault(); e.stopPropagation();
+    $(this).removeClass('border-warning').css('background', '#191820');
+  });
+
+  $(document).on('drop', '#salve-drop-zone', function(e) {
+    e.preventDefault(); e.stopPropagation();
+    $(this).removeClass('border-warning').css('background', '#191820');
+    const files = e.originalEvent.dataTransfer.files;
+    if (files && files.length > 0) handleSalveFileApp(files[0]);
+  });
+
+  $(document).on('change', '#salve-file-input', function() {
+    if (this.files && this.files.length > 0) handleSalveFileApp(this.files[0]);
+  });
+
+  function handleSalveFileApp(file) {
+    if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') {
+      alert('Por favor, selecione um arquivo .csv válido.');
+      return;
+    }
+    selectedSalveFile = file;
+    $('#salve-file-badge').text(file.name);
+    $('#salve-file-info').text((file.size / 1048576).toFixed(2) + ' MB');
+    const reader = new FileReader();
+    reader.onload = function(evt) { renderSalvePreviewApp(evt.target.result || ''); };
+    reader.readAsText(file.slice(0, 50000));
+    $('#btn-execute-import-salve').prop('disabled', false);
+  }
+
+  function renderSalvePreviewApp(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (!lines.length) return;
+    const delim = (lines[0].match(/;/g)||[]).length > (lines[0].match(/,/g)||[]).length ? ';' : ',';
+    const parse = l => l.split(delim).map(c => c.replace(/^"|"$/g,'').trim());
+    const headers = parse(lines[0]);
+    $('#salve-preview-thead').html('<tr>' + headers.slice(0,7).map(h=>`<th class="text-warning">${h}</th>`).join('') + '</tr>');
+    let body = '';
+    for (let i=1; i<Math.min(lines.length,4); i++) {
+      body += '<tr>' + parse(lines[i]).slice(0,7).map(c=>`<td>${c||'-'}</td>`).join('') + '</tr>';
+    }
+    $('#salve-preview-tbody').html(body);
+    $('#salve-preview-container').removeClass('d-none');
+  }
+
+  $(document).on('click', '#btn-execute-import-salve', async function() {
+    if (!selectedSalveFile) return;
+    const btn = $(this);
+    btn.prop('disabled', true);
+    $('#salve-progress-container').removeClass('d-none');
+    $('#salve-result-container').addClass('d-none').empty();
+    $('#salve-progress-bar').css('width', '0%').text('0%').attr('aria-valuenow', 0);
+    $('#salve-progress-percent').text('0%');
+    $('#salve-progress-status').html('<i class="fa-solid fa-spinner fa-spin me-1"></i> Iniciando importação...');
+
+    const fd = new FormData();
+    fd.append('csv_file', selectedSalveFile);
+    fd.append('auto_images', $('#check-auto-images').is(':checked'));
+    fd.append('max_rows', $('#select-max-rows').val());
+
+    try {
+      const response = await fetch('/api/v1/animais/import-salve?stream=true', {
+        method: 'POST',
+        headers: { 'Accept': 'text/event-stream' },
+        body: fd
+      });
+
+      if (!response.ok && !response.body) {
+        throw new Error(`Erro no servidor: HTTP ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let hasCompleted = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop(); // guarda pedaço parcial
+
+        for (const part of parts) {
+          if (!part.trim()) continue;
+          const lines = part.split('\n');
+          let eventType = 'message';
+          let dataStr = '';
+          for (const line of lines) {
+            if (line.startsWith('event: ')) eventType = line.replace('event: ', '').trim();
+            else if (line.startsWith('data: ')) dataStr = line.replace('data: ', '').trim();
+          }
+
+          if (dataStr) {
+            try {
+              const payload = JSON.parse(dataStr);
+              if (eventType === 'progress') {
+                const pct = Math.max(0, Math.min(100, payload.percent || 0));
+                $('#salve-progress-bar')
+                  .css('width', pct + '%')
+                  .text(pct + '%')
+                  .attr('aria-valuenow', pct);
+                $('#salve-progress-percent').text(pct + '%');
+                $('#salve-progress-status').html(`
+                  <i class="fa-solid fa-spinner fa-spin me-1"></i>
+                  Processando: <strong>${payload.species || ''}</strong> (${payload.current}/${payload.total})
+                `);
+              } else if (eventType === 'done') {
+                hasCompleted = true;
+                $('#salve-progress-bar').css('width', '100%').text('100%');
+                $('#salve-progress-percent').text('100%');
+                setTimeout(() => {
+                  $('#salve-progress-container').addClass('d-none');
+                  btn.prop('disabled', false);
+                  const s = payload.data || {};
+                  $('#salve-result-container').html(`
+                    <div class="alert alert-success border-0 mb-0" style="background:#1e3a29;color:#75b798;">
+                      <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="fa-solid fa-circle-check fs-5"></i>
+                        <strong>${payload.message || 'Importação finalizada com sucesso!'}</strong>
+                      </div>
+                      <ul class="mb-0 small ps-3">
+                        <li><strong>Identificadas no arquivo:</strong> ${s.totalParsed || 0}</li>
+                        <li><strong>Novas espécies inseridas:</strong> ${s.inserted || 0}</li>
+                        <li><strong>Espécies atualizadas:</strong> ${s.updated || 0}</li>
+                        ${s.skipped ? `<li><strong>Linhas ignoradas/vazias:</strong> ${s.skipped}</li>` : ''}
+                      </ul>
+                    </div>`).removeClass('d-none');
+                  if (typeof reloadMarkers === 'function') reloadMarkers();
+                  if (typeof loadData === 'function') loadData();
+                }, 400);
+              } else if (eventType === 'error') {
+                throw new Error(payload.message || payload.error || 'Erro durante a importação.');
+              }
+            } catch (jsonErr) {
+              if (eventType === 'error') throw jsonErr;
+            }
+          }
+        }
+      }
+
+      if (!hasCompleted) {
+        btn.prop('disabled', false);
+        $('#salve-progress-container').addClass('d-none');
+      }
+    } catch (err) {
+      $('#salve-progress-container').addClass('d-none');
+      btn.prop('disabled', false);
+      $('#salve-result-container').html(`
+        <div class="alert alert-danger border-0 mb-0" style="background:#3e1f25;color:#ea868f;">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fa-solid fa-triangle-exclamation fs-5"></i>
+            <div>
+              <strong>Falha na importação</strong>
+              <div class="small mt-1">${err.message || 'Erro desconhecido.'}</div>
+            </div>
+          </div>
+        </div>`).removeClass('d-none');
+    }
+  });
+
   loadData();
   loadMarkers();
   setTimeout(function() { map.invalidateSize(); }, 400);
 });
+
