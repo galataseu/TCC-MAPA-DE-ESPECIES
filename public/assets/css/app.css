@@ -692,6 +692,18 @@ html, body, #main-layout {
   display: block;
 }
 
+/* Preview do ícone do marcador (círculo de 105px no cadastro).
+   Tamanho fixo com object-fit: cover para o preview ser idêntico ao recorte
+   circular de 500px gerado no canvas (mesmo modelo cover + translate/scale). */
+#modal-icon-preview-img,
+#icon-preview-img {
+  width: 105px;
+  height: 105px;
+  left: 0;
+  top: 0;
+  object-fit: cover;
+}
+
 .marker-name-label {
   max-width: 0;
   opacity: 0;

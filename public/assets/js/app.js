@@ -16,7 +16,7 @@ var stateLayers = [];
 var markersData = [];
 
 /* Camadas de Base */
-var darkFull = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+var darkFull = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_3l5t_1_889f4489a3fb5fb5051816e3', {
   attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
   subdomains: 'abcd',
   maxZoom: 19,
@@ -251,7 +251,7 @@ $(document).ready(function () {
       updateLayerStyles();
       reorderLayers();
       injectTreePattern();
-      renderBiomeViewportMarkers();
+      refreshAreaViewport();
     });
   };
 
@@ -670,6 +670,127 @@ $(document).ready(function () {
 
   let debugPolygonsLayer = L.layerGroup().addTo(map);
 
+  // ---------------------------------------------------------------------------
+  // ÁREAS DESENHADAS PELOS ADMINS.
+  // Cada animal pode ter uma área de ocorrência (polígono). O comportamento
+  // esperado: sempre que a câmera mostrar essa área, o animal aparece na tela.
+  // - areaPolygonsLayer desenha as áreas, mas SÓ para ADM com "Exibir Áreas"
+  //   ativado (ver renderAreaPolygons);
+  // - refreshAreaViewport() cria um "proxy" do marcador dentro do viewport
+  //   quando a área cruza a tela mas o ponto original está fora dela — isso
+  //   vale para TODOS os usuários, mesmo sem ver o polígono.
+  // ---------------------------------------------------------------------------
+  var areaPolygonsLayer = L.layerGroup().addTo(map);
+  var areaProxyByAnimal = new Map(); // animal_id (string) -> L.marker
+
+  function getAreaRingsOf(p) {
+    var raw = p && p.area_polygon;
+    if (!raw || !Array.isArray(raw) || raw.length === 0) return [];
+    var rings = (Array.isArray(raw[0]) && Array.isArray(raw[0][0])) ? raw : [raw];
+    return rings.filter(function(r) { return r && r.length >= 3; });
+  }
+
+  function ringBboxIntersectsBounds(ring, bounds) {
+    var south = bounds.getSouth(), north = bounds.getNorth();
+    var west = bounds.getWest(), east = bounds.getEast();
+    var rMinLat = Infinity, rMinLng = Infinity, rMaxLat = -Infinity, rMaxLng = -Infinity;
+    for (var i = 0; i < ring.length; i++) {
+      var pt = ring[i];
+      if (!pt || pt.length < 2) continue;
+      var lat = parseFloat(pt[0]);
+      var lng = parseFloat(pt[1]);
+      if (isNaN(lat) || isNaN(lng)) continue;
+      if (lat < rMinLat) rMinLat = lat;
+      if (lat > rMaxLat) rMaxLat = lat;
+      if (lng < rMinLng) rMinLng = lng;
+      if (lng > rMaxLng) rMaxLng = lng;
+    }
+    if (rMinLat === Infinity) return false;
+    if (rMaxLng < west || rMinLng > east || rMaxLat < south || rMinLat > north) return false;
+    return true;
+  }
+
+  function renderAreaPolygons() {
+    areaPolygonsLayer.clearLayers();
+    // Zonas visíveis apenas para ADM com "Exibir Áreas" ativado.
+    // (Os proxies dos marcadores continuam funcionando para todos.)
+    if (typeof isAdminModeActive !== 'function' || !isAdminModeActive()) return;
+    if (!$("#toggle-debug-areas").is(":checked")) return;
+    if (!rawMarkersGeoJson || !rawMarkersGeoJson.features) return;
+    var rendered = new Set();
+    rawMarkersGeoJson.features.forEach(function(f) {
+      var p = f.properties;
+      var animalId = String(p.animal_id || p.id);
+      if (rendered.has(animalId)) return;
+      rendered.add(animalId);
+      var rings = getAreaRingsOf(p);
+      if (rings.length === 0) return;
+      var stroke = p.area_polygon_color || '#FFAA44';
+      rings.forEach(function(ring) {
+        L.polygon(ring, {
+          color: stroke,
+          fillColor: stroke,
+          fillOpacity: 0.15,
+          weight: 2,
+          interactive: false
+        }).addTo(areaPolygonsLayer);
+      });
+    });
+  }
+
+  function refreshAreaViewport() {
+    if (!map || !rawMarkersGeoJson || !rawMarkersGeoJson.features) return;
+    var bounds;
+    try { bounds = map.getBounds(); } catch (e) { return; }
+    var seen = new Set();
+    var aliveIds = new Set();
+    rawMarkersGeoJson.features.forEach(function(f) {
+      var p = f.properties;
+      var animalId = String(p.animal_id || p.id);
+      if (seen.has(animalId)) return;
+      seen.add(animalId);
+      var rings = getAreaRingsOf(p);
+      if (rings.length === 0) return;
+      aliveIds.add(animalId);
+
+      var intersects = rings.some(function(ring) { return ringBboxIntersectsBounds(ring, bounds); });
+      var ptLat = null, ptLng = null;
+      if (f.geometry && f.geometry.coordinates && f.geometry.coordinates.length >= 2) {
+        ptLng = parseFloat(f.geometry.coordinates[0]);
+        ptLat = parseFloat(f.geometry.coordinates[1]);
+      }
+      var pointVisible = (ptLat !== null && !isNaN(ptLat) && bounds.contains([ptLat, ptLng]));
+      var existing = areaProxyByAnimal.get(animalId);
+
+      if (intersects && !pointVisible) {
+        var center = bounds.getCenter();
+        var valid = null;
+        try {
+          valid = findValidPointForAnimal(p, bounds.getSouth(), bounds.getNorth(), bounds.getWest(), bounds.getEast(), center.lat, center.lng);
+        } catch (e) { valid = null; }
+        if (!valid) return;
+        if (existing) {
+          existing.setLatLng(valid);
+        } else {
+          var proxy = L.marker(valid, { icon: createAnimalIcon(p) });
+          proxy.on('click', function() { showDetails(p.animal_id); });
+          proxy.addTo(map);
+          areaProxyByAnimal.set(animalId, proxy);
+        }
+      } else if (existing) {
+        map.removeLayer(existing);
+        areaProxyByAnimal.delete(animalId);
+      }
+    });
+    // Remove proxies de animais que não existem mais nos dados (ex.: após reload)
+    areaProxyByAnimal.forEach(function(marker, animalId) {
+      if (!aliveIds.has(animalId) && !seen.has(animalId)) {
+        map.removeLayer(marker);
+        areaProxyByAnimal.delete(animalId);
+      }
+    });
+  }
+
   function areaPolygonToTurf(polygonCoords) {
     if (!polygonCoords || !Array.isArray(polygonCoords) || polygonCoords.length < 3) return null;
     try {
@@ -761,6 +882,7 @@ $(document).ready(function () {
 
   $(document).on("change", "#toggle-debug-areas", function() {
     renderDebugPolygons();
+    renderAreaPolygons();
   });
 
   function isPointInsideGeometry(lat, lng, geom) {
@@ -982,6 +1104,8 @@ $(document).ready(function () {
         features: Array.from(_allFeatures.values())
       };
       renderDebugPolygons();
+      renderAreaPolygons();
+      refreshAreaViewport();
     }).always(function () {
       _loadingMarkers = false;
     });
@@ -1017,6 +1141,8 @@ $(document).ready(function () {
         features: Array.from(_allFeatures.values())
       };
       renderDebugPolygons();
+      renderAreaPolygons();
+      refreshAreaViewport();
     }).always(function () {
       _loadingMarkers = false;
       // Marca bbox inicial como carregado para não re-buscar
@@ -1033,14 +1159,20 @@ $(document).ready(function () {
     _allFeatures.clear();
     markersData.length = 0;
     markersCluster.clearLayers();
+    areaProxyByAnimal.forEach(function(marker) { map.removeLayer(marker); });
+    areaProxyByAnimal.clear();
+    if (typeof areaPolygonsLayer !== 'undefined' && areaPolygonsLayer) areaPolygonsLayer.clearLayers();
     loadMarkers();
   }
 
   // Ao mover/zoom: carrega marcadores das novas áreas (debounced)
   let _viewportTimer = null;
+  let _areaViewportTimer = null;
   map.on('moveend zoomend', function () {
     clearTimeout(_viewportTimer);
     _viewportTimer = setTimeout(loadMarkersForViewport, 300);
+    clearTimeout(_areaViewportTimer);
+    _areaViewportTimer = setTimeout(refreshAreaViewport, 350);
   });
 
   // =========================================================================
@@ -1060,6 +1192,7 @@ $(document).ready(function () {
       $("#admin-debug-toggle-container").removeClass("d-none");
       $("#toggle-debug-areas").prop("checked", true);
       renderDebugPolygons();
+      renderAreaPolygons();
       $("#admin-btn").addClass("admin-active").attr("title", "Clique para encerrar o Modo Administrador");
       $("#admin-btn").attr("href", "#");
     } else {
@@ -1067,6 +1200,7 @@ $(document).ready(function () {
       $("#admin-debug-toggle-container").addClass("d-none");
       $("#toggle-debug-areas").prop("checked", false);
       renderDebugPolygons();
+      renderAreaPolygons();
       $("#admin-btn").removeClass("admin-active").attr("title", "Acesso Administrador");
       $("#admin-btn").attr("href", "/admin/login");
       closeAdminDrawer();
@@ -1327,7 +1461,7 @@ $(document).ready(function () {
   function initModalRightPanelMap(lat, lng) {
     setTimeout(() => {
       if (!modalRightMap) {
-        const darkTile = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+        const darkTile = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_3l5t_1_889f4489a3fb5fb5051816e3', {
           maxZoom: 19,
           attribution: '© CARTO'
         });
@@ -2128,6 +2262,24 @@ $(document).ready(function () {
   const modalIconTrigger = document.getElementById('modal-icon-circle-trigger');
   const modalIconImg = document.getElementById('modal-icon-preview-img');
 
+  // Mantém a foto sempre cobrindo o círculo de 105px: o zoom mínimo é 1
+  // (cover) e o arrasto é limitado para nunca revelar o fundo vazio.
+  // Sem isso a foto salva saía "longe"/pequena dentro do ícone.
+  function clampModalIconCrop() {
+    var s = modalIconCropState.scale || 1.0;
+    if (s < 1.0) { s = 1.0; modalIconCropState.scale = 1.0; }
+    if (s > 4.0) { s = 4.0; modalIconCropState.scale = 4.0; }
+    var max = 105 * (s - 1) / 2;
+    if (max < 0) max = 0;
+    modalIconCropState.currentX = Math.min(max, Math.max(-max, modalIconCropState.currentX || 0));
+    modalIconCropState.currentY = Math.min(max, Math.max(-max, modalIconCropState.currentY || 0));
+  }
+
+  function applyModalIconTransform() {
+    clampModalIconCrop();
+    modalIconImg.style.transform = `translate(${modalIconCropState.currentX}px, ${modalIconCropState.currentY}px) scale(${modalIconCropState.scale})`;
+  }
+
   if (modalIconTrigger && modalIconImg) {
     const startDrag = function(clientX, clientY) {
       if (modalIconImg.classList.contains('d-none')) return;
@@ -2140,7 +2292,7 @@ $(document).ready(function () {
       if (!modalIconCropState.isDragging) return;
       modalIconCropState.currentX = clientX - modalIconCropState.startX;
       modalIconCropState.currentY = clientY - modalIconCropState.startY;
-      modalIconImg.style.transform = `translate(${modalIconCropState.currentX}px, ${modalIconCropState.currentY}px) scale(${modalIconCropState.scale || 1.0})`;
+      applyModalIconTransform();
     };
 
     const endDrag = function() {
@@ -2158,60 +2310,82 @@ $(document).ready(function () {
     window.addEventListener('touchmove', e => { if (e.touches && e.touches[0]) moveDrag(e.touches[0].clientX, e.touches[0].clientY); });
     window.addEventListener('touchend', endDrag);
 
-    // Roda do mouse no círculo do ícone para Zoom
+    // Roda do mouse no círculo do ícone para Zoom (só aproxima a partir do cover)
     modalIconTrigger.addEventListener('wheel', e => {
       if (modalIconImg.classList.contains('d-none')) return;
       e.preventDefault();
       const step = e.deltaY < 0 ? 0.1 : -0.1;
-      modalIconCropState.scale = Math.min(Math.max(0.4, (modalIconCropState.scale || 1.0) + step), 4.0);
-      modalIconImg.style.transform = `translate(${modalIconCropState.currentX}px, ${modalIconCropState.currentY}px) scale(${modalIconCropState.scale})`;
+      modalIconCropState.scale = (modalIconCropState.scale || 1.0) + step;
+      applyModalIconTransform();
       generateModalIconBase64();
     }, { passive: false });
   }
 
+  // Gera o PNG circular do ícone a partir do enquadramento atual do preview.
+  // Retorna Promise para o submit aguardar o recorte antes de enviar.
   function generateModalIconBase64() {
     const img = document.getElementById('modal-icon-preview-img');
-    if (!img || img.classList.contains('d-none') || !img.src) return;
+    if (!img || img.classList.contains('d-none') || !img.src) return Promise.resolve(null);
+    clampModalIconCrop();
 
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 500;
-      canvas.height = 500;
-      const ctx = canvas.getContext('2d');
+    return new Promise(function(resolve) {
+      var done = function(val) { resolve(val); };
+      // Nunca trava o submit: resolve mesmo se a imagem falhar (ex.: CORS).
+      var timer = setTimeout(function() { done($('#modal-input-icon-base64').val() || null); }, 1500);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 500;
+        canvas.height = 500;
+        const ctx = canvas.getContext('2d');
 
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(250, 250, 250, 0, Math.PI * 2, true);
-      ctx.closePath();
-      ctx.clip();
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(250, 250, 250, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.clip();
 
-      const naturalW = img.naturalWidth || 500;
-      const naturalH = img.naturalHeight || 500;
-      const aspect = naturalW / naturalH;
-      let drawW = 500, drawH = 500;
+        const naturalW = img.naturalWidth || 500;
+        const naturalH = img.naturalHeight || 500;
+        const aspect = naturalW / naturalH;
+        let drawW = 500, drawH = 500;
 
-      if (aspect > 1) drawW = 500 * aspect;
-      else drawH = 500 / aspect;
+        if (aspect > 1) drawW = 500 * aspect;
+        else drawH = 500 / aspect;
 
-      const scaleRatio = 500 / 105;
-      drawW = drawW * (modalIconCropState.scale || 1.0);
-      drawH = drawH * (modalIconCropState.scale || 1.0);
+        const scaleRatio = 500 / 105;
+        drawW = drawW * (modalIconCropState.scale || 1.0);
+        drawH = drawH * (modalIconCropState.scale || 1.0);
 
-      const drawX = (500 - drawW) / 2 + (modalIconCropState.currentX * scaleRatio);
-      const drawY = (500 - drawH) / 2 + (modalIconCropState.currentY * scaleRatio);
+        const drawX = (500 - drawW) / 2 + (modalIconCropState.currentX * scaleRatio);
+        const drawY = (500 - drawH) / 2 + (modalIconCropState.currentY * scaleRatio);
 
-      const tempImg = new Image();
-      tempImg.crossOrigin = 'anonymous';
-      tempImg.onload = function() {
-        ctx.drawImage(tempImg, drawX, drawY, drawW, drawH);
-        ctx.restore();
-        const dataUrl = canvas.toDataURL('image/png');
-        $('#modal-input-icon-base64').val(dataUrl);
-      };
-      tempImg.src = img.src;
-    } catch(e) {
-      console.error("Error generating icon base64:", e);
-    }
+        const tempImg = new Image();
+        tempImg.crossOrigin = 'anonymous';
+        tempImg.onload = function() {
+          try {
+            ctx.drawImage(tempImg, drawX, drawY, drawW, drawH);
+            ctx.restore();
+            const dataUrl = canvas.toDataURL('image/png');
+            $('#modal-input-icon-base64').val(dataUrl);
+            clearTimeout(timer);
+            done(dataUrl);
+          } catch (e) {
+            console.error("Error generating icon base64:", e);
+            clearTimeout(timer);
+            done($('#modal-input-icon-base64').val() || null);
+          }
+        };
+        tempImg.onerror = function() {
+          clearTimeout(timer);
+          done($('#modal-input-icon-base64').val() || null);
+        };
+        tempImg.src = img.src;
+      } catch(e) {
+        console.error("Error generating icon base64:", e);
+        clearTimeout(timer);
+        done($('#modal-input-icon-base64').val() || null);
+      }
+    });
   }
 
   // Interatividade com os Chips de Biomas no Modal
@@ -2341,8 +2515,10 @@ $(document).ready(function () {
   });
 
   // Submissão do Formulário de Animal (Criação e Edição)
-  $("#form-create-animal").submit(function(e) {
+  $("#form-create-animal").submit(async function(e) {
     e.preventDefault();
+    // Garante que o recorte atual do ícone foi gerado antes de montar o FormData
+    try { await generateModalIconBase64(); } catch (err) {}
     const formData = new FormData(this);
 
     // Anexar todos os arquivos ativos da galeria
@@ -2365,6 +2541,29 @@ $(document).ready(function () {
     const lngVal = $(this).find('.coord-lng').val();
     if (latVal) formData.set('lat', latVal);
     if (lngVal) formData.set('lng', lngVal);
+
+    // Se desenhou área mas não clicou no mapa, ancora o ponto no centroide
+    // da área para ponto e polígono não ficarem desconectados.
+    try {
+      var polyHidden = $('#modal-area-polygon-json-hidden').val();
+      var coordHidden = $('#modal-coordenadas-json-hidden').val();
+      if (polyHidden && polyHidden.trim().length > 0 && (!coordHidden || coordHidden.trim().length === 0)) {
+        var polyPayload = JSON.parse(polyHidden);
+        var polyRings = (polyPayload && polyPayload.polygons) || [];
+        var firstRing = null;
+        for (var ri = 0; ri < polyRings.length; ri++) {
+          if (polyRings[ri] && polyRings[ri].length >= 3) { firstRing = polyRings[ri]; break; }
+        }
+        if (firstRing) {
+          var centroid = getPolygonCentroid(firstRing);
+          if (centroid) {
+            formData.set('lat', String(centroid[0]));
+            formData.set('lng', String(centroid[1]));
+            formData.set('coordenadas_json', JSON.stringify([{ lat: centroid[0], lng: centroid[1] }]));
+          }
+        }
+      }
+    } catch (e) {}
 
     const editId = $("#animal-edit-id").val();
     const url = editId ? `/api/v1/animais/${editId}/` : `/api/v1/animais/`;
@@ -2725,6 +2924,141 @@ $(document).ready(function () {
     $('#salve-preview-container').removeClass('d-none');
   }
 
+  // ---------------------------------------------------------------------------
+  // Importação compatível com a Vercel (fallback fatiado em JSON).
+  // A Vercel encerra funções serverless após poucos segundos, então um CSV
+  // grande com busca de fotos nunca termina via SSE (streaming). O fallback
+  // divide o CSV em lotes pequenos e envia cada lote como JSON simples
+  // (sem streaming), acumulando o resultado. Cada lote cabe no timeout.
+  // ---------------------------------------------------------------------------
+  var SALVE_CHUNK_ROWS = 60;
+
+  function splitSalveCsvIntoChunks(fullText, chunkRows) {
+    if (!fullText || typeof fullText !== 'string') return [];
+    var firstLine = (fullText.slice(0, 2000).split(/\r?\n/)[0]) || '';
+    var semis = (firstLine.match(/;/g) || []).length;
+    var commas = (firstLine.match(/,/g) || []).length;
+    var rows = [];
+    var cur = '';
+    var inQ = false;
+    var pushRow = function() { rows.push(cur); cur = ''; };
+    for (var i = 0; i < fullText.length; i++) {
+      var ch = fullText[i];
+      var nx = fullText[i + 1];
+      if (inQ) {
+        cur += ch;
+        if (ch === '"') {
+          if (nx === '"') { cur += nx; i++; }
+          else { inQ = false; }
+        }
+      } else {
+        if (ch === '"') { inQ = true; cur += ch; }
+        else if (ch === '\r') { if (nx === '\n') i++; pushRow(); }
+        else if (ch === '\n') { pushRow(); }
+        else { cur += ch; }
+      }
+    }
+    if (cur.length > 0) rows.push(cur);
+    var nonEmpty = rows.filter(function(r) { return r.trim().length > 0; });
+    if (nonEmpty.length === 0) return [];
+    var header = nonEmpty[0];
+    var body = nonEmpty.slice(1);
+    var chunks = [];
+    for (var j = 0; j < body.length; j += chunkRows) {
+      chunks.push(header + '\n' + body.slice(j, j + chunkRows).join('\n'));
+    }
+    return chunks;
+  }
+
+  function readSelectedSalveFileText() {
+    if (!selectedSalveFile) return Promise.resolve('');
+    if (typeof selectedSalveFile.text === 'function') return selectedSalveFile.text();
+    return new Promise(function(resolve, reject) {
+      try {
+        var reader = new FileReader();
+        reader.onload = function(evt) { resolve(evt.target.result || ''); };
+        reader.onerror = function() { reject(new Error('Não foi possível ler o arquivo CSV.')); };
+        reader.readAsText(selectedSalveFile);
+      } catch (e) { reject(e); }
+    });
+  }
+
+  function salveProgress(pct, statusHtml) {
+    $('#salve-progress-bar').css('width', pct + '%').text(pct + '%').attr('aria-valuenow', pct);
+    $('#salve-progress-percent').text(pct + '%');
+    if (statusHtml) $('#salve-progress-status').html(statusHtml);
+  }
+
+  function showSalveSuccess(message, s) {
+    $('#salve-progress-container').addClass('d-none');
+    $('#btn-execute-import-salve').prop('disabled', false);
+    $('#salve-result-container').html(
+      '<div class="alert alert-success border-0 mb-0" style="background:#1e3a29;color:#75b798;">' +
+      '<div class="d-flex align-items-center gap-2 mb-2">' +
+      '<i class="fa-solid fa-circle-check fs-5"></i>' +
+      '<strong>' + (message || 'Importação finalizada com sucesso!') + '</strong>' +
+      '</div>' +
+      '<ul class="mb-0 small ps-3">' +
+      '<li><strong>Identificadas no arquivo:</strong> ' + (s.totalParsed || 0) + '</li>' +
+      '<li><strong>Novas espécies inseridas:</strong> ' + (s.inserted || 0) + '</li>' +
+      '<li><strong>Espécies atualizadas:</strong> ' + (s.updated || 0) + '</li>' +
+      (s.skipped ? '<li><strong>Linhas ignoradas/vazias:</strong> ' + s.skipped + '</li>' : '') +
+      '</ul></div>'
+    ).removeClass('d-none');
+    if (typeof reloadMarkers === 'function') reloadMarkers();
+    if (typeof loadData === 'function') loadData();
+  }
+
+  function showSalveError(err) {
+    $('#salve-progress-container').addClass('d-none');
+    $('#btn-execute-import-salve').prop('disabled', false);
+    var msg = 'Erro desconhecido.';
+    try { msg = formatErrorMessage(err, 'Erro desconhecido.'); } catch (e) { msg = (err && err.message) || msg; }
+    $('#salve-result-container').html(
+      '<div class="alert alert-danger border-0 mb-0" style="background:#3e1f25;color:#ea868f;">' +
+      '<div class="d-flex align-items-center gap-2">' +
+      '<i class="fa-solid fa-triangle-exclamation fs-5"></i>' +
+      '<div><strong>Falha na importação</strong>' +
+      '<div class="small mt-1">' + msg + '</div>' +
+      '</div></div></div>'
+    ).removeClass('d-none');
+  }
+
+  // Envia o CSV em lotes JSON (sem SSE). Usado quando o streaming falha
+  // (ex.: timeout da função serverless na Vercel).
+  async function runChunkedSalveImport(fullText, maxRows, autoImages) {
+    var chunks = splitSalveCsvIntoChunks(fullText, SALVE_CHUNK_ROWS);
+    if (chunks.length === 0) throw new Error('O arquivo CSV está vazio ou o formato não pôde ser interpretado.');
+    var limit = parseInt(maxRows, 10) || 5000;
+    chunks = chunks.slice(0, Math.max(1, Math.ceil(limit / SALVE_CHUNK_ROWS)));
+    var totals = { totalParsed: 0, processed: 0, inserted: 0, updated: 0, skipped: 0 };
+    for (var i = 0; i < chunks.length; i++) {
+      salveProgress(Math.round((i / chunks.length) * 100),
+        '<i class="fa-solid fa-spinner fa-spin me-1"></i> Enviando lote ' + (i + 1) + '/' + chunks.length + ' (modo compatível)...');
+      var fd = new FormData();
+      fd.append('csv_text', chunks[i]);
+      fd.append('auto_images', autoImages);
+      fd.append('max_rows', String(SALVE_CHUNK_ROWS));
+      var resp = await fetch('/api/v1/animais/import-salve', { method: 'POST', body: fd });
+      var data = null;
+      try { data = await resp.json(); } catch (e) { data = null; }
+      if (!resp.ok || !data || data.success === false) {
+        throw new Error((data && (data.message || data.error)) || ('Erro no servidor (lote ' + (i + 1) + '): HTTP ' + resp.status));
+      }
+      var r = data.data || {};
+      totals.totalParsed += (r.totalParsed || 0);
+      totals.processed += (r.processed || 0);
+      totals.inserted += (r.inserted || 0);
+      totals.updated += (r.updated || 0);
+      totals.skipped += (r.skipped || 0);
+      salveProgress(Math.round(((i + 1) / chunks.length) * 100),
+        '<i class="fa-solid fa-spinner fa-spin me-1"></i> Lote ' + (i + 1) + '/' + chunks.length + ' concluído...');
+    }
+    salveProgress(100, '<i class="fa-solid fa-circle-check me-1"></i> Concluído!');
+    showSalveSuccess('Importação concluída com sucesso! ' + totals.inserted + ' adicionados, ' + totals.updated + ' atualizados.', totals);
+    return true;
+  }
+
   $(document).on('click', '#btn-execute-import-salve', async function() {
     if (!selectedSalveFile) return;
     const btn = $(this);
@@ -2747,8 +3081,23 @@ $(document).ready(function () {
         body: fd
       });
 
-      if (!response.ok && !response.body) {
-        throw new Error(`Erro no servidor: HTTP ${response.status}`);
+      // A Vercel pode responder JSON direto (erro, ou função sem streaming).
+      // Nesse caso não há eventos SSE para ler — trata como JSON.
+      var contentType = '';
+      try { contentType = response.headers.get('content-type') || ''; } catch (e) {}
+      if (contentType.indexOf('application/json') !== -1) {
+        var jsonData = await response.json();
+        if (response.ok && jsonData && jsonData.success) {
+          showSalveSuccess(jsonData.message, jsonData.data || {});
+          return;
+        }
+        throw new Error(formatErrorMessage(jsonData, 'Erro no servidor: HTTP ' + response.status));
+      }
+      if (!response.ok) {
+        throw new Error('Erro no servidor: HTTP ' + response.status);
+      }
+      if (!response.body || typeof response.body.getReader !== 'function') {
+        throw new Error('STREAMING_INDISPONIVEL');
       }
 
       const reader = response.body.getReader();
@@ -2822,22 +3171,39 @@ $(document).ready(function () {
       }
 
       if (!hasCompleted) {
-        btn.prop('disabled', false);
-        $('#salve-progress-container').addClass('d-none');
+        // O servidor encerrou a conexão sem concluir (ex.: timeout da função
+        // serverless na Vercel). Tenta automaticamente o modo fatiado.
+        try {
+          $('#salve-progress-status').html('<i class="fa-solid fa-spinner fa-spin me-1"></i> Conexão interrompida, tentando modo compatível...');
+          var fullTextFallback = await readSelectedSalveFileText();
+          await runChunkedSalveImport(fullTextFallback, $('#select-max-rows').val(), $('#check-auto-images').is(':checked'));
+        } catch (chunkErr) {
+          showSalveError(new Error('O servidor encerrou a conexão antes de concluir (limite de tempo da hospedagem). Tente um limite menor de espécies ou desative a busca automática de fotos. Detalhe: ' + ((chunkErr && chunkErr.message) || 'sem resposta')));
+        }
       }
     } catch (err) {
-      $('#salve-progress-container').addClass('d-none');
-      btn.prop('disabled', false);
-      $('#salve-result-container').html(`
-        <div class="alert alert-danger border-0 mb-0" style="background:#3e1f25;color:#ea868f;">
-          <div class="d-flex align-items-center gap-2">
-            <i class="fa-solid fa-triangle-exclamation fs-5"></i>
-            <div>
-              <strong>Falha na importação</strong>
-              <div class="small mt-1">${err.message || 'Erro desconhecido.'}</div>
-            </div>
-          </div>
-        </div>`).removeClass('d-none');
+      if (err && err.message === 'STREAMING_INDISPONIVEL') {
+        try {
+          var fullTextRetry = await readSelectedSalveFileText();
+          await runChunkedSalveImport(fullTextRetry, $('#select-max-rows').val(), $('#check-auto-images').is(':checked'));
+          return;
+        } catch (chunkErr2) {
+          showSalveError(chunkErr2);
+          return;
+        }
+      }
+      // Falha no SSE (rede, timeout, etc.): tenta o modo fatiado antes de desistir.
+      try {
+        $('#salve-progress-status').html('<i class="fa-solid fa-spinner fa-spin me-1"></i> Streaming indisponível nesta hospedagem, tentando modo compatível...');
+        var fullTextCatch = await readSelectedSalveFileText();
+        if (fullTextCatch) {
+          await runChunkedSalveImport(fullTextCatch, $('#select-max-rows').val(), $('#check-auto-images').is(':checked'));
+          return;
+        }
+        showSalveError(err);
+      } catch (chunkErr3) {
+        showSalveError(chunkErr3 && chunkErr3.message ? chunkErr3 : err);
+      }
     }
   });
 

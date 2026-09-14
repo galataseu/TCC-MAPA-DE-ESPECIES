@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../services/db');
 
 function getMediaDir() {
   const localDir = path.join(__dirname, '..', 'public', 'media');

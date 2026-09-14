@@ -16,7 +16,8 @@
     "prisma:seed": "npx prisma db seed",
     "fix:coords": "node scripts/fix_marker_coords.js",
     "fix:coords:dry": "node scripts/fix_marker_coords.js --dry-run",
-    "enrich:images": "node scripts/enrich_images.js"
+    "enrich:images": "node scripts/enrich_images.js",
+    "vercel-build": "npx prisma generate"
   },
   "overrides": {
     "shell-quote": "1.8.4"

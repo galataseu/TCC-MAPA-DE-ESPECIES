@@ -802,7 +802,7 @@ $(document).ready(function() {
     function initRightPanelMap(lat = -27.59, lng = -48.54) {
         setTimeout(() => {
             if (!rightPanelMap) {
-                const darkTile = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+                const darkTile = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_3l5t_1_889f4489a3fb5fb5051816e3', {
                     maxZoom: 19,
                     attribution: '© CARTO'
                 });
@@ -901,6 +901,7 @@ $(document).ready(function() {
                             pointToLayer: function(feature, latlng) {
                                 const p = feature.properties;
                                 const statusSigla = p.nivel_sigla ? p.nivel_sigla.toLowerCase() : 'dd';
+                                const borderColor = extinctionColorMap[statusSigla] || '#1a5fb4';
                                 let iconSrc = '/assets/img/logotipo.png';
                                 if (p.icone && typeof p.icone === 'string' && !p.icone.includes('logotipo.png')) {
                                     iconSrc = p.icone;
@@ -1124,6 +1125,24 @@ $(document).ready(function() {
     const iconWrapper = document.getElementById('icon-circle-trigger');
     const iconImg = document.getElementById('icon-preview-img');
 
+    // Mantém a foto sempre cobrindo o círculo de 105px: o zoom mínimo é 1
+    // (cover) e o arrasto é limitado para nunca revelar o fundo vazio.
+    // Sem isso a foto salva saía "longe"/pequena dentro do ícone.
+    function clampPageIconCrop() {
+        var s = iconCropState.scale || 1.0;
+        if (s < 1.0) { s = 1.0; iconCropState.scale = 1.0; }
+        if (s > 4.0) { s = 4.0; iconCropState.scale = 4.0; }
+        var max = 105 * (s - 1) / 2;
+        if (max < 0) max = 0;
+        iconCropState.currentX = Math.min(max, Math.max(-max, iconCropState.currentX || 0));
+        iconCropState.currentY = Math.min(max, Math.max(-max, iconCropState.currentY || 0));
+    }
+
+    function applyPageIconTransform() {
+        clampPageIconCrop();
+        iconImg.style.transform = `translate(${iconCropState.currentX}px, ${iconCropState.currentY}px) scale(${iconCropState.scale})`;
+    }
+
     if (iconWrapper && iconImg) {
         iconWrapper.addEventListener('mousedown', function(e) {
             if (iconImg.classList.contains('d-none')) return;
@@ -1137,7 +1156,7 @@ $(document).ready(function() {
             if (!iconCropState.isDragging) return;
             iconCropState.currentX = e.clientX - iconCropState.startX;
             iconCropState.currentY = e.clientY - iconCropState.startY;
-            iconImg.style.transform = `translate(${iconCropState.currentX}px, ${iconCropState.currentY}px) scale(${iconCropState.scale || 1.0})`;
+            applyPageIconTransform();
         });
 
         window.addEventListener('mouseup', function() {
@@ -1151,58 +1170,82 @@ $(document).ready(function() {
             if (iconImg.classList.contains('d-none')) return;
             e.preventDefault();
             const step = e.deltaY < 0 ? 0.1 : -0.1;
-            iconCropState.scale = Math.min(Math.max(0.4, (iconCropState.scale || 1.0) + step), 4.0);
-            iconImg.style.transform = `translate(${iconCropState.currentX}px, ${iconCropState.currentY}px) scale(${iconCropState.scale})`;
+            iconCropState.scale = (iconCropState.scale || 1.0) + step;
+            applyPageIconTransform();
             generatePageIconBase64();
         }, { passive: false });
     }
 
+    // Gera o PNG circular do ícone a partir do enquadramento atual do preview.
+    // Retorna Promise para o submit aguardar o recorte antes de enviar.
     function generatePageIconBase64() {
-        if (!iconImg || iconImg.classList.contains('d-none') || !iconImg.src) return;
-        try {
-            const canvas = document.createElement('canvas');
-            canvas.width = 500;
-            canvas.height = 500;
-            const ctx = canvas.getContext('2d');
+        if (!iconImg || iconImg.classList.contains('d-none') || !iconImg.src) return Promise.resolve(null);
+        clampPageIconCrop();
+        return new Promise(function(resolve) {
+            var done = function(val) { resolve(val); };
+            // Nunca trava o submit: resolve mesmo se a imagem falhar (ex.: CORS).
+            var timer = setTimeout(function() { done($('#input-icon-base64').val() || null); }, 1500);
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = 500;
+                canvas.height = 500;
+                const ctx = canvas.getContext('2d');
 
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(250, 250, 250, 0, Math.PI * 2, true);
-            ctx.closePath();
-            ctx.clip();
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(250, 250, 250, 0, Math.PI * 2, true);
+                ctx.closePath();
+                ctx.clip();
 
-            const naturalW = iconImg.naturalWidth || 500;
-            const naturalH = iconImg.naturalHeight || 500;
-            const aspect = naturalW / naturalH;
-            let drawW = 500, drawH = 500;
+                const naturalW = iconImg.naturalWidth || 500;
+                const naturalH = iconImg.naturalHeight || 500;
+                const aspect = naturalW / naturalH;
+                let drawW = 500, drawH = 500;
 
-            if (aspect > 1) drawW = 500 * aspect;
-            else drawH = 500 / aspect;
+                if (aspect > 1) drawW = 500 * aspect;
+                else drawH = 500 / aspect;
 
-            const scaleRatio = 500 / 105;
-            drawW = drawW * (iconCropState.scale || 1.0);
-            drawH = drawH * (iconCropState.scale || 1.0);
+                const scaleRatio = 500 / 105;
+                drawW = drawW * (iconCropState.scale || 1.0);
+                drawH = drawH * (iconCropState.scale || 1.0);
 
-            const drawX = (500 - drawW) / 2 + (iconCropState.currentX * scaleRatio);
-            const drawY = (500 - drawH) / 2 + (iconCropState.currentY * scaleRatio);
+                const drawX = (500 - drawW) / 2 + (iconCropState.currentX * scaleRatio);
+                const drawY = (500 - drawH) / 2 + (iconCropState.currentY * scaleRatio);
 
-            const tempImg = new Image();
-            tempImg.crossOrigin = 'anonymous';
-            tempImg.onload = function() {
-                ctx.drawImage(tempImg, drawX, drawY, drawW, drawH);
-                ctx.restore();
-                const dataUrl = canvas.toDataURL('image/png');
-                $('#input-icon-base64').val(dataUrl);
-            };
-            tempImg.src = iconImg.src;
-        } catch(e) {
-            console.error("Error generating icon base64:", e);
-        }
+                const tempImg = new Image();
+                tempImg.crossOrigin = 'anonymous';
+                tempImg.onload = function() {
+                    try {
+                        ctx.drawImage(tempImg, drawX, drawY, drawW, drawH);
+                        ctx.restore();
+                        const dataUrl = canvas.toDataURL('image/png');
+                        $('#input-icon-base64').val(dataUrl);
+                        clearTimeout(timer);
+                        done(dataUrl);
+                    } catch (e) {
+                        console.error("Error generating icon base64:", e);
+                        clearTimeout(timer);
+                        done($('#input-icon-base64').val() || null);
+                    }
+                };
+                tempImg.onerror = function() {
+                    clearTimeout(timer);
+                    done($('#input-icon-base64').val() || null);
+                };
+                tempImg.src = iconImg.src;
+            } catch(e) {
+                console.error("Error generating icon base64:", e);
+                clearTimeout(timer);
+                done($('#input-icon-base64').val() || null);
+            }
+        });
     }
 
     // Submissão do Formulário de Cadastro / Edição
-    $('#form-species-create').submit(function(e) {
+    $('#form-species-create').submit(async function(e) {
         e.preventDefault();
+        // Garante que o recorte atual do ícone foi gerado antes de montar o FormData
+        try { await generatePageIconBase64(); } catch (err) {}
         const formData = new FormData(this);
 
         // Anexar arquivos da galeria
@@ -1522,6 +1565,138 @@ $(document).ready(function() {
         $('#salve-preview-container').removeClass('d-none');
     }
 
+    // ---------------------------------------------------------------------------
+    // Importação compatível com a Vercel (fallback fatiado em JSON).
+    // A Vercel encerra funções serverless após poucos segundos, então um CSV
+    // grande com busca de fotos nunca termina via SSE (streaming). O fallback
+    // divide o CSV em lotes pequenos e envia cada lote como JSON simples
+    // (sem streaming), acumulando o resultado. Cada lote cabe no timeout.
+    // ---------------------------------------------------------------------------
+    var SALVE_CHUNK_ROWS = 60;
+
+    function splitSalveCsvIntoChunks(fullText, chunkRows) {
+        if (!fullText || typeof fullText !== 'string') return [];
+        var firstLine = (fullText.slice(0, 2000).split(/\r?\n/)[0]) || '';
+        var rows = [];
+        var cur = '';
+        var inQ = false;
+        var pushRow = function() { rows.push(cur); cur = ''; };
+        for (var i = 0; i < fullText.length; i++) {
+            var ch = fullText[i];
+            var nx = fullText[i + 1];
+            if (inQ) {
+                cur += ch;
+                if (ch === '"') {
+                    if (nx === '"') { cur += nx; i++; }
+                    else { inQ = false; }
+                }
+            } else {
+                if (ch === '"') { inQ = true; cur += ch; }
+                else if (ch === '\r') { if (nx === '\n') i++; pushRow(); }
+                else if (ch === '\n') { pushRow(); }
+                else { cur += ch; }
+            }
+        }
+        if (cur.length > 0) rows.push(cur);
+        var nonEmpty = rows.filter(function(r) { return r.trim().length > 0; });
+        if (nonEmpty.length === 0) return [];
+        var header = nonEmpty[0];
+        var body = nonEmpty.slice(1);
+        var chunks = [];
+        for (var j = 0; j < body.length; j += chunkRows) {
+            chunks.push(header + '\n' + body.slice(j, j + chunkRows).join('\n'));
+        }
+        return chunks;
+    }
+
+    function readSelectedSalveFileText() {
+        if (!selectedSalveFile) return Promise.resolve('');
+        if (typeof selectedSalveFile.text === 'function') return selectedSalveFile.text();
+        return new Promise(function(resolve, reject) {
+            try {
+                var reader = new FileReader();
+                reader.onload = function(evt) { resolve(evt.target.result || ''); };
+                reader.onerror = function() { reject(new Error('Não foi possível ler o arquivo CSV.')); };
+                reader.readAsText(selectedSalveFile);
+            } catch (e) { reject(e); }
+        });
+    }
+
+    function salveProgress(pct, statusHtml) {
+        $('#salve-progress-bar').css('width', pct + '%').text(pct + '%').attr('aria-valuenow', pct);
+        $('#salve-progress-percent').text(pct + '%');
+        if (statusHtml) $('#salve-progress-status').html(statusHtml);
+    }
+
+    function showSalveSuccess(message, s) {
+        $('#salve-progress-container').addClass('d-none');
+        $('#btn-execute-import-salve').prop('disabled', false);
+        $('#salve-result-container').html(
+            '<div class="alert alert-success border-0 mb-0" style="background: #1e3a29; color: #75b798;">' +
+            '<div class="d-flex align-items-center gap-2 mb-2">' +
+            '<i class="fa-solid fa-circle-check fs-5"></i>' +
+            '<strong>' + (message || 'Importação finalizada com sucesso!') + '</strong>' +
+            '</div>' +
+            '<ul class="mb-0 small ps-3">' +
+            '<li><strong>Espécies identificadas:</strong> ' + (s.totalParsed || 0) + '</li>' +
+            '<li><strong>Novas inseridas:</strong> ' + (s.inserted || 0) + '</li>' +
+            '<li><strong>Atualizadas:</strong> ' + (s.updated || 0) + '</li>' +
+            (s.skipped ? '<li><strong>Ignoradas/Sem nome válido:</strong> ' + s.skipped + '</li>' : '') +
+            '</ul></div>'
+        ).removeClass('d-none');
+        if (typeof loadAnimals === 'function') loadAnimals();
+    }
+
+    function showSalveError(err) {
+        $('#salve-progress-container').addClass('d-none');
+        $('#btn-execute-import-salve').prop('disabled', false);
+        var msg = 'Erro desconhecido.';
+        try { msg = formatErrorMessage(err, 'Erro ao enviar ou processar arquivo CSV.'); } catch (e) { msg = (err && err.message) || msg; }
+        $('#salve-result-container').html(
+            '<div class="alert alert-danger border-0 mb-0" style="background: #3e1f25; color: #ea868f;">' +
+            '<div class="d-flex align-items-center gap-2">' +
+            '<i class="fa-solid fa-triangle-exclamation fs-5"></i>' +
+            '<div><strong>Falha na importação</strong>' +
+            '<div class="small mt-1">' + msg + '</div>' +
+            '</div></div></div>'
+        ).removeClass('d-none');
+    }
+
+    // Envia o CSV em lotes JSON (sem SSE). Usado quando o streaming falha
+    // (ex.: timeout da função serverless na Vercel).
+    async function runChunkedSalveImport(fullText, maxRows, autoImages) {
+        var chunks = splitSalveCsvIntoChunks(fullText, SALVE_CHUNK_ROWS);
+        if (chunks.length === 0) throw new Error('O arquivo CSV está vazio ou o formato não pôde ser interpretado.');
+        var limit = parseInt(maxRows, 10) || 5000;
+        chunks = chunks.slice(0, Math.max(1, Math.ceil(limit / SALVE_CHUNK_ROWS)));
+        var totals = { totalParsed: 0, processed: 0, inserted: 0, updated: 0, skipped: 0 };
+        for (var i = 0; i < chunks.length; i++) {
+            salveProgress(Math.round((i / chunks.length) * 100),
+                '<i class="fa-solid fa-spinner fa-spin me-1"></i> Enviando lote ' + (i + 1) + '/' + chunks.length + ' (modo compatível)...');
+            var fd = new FormData();
+            fd.append('csv_text', chunks[i]);
+            fd.append('auto_images', autoImages);
+            fd.append('max_rows', String(SALVE_CHUNK_ROWS));
+            var resp = await fetch('/api/v1/animais/import-salve', { method: 'POST', body: fd });
+            var data = null;
+            try { data = await resp.json(); } catch (e) { data = null; }
+            if (!resp.ok || !data || data.success === false) {
+                throw new Error((data && (data.message || data.error)) || ('Erro no servidor (lote ' + (i + 1) + '): HTTP ' + resp.status));
+            }
+            var r = data.data || {};
+            totals.totalParsed += (r.totalParsed || 0);
+            totals.processed += (r.processed || 0);
+            totals.inserted += (r.inserted || 0);
+            totals.updated += (r.updated || 0);
+            totals.skipped += (r.skipped || 0);
+            salveProgress(Math.round(((i + 1) / chunks.length) * 100),
+                '<i class="fa-solid fa-spinner fa-spin me-1"></i> Lote ' + (i + 1) + '/' + chunks.length + ' concluído...');
+        }
+        salveProgress(100, '<i class="fa-solid fa-circle-check me-1"></i> Concluído!');
+        showSalveSuccess('Importação concluída com sucesso! ' + totals.inserted + ' adicionados, ' + totals.updated + ' atualizados.', totals);
+        return true;
+    }
+
     $(document).on('click', '#btn-execute-import-salve', async function() {
         if (!selectedSalveFile) return;
 
@@ -1545,8 +1720,23 @@ $(document).ready(function() {
                 body: formData
             });
 
-            if (!response.ok && !response.body) {
-                throw new Error(`Erro no servidor: HTTP ${response.status}`);
+            // A Vercel pode responder JSON direto (erro, ou função sem streaming).
+            // Nesse caso não há eventos SSE para ler — trata como JSON.
+            var contentType = '';
+            try { contentType = response.headers.get('content-type') || ''; } catch (e) {}
+            if (contentType.indexOf('application/json') !== -1) {
+                var jsonData = await response.json();
+                if (response.ok && jsonData && jsonData.success) {
+                    showSalveSuccess(jsonData.message, jsonData.data || {});
+                    return;
+                }
+                throw new Error(formatErrorMessage(jsonData, 'Erro no servidor: HTTP ' + response.status));
+            }
+            if (!response.ok) {
+                throw new Error('Erro no servidor: HTTP ' + response.status);
+            }
+            if (!response.body || typeof response.body.getReader !== 'function') {
+                throw new Error('STREAMING_INDISPONIVEL');
             }
 
             const reader = response.body.getReader();
@@ -1622,25 +1812,39 @@ $(document).ready(function() {
             }
 
             if (!hasCompleted) {
-                btn.prop('disabled', false);
-                $('#salve-progress-container').addClass('d-none');
+                // O servidor encerrou a conexão sem concluir (ex.: timeout da função
+                // serverless na Vercel). Tenta automaticamente o modo fatiado.
+                try {
+                    $('#salve-progress-status').html('<i class="fa-solid fa-spinner fa-spin me-1"></i> Conexão interrompida, tentando modo compatível...');
+                    var fullTextFallback = await readSelectedSalveFileText();
+                    await runChunkedSalveImport(fullTextFallback, $('#select-max-rows').val(), $('#check-auto-images').is(':checked'));
+                } catch (chunkErr) {
+                    showSalveError(new Error('O servidor encerrou a conexão antes de concluir (limite de tempo da hospedagem). Tente um limite menor de espécies ou desative a busca automática de fotos. Detalhe: ' + ((chunkErr && chunkErr.message) || 'sem resposta')));
+                }
             }
         } catch (err) {
-            $('#salve-progress-container').addClass('d-none');
-            btn.prop('disabled', false);
-
-            const html = `
-                <div class="alert alert-danger border-0 mb-0" style="background: #3e1f25; color: #ea868f;">
-                    <div class="d-flex align-items-center gap-2">
-                        <i class="fa-solid fa-triangle-exclamation fs-5"></i>
-                        <div>
-                            <strong>Falha na importação</strong>
-                            <div class="small mt-1">${formatErrorMessage(err, 'Erro ao enviar ou processar arquivo CSV.')}</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            $('#salve-result-container').html(html).removeClass('d-none');
+            if (err && err.message === 'STREAMING_INDISPONIVEL') {
+                try {
+                    var fullTextRetry = await readSelectedSalveFileText();
+                    await runChunkedSalveImport(fullTextRetry, $('#select-max-rows').val(), $('#check-auto-images').is(':checked'));
+                    return;
+                } catch (chunkErr2) {
+                    showSalveError(chunkErr2);
+                    return;
+                }
+            }
+            // Falha no SSE (rede, timeout, etc.): tenta o modo fatiado antes de desistir.
+            try {
+                $('#salve-progress-status').html('<i class="fa-solid fa-spinner fa-spin me-1"></i> Streaming indisponível nesta hospedagem, tentando modo compatível...');
+                var fullTextCatch = await readSelectedSalveFileText();
+                if (fullTextCatch) {
+                    await runChunkedSalveImport(fullTextCatch, $('#select-max-rows').val(), $('#check-auto-images').is(':checked'));
+                    return;
+                }
+                showSalveError(err);
+            } catch (chunkErr3) {
+                showSalveError(chunkErr3 && chunkErr3.message ? chunkErr3 : err);
+            }
         }
     });
 });

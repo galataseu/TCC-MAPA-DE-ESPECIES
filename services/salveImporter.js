@@ -1,5 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('./db');
 const { getBiomaGeometry, getDistributedCoordinate } = require('../utils/biomaPolygons');
 
 /**
@@ -117,7 +117,9 @@ async function fetchWikipediaImages(scientificName) {
   if (!scientificName || typeof scientificName !== 'string') return [];
   const cleanName = scientificName.trim().replace(/\s+/g, '_');
   const userAgent = 'TCC-Mapa-Especies-Sul/1.0 (contato@escola.edu.br; educational use)';
-  const timeoutMs = 2500;
+  // Na Vercel (serverless com timeout curto) usa timeout menor para não
+  // estourar a duração máxima da função durante importações grandes.
+  const timeoutMs = process.env.VERCEL ? 1500 : 2500;
 
   const tryWiki = async (lang) => {
     // 1. Tenta media-list para obter múltiplas imagens
