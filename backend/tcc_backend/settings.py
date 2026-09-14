@@ -104,6 +104,8 @@ DATABASES = {
 
 # Força o uso da engine espacial do PostGIS independentemente do prefixo da URL
 DATABASES['default']['ENGINE'] = 'django.contrib.gis.db.backends.postgis'
+if 'OPTIONS' in DATABASES['default'] and 'pgbouncer' in DATABASES['default']['OPTIONS']:
+    del DATABASES['default']['OPTIONS']['pgbouncer']
 
 AUTH_USER_MODEL = 'api.User'
 
