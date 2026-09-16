@@ -225,13 +225,13 @@ block content
             //- Linha 4: Peso, Altura e Dieta
             .row.g-3.mb-3
               .col-md-4
-                label.species-form-label Peso (Kg)
+                label.species-form-label Peso (g)
                 .custom-stepper-wrapper
-                  input.form-control.colored-pill-input-green(type="number", step="0.01", name="peso", placeholder="Ex: 0.60")
+                  input.form-control.colored-pill-input-green(type="number", step="1", min="0", name="peso", placeholder="Ex: 600")
               .col-md-4
-                label.species-form-label Altura / Comp. (m)
+                label.species-form-label Altura / Comp. (cm)
                 .custom-stepper-wrapper
-                  input.form-control.colored-pill-input-blue(type="number", step="0.01", name="altura", placeholder="Ex: 0.26")
+                  input.form-control.colored-pill-input-blue(type="number", step="0.1", min="0", name="altura", placeholder="Ex: 26")
               .col-md-4
                 label.species-form-label Dieta
                 input.form-control.colored-pill-input-crimson(type="text", name="dieta", placeholder="Ex: Onívoro, Insetos")

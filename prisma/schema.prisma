@@ -25,7 +25,9 @@ model api_animal {
   autor_cad_id        BigInt?
   nivel_destruicao_id BigInt?
   nivel_extincao_id   BigInt
+  /// Altura/comprimento em centímetros (cm)
   altura              Float?
+  /// Peso em gramas (g)
   peso                Float?
   microrregiao_id     BigInt?
   api_user            api_user?            @relation(fields: [autor_cad_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "api_animal_autor_cad_id_9ef37c4a_fk_api_user_id")

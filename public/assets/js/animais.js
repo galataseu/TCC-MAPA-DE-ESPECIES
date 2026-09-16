@@ -1500,11 +1500,11 @@ $(document).ready(function() {
                       </div>
                       <div class="col-4 border-start border-secondary">
                           <span class="mb-1 text-muted small"><i class="fas fa-weight-hanging me-1"></i> Peso</span>
-                          <div class="fw-bold" style="color: ${statusColor}; font-size: 0.95rem;">${animal.peso ? animal.peso + ' Kg' : '00 Kg'}</div>
+                          <div class="fw-bold" style="color: ${statusColor}; font-size: 0.95rem;">${animal.peso ? animal.peso + ' g' : '0 g'}</div>
                       </div>
                       <div class="col-4 border-start border-secondary">
                           <span class="mb-1 text-muted small"><i class="fas fa-arrows-alt-v me-1"></i> Altura</span>
-                          <div class="fw-bold" style="color: ${statusColor}; font-size: 0.95rem;">${animal.altura ? animal.altura + ' m' : '00 m'}</div>
+                          <div class="fw-bold" style="color: ${statusColor}; font-size: 0.95rem;">${animal.altura ? animal.altura + ' cm' : '0 cm'}</div>
                       </div>
                   </div>
                   <hr style="border-color: ${statusColor}; opacity: 0.3;" class="my-2">
