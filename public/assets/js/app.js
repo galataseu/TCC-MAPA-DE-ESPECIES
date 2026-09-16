@@ -938,24 +938,17 @@ $(document).ready(function () {
   // Cada animal pode ter uma área de ocorrência (polígono). O comportamento
   // esperado: sempre que a câmera mostrar essa área, o animal aparece na tela.
   // ---------------------------------------------------------------------------
-  // Posicionamento do marcador por nível de zoom.
-  // - Zoom out (zona pequena na tela): coordenada REAL cadastrada, sem ajuste.
-  // - Zoom in (zona ocupa parte significativa da viewport): marcador é
-  //   "clampado" para dentro da zona.
-  // Sempre o MESMO objeto marcador (click + contextmenu intactos — nada de
-  // elemento visual "por cima"); a troca de posição é animada (tween curto)
-  // para não pular nem piscar. Histerese por animal evita liga/desliga na
-  // borda do limiar.
+  // Posicionamento do marcador por viewport (sem "proxies" e sem tween).
+  // - Ponto real dentro da tela: marcador fica nele (cluster gerencia).
+  // - Ponto real fora da tela + área cruzando a tela: o PRÓPRIO marcador
+  //   (click + contextmenu intactos) é posicionado num ponto da interseção
+  //   VISÍVEL, com distribuição polar por índice entre os ativos (sem
+  //   sobreposição) + passada anti-colisão de segurança.
+  // - Fora desses casos: coordenada real (fora da tela some, normal no mapa).
+  // setLatLng direto + refreshClusters: sem dessincronizar o cluster.
   // ---------------------------------------------------------------------------
   var areaPolygonsLayer = L.layerGroup().addTo(map);
   var markerByAnimal = new Map();      // animal_id (string) -> L.marker (no cluster)
-  var clampActiveByAnimal = new Map(); // animal_id -> bool (estado da histerese)
-  var clampTargetByAnimal = new Map(); // animal_id -> [lat, lng] determinístico
-  var markerTweenByAnimal = new Map(); // animal_id -> rAF id (transição em curso)
-
-  var CLAMP_MIN_ZOOM = 8;   // abaixo disso, sempre a coordenada real
-  var CLAMP_ENGAGE = 0.45;  // cobertura da viewport p/ começar a clampar
-  var CLAMP_RELEASE = 0.30; // cobertura p/ soltar e voltar à coord real
 
   function getAreaRingsOf(p) {
     var raw = p && p.area_polygon;
@@ -1021,7 +1014,13 @@ $(document).ready(function () {
     return ((h >>> 0) % 10000) / 10000;
   }
 
+  // Memoizado (WeakMap): os mesmos anéis são medidos a cada pan/zoom.
+  var ringBboxMemo = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
   function ringBboxOf(ring) {
+    if (ringBboxMemo && ring && typeof ring === 'object') {
+      var hit = ringBboxMemo.get(ring);
+      if (hit !== undefined) return hit;
+    }
     var minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
     for (var i = 0; i < ring.length; i++) {
       var pt = ring[i];
@@ -1035,30 +1034,18 @@ $(document).ready(function () {
       if (lng > maxLng) maxLng = lng;
     }
     if (minLat === Infinity) return null;
-    return { minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng };
-  }
-
-  // Fração da viewport ocupada pela zona (maior eixo, limitada a 1).
-  // Ex.: 0.5 = a zona cobre metade da tela numa direção. A porta de zoom
-  // (MIN_ZOOM) já garante coord real na visão regional, então aqui a
-  // sensibilidade pode ser maior para zonas pequenas.
-  function ringsCoverageOfViewport(rings, bounds) {
-    var vLat = bounds.getNorth() - bounds.getSouth();
-    var vLng = bounds.getEast() - bounds.getWest();
-    if (!(vLat > 0) || !(vLng > 0)) return 0;
-    var cov = 0;
-    rings.forEach(function (ring) {
-      var b = ringBboxOf(ring);
-      if (!b) return;
-      cov = Math.max(cov, Math.min(1, Math.max((b.maxLat - b.minLat) / vLat, (b.maxLng - b.minLng) / vLng)));
-    });
-    return cov;
+    var out = { minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng };
+    if (ringBboxMemo && ring && typeof ring === 'object') {
+      try { ringBboxMemo.set(ring, out); } catch (e) {}
+    }
+    return out;
   }
 
   // Ponto determinístico dentro dos anéis: estável entre pans/zooms e
   // distinto por animal (seed) mesmo quando compartilham a mesma zona —
   // inclusive se o centroide cair dentro (o deslocamento inicial já usa a
-  // direção da seed, ~2% do tamanho da zona).
+  // direção da seed, ~2% do tamanho da zona). Fallback da âncora polar e do
+  // submit (ponto inicial quando cria sem clicar no mapa).
   function anchorPointInRings(rings, seedStr) {
     if (!rings || rings.length === 0) return null;
     var base = rings[0];
@@ -1098,41 +1085,103 @@ $(document).ready(function () {
     return null;
   }
 
-  // Move o marcador com tween curto (não remove/readiciona: sem piscar).
-  function tweenMarkerTo(marker, animalId, to) {
-    try {
-      var prev = markerTweenByAnimal.get(animalId);
-      if (prev) {
-        try { cancelAnimationFrame(prev); } catch (e) {}
-        markerTweenByAnimal.delete(animalId);
+  // Recorta um anel [lat,lng] pelo retângulo da viewport (Sutherland–
+  // Hodgman no plano x=lng, y=lat). Retorna anel [lat,lng] (pode esvaziar).
+  function clipRingToViewport(ring, bounds) {
+    var west = bounds.getWest(), east = bounds.getEast();
+    var south = bounds.getSouth(), north = bounds.getNorth();
+    var pts = [];
+    for (var i = 0; i < ring.length; i++) {
+      var q = ring[i];
+      if (!q || q.length < 2) continue;
+      var lat = parseFloat(q[0]);
+      var lng = parseFloat(q[1]);
+      if (!isNaN(lat) && !isNaN(lng)) pts.push([lng, lat]);
+    }
+    if (pts.length < 3) return [];
+    var edges = [
+      { inside: function (p) { return p[0] >= west; }, axis: 0, val: west },
+      { inside: function (p) { return p[0] <= east; }, axis: 0, val: east },
+      { inside: function (p) { return p[1] >= south; }, axis: 1, val: south },
+      { inside: function (p) { return p[1] <= north; }, axis: 1, val: north }
+    ];
+    for (var e = 0; e < edges.length; e++) {
+      var edge = edges[e];
+      var out = [];
+      for (var j = 0; j < pts.length; j++) {
+        var cur = pts[j];
+        var prv = pts[(j + pts.length - 1) % pts.length];
+        var curIn = edge.inside(cur);
+        var prvIn = edge.inside(prv);
+        if (curIn) {
+          if (!prvIn) {
+            var hit = edgeIntersect(prv, cur, edge);
+            if (hit) out.push(hit);
+          }
+          out.push(cur);
+        } else if (prvIn) {
+          var hit2 = edgeIntersect(prv, cur, edge);
+          if (hit2) out.push(hit2);
+        }
       }
-      var from = marker.getLatLng();
-      var dLat = to[0] - from.lat;
-      var dLng = to[1] - from.lng;
-      if (Math.abs(dLat) < 1e-9 && Math.abs(dLng) < 1e-9) return;
-      var dur = 380;
-      var t0 = null;
-      var step = function (ts) {
-        if (t0 === null) t0 = ts;
-        var k = Math.min(1, (ts - t0) / dur);
-        var e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
-        try {
-          marker.setLatLng([from.lat + dLat * e, from.lng + dLng * e]);
-        } catch (err) {
-          markerTweenByAnimal.delete(animalId);
-          return;
-        }
-        if (k < 1) {
-          markerTweenByAnimal.set(animalId, requestAnimationFrame(step));
-        } else {
-          markerTweenByAnimal.delete(animalId);
-          try {
-            if (markersCluster && typeof markersCluster.refreshClusters === 'function') markersCluster.refreshClusters(marker);
-          } catch (err2) {}
-        }
-      };
-      markerTweenByAnimal.set(animalId, requestAnimationFrame(step));
-    } catch (e) {}
+      pts = out.filter(function (p) { return p && isFinite(p[0]) && isFinite(p[1]); });
+      if (pts.length < 3) return [];
+    }
+    return pts.map(function (p) { return [p[1], p[0]]; });
+  }
+
+  function edgeIntersect(a, b, edge) {
+    var d = (edge.axis === 0 ? b[0] - a[0] : b[1] - a[1]);
+    if (Math.abs(d) < 1e-12) return null;
+    var t = (edge.val - (edge.axis === 0 ? a[0] : a[1])) / d;
+    if (!isFinite(t)) return null;
+    return edge.axis === 0
+      ? [edge.val, a[1] + t * (b[1] - a[1])]
+      : [a[0] + t * (b[0] - a[0]), edge.val];
+  }
+
+  // Interseção área×viewport: anéis recortados + centro/tamanho da união
+  // visível. Null se nada da área cruza a tela.
+  function visibleIntersectionOfRings(rings, bounds) {
+    var clipped = [];
+    (rings || []).forEach(function (ring) {
+      if (!ringBboxIntersectsBounds(ring, bounds)) return;
+      var c = clipRingToViewport(ring, bounds);
+      if (c && c.length >= 3) clipped.push(c);
+    });
+    if (clipped.length === 0) return null;
+    var b = null;
+    clipped.forEach(function (r) {
+      var rb = ringBboxOf(r);
+      if (!rb) return;
+      b = b ? {
+        minLat: Math.min(b.minLat, rb.minLat),
+        maxLat: Math.max(b.maxLat, rb.maxLat),
+        minLng: Math.min(b.minLng, rb.minLng),
+        maxLng: Math.max(b.maxLng, rb.maxLng)
+      } : rb;
+    });
+    if (!b) return null;
+    return {
+      rings: clipped,
+      cxLat: (b.minLat + b.maxLat) / 2,
+      cxLng: (b.minLng + b.maxLng) / 2,
+      spanLat: Math.max(1e-9, b.maxLat - b.minLat),
+      spanLng: Math.max(1e-9, b.maxLng - b.minLng)
+    };
+  }
+
+  // Âncora polar dentro da parte visível: índice i de N distribuídos em
+  // círculo ao redor do centro visível (separação natural entre ativos).
+  function polarAnchorInVisible(vis, idx, total) {
+    var n = Math.max(1, total);
+    var ang = (idx * 2 * Math.PI) / n;
+    var rad = 0.3 * Math.min(vis.spanLat, vis.spanLng);
+    var cand = [vis.cxLat + Math.sin(ang) * rad, vis.cxLng + Math.cos(ang) * rad];
+    for (var i = 0; i < vis.rings.length; i++) {
+      if (isPointInsidePolygon(cand[0], cand[1], vis.rings[i])) return cand;
+    }
+    return null;
   }
 
   // Separação mínima em pixels entre âncoras clampadas (marcadores de 36px
@@ -1143,11 +1192,9 @@ $(document).ready(function () {
     if (!map || !rawMarkersGeoJson || !rawMarkersGeoJson.features) return;
     var bounds;
     try { bounds = map.getBounds(); } catch (e) { return; }
-    // Porta de zoom: abaixo dela, sempre a coordenada real (visão regional).
-    var zoomOk = true;
-    try { zoomOk = map.getZoom() >= CLAMP_MIN_ZOOM; } catch (e) {}
     var seen = new Set();
     var plan = new Map(); // animalId -> { marker, target, clamped, rings }
+    var actives = [];     // [{ animalId }] com ponto real fora da tela + área visível
     rawMarkersGeoJson.features.forEach(function (f) {
       var p = f.properties || {};
       var animalId = String(p.animal_id || p.id);
@@ -1157,44 +1204,47 @@ $(document).ready(function () {
       if (!marker) return;
       var real = realLatLngOfFeature(f);
       if (!real) return;
-      var target = real;
-      var clamped = false;
       var rings = getAreaRingsOf(p);
-      // Caminho barato primeiro (bbox): só roda o teste caro (turf) quando
-      // a zona está grande na tela e o zoom permite clampar.
-      if (rings.length > 0 && zoomOk && ringsCoverageOfViewport(rings, bounds) >= CLAMP_RELEASE) {
-        var outside = !rings.some(function (ring) { return isPointInsidePolygon(real[0], real[1], ring); });
-        if (outside) {
-          var cov = ringsCoverageOfViewport(rings, bounds);
-          var active = clampActiveByAnimal.get(animalId) === true;
-          if (active) {
-            if (cov < CLAMP_RELEASE) active = false;
-          } else if (cov >= CLAMP_ENGAGE) {
-            active = true;
-          }
-          clampActiveByAnimal.set(animalId, active);
-          if (active) {
-            var anchor = clampTargetByAnimal.get(animalId);
-            if (!anchor) {
-              anchor = anchorPointInRings(rings, animalId + '|' + (p.nome_cientifico || ''));
-              if (anchor) clampTargetByAnimal.set(animalId, anchor);
-            }
-            if (anchor) { target = anchor; clamped = true; }
-          }
-        } else {
-          clampActiveByAnimal.set(animalId, false);
-        }
-      } else {
-        clampActiveByAnimal.set(animalId, false);
+      var realVisible = false;
+      try { realVisible = bounds.contains([real[0], real[1]]); } catch (e) {}
+      // Ponto real na tela: fica nele (cluster gerencia). Sem área: idem.
+      if (realVisible || rings.length === 0) {
+        plan.set(animalId, { marker: marker, target: real, clamped: false, rings: rings });
+        return;
       }
-      plan.set(animalId, { marker: marker, target: target, clamped: clamped, rings: rings });
+      var vis = visibleIntersectionOfRings(rings, bounds);
+      if (!vis) {
+        plan.set(animalId, { marker: marker, target: real, clamped: false, rings: rings });
+        return;
+      }
+      actives.push({ animalId: animalId, vis: vis, p: p, real: real });
+      plan.set(animalId, { marker: marker, target: real, clamped: true, rings: vis.rings });
     });
+    // Distribuição polar por índice (ordem estável por id) entre os ativos.
+    actives.sort(function (x, y) { return x.animalId < y.animalId ? -1 : 1; });
+    actives.forEach(function (a, idx) {
+      var t = plan.get(a.animalId);
+      if (!t) return;
+      var anchor = polarAnchorInVisible(a.vis, idx, actives.length);
+      if (!anchor) anchor = anchorPointInRings(a.vis.rings, a.animalId + '|' + ((a.p && a.p.nome_cientifico) || ''));
+      if (anchor) {
+        t.target = anchor;
+      } else {
+        t.target = a.real;
+        t.clamped = false;
+      }
+    });
+    // Rede de segurança: nenhuma âncora clampada dentro da outra.
     declutterClampedAnchors(plan);
     plan.forEach(function (t, animalId) {
+      if (!t.target) return;
       var cur = null;
       try { cur = t.marker.getLatLng(); } catch (e) {}
       if (cur && (Math.abs(cur.lat - t.target[0]) > 1e-9 || Math.abs(cur.lng - t.target[1]) > 1e-9)) {
-        tweenMarkerTo(t.marker, animalId, t.target);
+        try { t.marker.setLatLng(t.target); } catch (e) {}
+        try {
+          if (markersCluster && typeof markersCluster.refreshClusters === 'function') markersCluster.refreshClusters(t.marker);
+        } catch (e2) {}
       }
     });
   }
@@ -1492,12 +1542,6 @@ $(document).ready(function () {
     markersData.length = 0;
     markersCluster.clearLayers();
     markerByAnimal.clear();
-    clampActiveByAnimal.clear();
-    clampTargetByAnimal.clear();
-    markerTweenByAnimal.forEach(function (rafId) {
-      try { cancelAnimationFrame(rafId); } catch (e) {}
-    });
-    markerTweenByAnimal.clear();
     if (typeof areaPolygonsLayer !== 'undefined' && areaPolygonsLayer) areaPolygonsLayer.clearLayers();
     loadMarkers();
   }
@@ -2352,6 +2396,22 @@ $(document).ready(function () {
     }
     return pts.filter(function (_, i) { return keep[i]; });
   }
+  // Seleciona os anéis representativos: descarta micro-ilhas (<~200m de
+  // lado), fica com os 25 maiores e afina com RDP (tol 0.003 ≈ 330m).
+  // Biomas precisos vêm com centenas de anéis — sem isso o payload vai a MBs.
+  function selectRepresentativeRings(rings) {
+    var scored = [];
+    (rings || []).forEach(function (ring) {
+      if (!ring || ring.length < 3) return;
+      var b = ringBboxOf(ring);
+      if (!b) return;
+      var span = Math.max(b.maxLat - b.minLat, b.maxLng - b.minLng);
+      if (span < 0.002) return; // micro-ilha irrelevante na tela
+      scored.push({ ring: ring, area: (b.maxLat - b.minLat) * (b.maxLng - b.minLng) });
+    });
+    scored.sort(function (x, y) { return y.area - x.area; });
+    return scored.slice(0, 25).map(function (o) { return simplifyBigRingRDP(o.ring, 0.003); });
+  }
   function applyModalBiomeAreaRings(key, nome, color, rings) {
     saveModalPolygonHistoryState();
     if (color) {
@@ -2359,12 +2419,11 @@ $(document).ready(function () {
       try { $('#modal-polygon-color-picker').val(modalPolygonColor); } catch (e) {}
     }
     modalDraftPolygonsList = (modalDraftPolygonsList || []).filter(r => r && r.length > 0);
-    // 5 decimais (~1m): evita payload gigante ("Field value too long" no multer).
-    // + RDP em anéis gigantes: 24k pts -> ~5k sem perda visual.
+    // 5 decimais (~1m) + seleção RDP: 219 anéis/0,9 MB -> ~25 anéis/~10 KB.
     const round5 = (v) => Math.round(parseFloat(v) * 1e5) / 1e5;
-    rings.forEach(ring => {
-      const rounded = ring.map(pt => [round5(pt[0]), round5(pt[1])]);
-      modalDraftPolygonsList.push(simplifyBigRingRDP(rounded));
+    const slimRings = selectRepresentativeRings(rings.map(ring => ring.map(pt => [round5(pt[0]), round5(pt[1])])));
+    slimRings.forEach(ring => {
+      modalDraftPolygonsList.push(ring);
     });
     selectModalBiomeChipByKey(key);
     redrawModalDraftPolygonLayers();
@@ -3288,10 +3347,9 @@ $(document).ready(function () {
     }
   });
 
-  // Reduz fotos grandes antes do upload (máx. 1600px, JPEG 0.85): upload,
-  // banco e recarregamentos ficam ordens de magnitude mais leves. Arquivos
-  // pequenos e não-imagens passam intactos. Nunca rejeita: em qualquer
-  // falha, usa o original.
+  // Reduz fotos grandes antes do upload (máx. 1000px, JPEG 0.75: ~60 KB
+  // por foto em vez de 500 KB–2 MB). Arquivos pequenos e não-imagens passam
+  // intactos. Nunca rejeita: em qualquer falha, usa o original.
   function downscalePhotoFile(file) {
     return new Promise(function (resolve) {
       try {
@@ -3306,17 +3364,17 @@ $(document).ready(function () {
             var w = img.naturalWidth || img.width;
             var h = img.naturalHeight || img.height;
             try { URL.revokeObjectURL(url); } catch (e) {}
-            if (!w || !h) return resolve(file);
-            var scale = Math.min(1, 1600 / Math.max(w, h));
-            if (scale >= 1) return resolve(file);
-            var cv = document.createElement('canvas');
-            cv.width = Math.round(w * scale);
-            cv.height = Math.round(h * scale);
-            cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-            var type = (file.type === 'image/png') ? 'image/png' : 'image/jpeg';
-            if (cv.toBlob) {
-              cv.toBlob(function (b) { resolve(b || file); }, type, 0.85);
-            } else resolve(file);
+          if (!w || !h) return resolve(file);
+          var scale = Math.min(1, 1000 / Math.max(w, h));
+          if (scale >= 1) return resolve(file);
+          var cv = document.createElement('canvas');
+          cv.width = Math.round(w * scale);
+          cv.height = Math.round(h * scale);
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          var type = (file.type === 'image/png') ? 'image/png' : 'image/jpeg';
+          if (cv.toBlob) {
+            cv.toBlob(function (b) { resolve(b || file); }, type, 0.75);
+          } else resolve(file);
           } catch (e) { resolve(file); }
         };
         img.onerror = function () { try { URL.revokeObjectURL(url); } catch (e) {} resolve(file); };
@@ -3483,8 +3541,8 @@ $(document).ready(function () {
   }
 
   // Gera o ícone a partir do enquadramento atual do preview.
-  // 192px JPEG com fundo escuro (exibido a 30-105px com recorte circular via
-  // CSS): ~20x mais leve que o PNG 500px e indistinguível na tela.
+  // 128px JPEG com fundo escuro (exibido a 30-105px com recorte circular via
+  // CSS): ~8 KB em vez de ~650 KB, indistinguível na tela.
   // Retorna Promise para o submit aguardar o recorte antes de enviar.
   function generateModalIconBase64() {
     const img = document.getElementById('modal-icon-preview-img');
@@ -3496,7 +3554,7 @@ $(document).ready(function () {
       // Nunca trava o submit: resolve mesmo se a imagem falhar (ex.: CORS).
       var timer = setTimeout(function() { done($('#modal-input-icon-base64').val() || null); }, 1500);
       try {
-        const SIZE = 192;
+        const SIZE = 128;
         const canvas = document.createElement('canvas');
         canvas.width = SIZE;
         canvas.height = SIZE;
@@ -3522,7 +3580,7 @@ $(document).ready(function () {
           const drawY = (SIZE - drawH) / 2 + (modalIconCropState.currentY * scaleRatio);
 
           ctx.drawImage(source, drawX, drawY, drawW, drawH);
-          return canvas.toDataURL('image/jpeg', 0.85);
+          return canvas.toDataURL('image/jpeg', 0.8);
         };
 
         // Atalho rápido: o preview já está decodificado no DOM — desenha
@@ -3686,6 +3744,15 @@ $(document).ready(function () {
   // Submissão do Formulário de Animal (Criação e Edição)
   $("#form-create-animal").submit(async function(e) {
     e.preventDefault();
+    var saveBtn = $('#modal-btn-save-species');
+    var saveBtnHtml = saveBtn.length ? saveBtn.html() : null;
+    if (saveBtn.length) {
+      saveBtn.prop('disabled', true);
+      saveBtn.html('<i class="fa-solid fa-spinner fa-spin me-2"></i>Salvando espécie...');
+    }
+    var restoreSaveBtn = function () {
+      if (saveBtn.length) { saveBtn.prop('disabled', false); saveBtn.html(saveBtnHtml); }
+    };
     // Garante que o recorte atual do ícone foi gerado antes de montar o FormData
     try { await generateModalIconBase64(); } catch (err) {}
     const formData = new FormData(this);
@@ -3745,6 +3812,7 @@ $(document).ready(function () {
     fetch(url, { method: method, body: formData })
     .then(res => res.json())
     .then(data => {
+      restoreSaveBtn();
       if (data.success) {
         systemAlert(editId ? "Espécie atualizada com sucesso!" : "Espécie cadastrada com sucesso!", 'success');
         $("#species-admin-modal").addClass("d-none");
@@ -3754,6 +3822,7 @@ $(document).ready(function () {
       }
     })
     .catch(err => {
+      restoreSaveBtn();
       console.error(err);
       systemAlert("Erro ao salvar espécie: " + (err.message || 'Falha de comunicação com o servidor.'), 'error');
     });

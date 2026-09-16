@@ -52,6 +52,18 @@ const upload = multer({
   }
 });
 
+// Ponto inicial determinístico (disperso por nome) quando o cadastro chega
+// sem nenhuma coordenada: evita que todos caiam no default fixo de
+// Florianópolis (-27.59, -48.54) e nasçam sobrepostos. Dispersão de ±0.5°.
+function defaultScatteredPoint(nome) {
+  let h = 5381;
+  const s = String(nome || Date.now());
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  const u = ((h >>> 0) % 10000) / 10000;
+  const v = (Math.floor((h >>> 0) / 10000) % 10000) / 10000;
+  return { lat: -27.59 + (u - 0.5) * 1.0, lng: -48.54 + (v - 0.5) * 1.0 };
+}
+
 // Traduz erros do multer para JSON amigável (senão cai no 500 em HTML).
 function uploadFieldsSafe(req, res, next) {
   uploadFields(req, res, function (err) {
@@ -301,8 +313,9 @@ router.post('/animais/', uploadFieldsSafe, async (req, res) => {
       let lat = parseFloat(b.lat);
       let lng = parseFloat(b.lng);
       if (isNaN(lat) || isNaN(lng)) {
-        lat = -27.59;
-        lng = -48.54;
+        const scatter = defaultScatteredPoint(b.nome_cientifico || b.nome_comum);
+        lat = scatter.lat;
+        lng = scatter.lng;
       }
       coordsList = [{ lat, lng }];
     }
@@ -508,8 +521,13 @@ router.patch('/animais/:id/', uploadFieldsSafe, async (req, res) => {
           `;
         }
       } else if (hasCoords || iconPath) {
-        const coordLat = hasCoords ? lat : -27.59;
-        const coordLng = hasCoords ? lng : -48.54;
+        let coordLat = lat;
+        let coordLng = lng;
+        if (!hasCoords) {
+          const scatter = defaultScatteredPoint(animal.nome_cientifico || animal.nome_comum);
+          coordLat = scatter.lat;
+          coordLng = scatter.lng;
+        }
         await prisma.$executeRaw`
           INSERT INTO public.api_marcador (animal_id, location, icone, created_at)
           VALUES (${id}, ST_SetSRID(ST_MakePoint(${coordLng}, ${coordLat}), 4326), ${iconVal}, NOW());

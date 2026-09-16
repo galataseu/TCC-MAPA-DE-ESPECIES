@@ -140,8 +140,8 @@ block content
             input#animal-edit-id(type="hidden", name="animal_id")
             input#modal-coordenadas-json-hidden(type="hidden", name="coordenadas_json")
             input#modal-area-polygon-json-hidden(type="hidden", name="area_polygon_json")
-            input.coord-lat(type="hidden", name="lat", value="-27.59")
-            input.coord-lng(type="hidden", name="lng", value="-48.54")
+            input.coord-lat(type="hidden", name="lat")
+            input.coord-lng(type="hidden", name="lng")
 
             //- Seção de Uploads (Imagens e Ícone Recortáveis com Drag e Wheel Zoom)
             .row.g-3.mb-4
@@ -247,7 +247,7 @@ block content
 
             //- Botões de Ação
             .d-flex.gap-3.mt-auto
-              button.btn.btn-warning.fw-bold.rounded-pill.px-4.py-2(type="submit", style="background-color: #9C5B1C; border: none; color: #FFF;")
+              button#modal-btn-save-species.btn.btn-warning.fw-bold.rounded-pill.px-4.py-2(type="submit", style="background-color: #9C5B1C; border: none; color: #FFF;")
                 i.fa-solid.fa-check.me-2
                 | Salvar Espécie
               button.btn.btn-outline-secondary.rounded-pill.px-4.py-2.btn-cancel-modal(type="button")
@@ -541,5 +541,5 @@ block content
 
 block scripts
   script(src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.10.5/typeahead.bundle.min.js")
-  script(src="/assets/js/app.js?v=13")
+  script(src="/assets/js/app.js?v=14")
 

@@ -930,6 +930,33 @@ $(document).ready(function() {
         }
         return pts.filter(function (_, i) { return keep[i]; });
     }
+    // Seleciona os anéis representativos: descarta micro-ilhas (<~200m de
+    // lado), fica com os 25 maiores e afina com RDP (tol 0.003 ≈ 330m).
+    function selectPageRepresentativeRings(rings) {
+        var scored = [];
+        (rings || []).forEach(function (ring) {
+            if (!ring || ring.length < 3) return;
+            var b = (function (rg) {
+                var a = Infinity, c = Infinity, d = -Infinity, e = -Infinity;
+                for (var i = 0; i < rg.length; i++) {
+                    var q = rg[i];
+                    if (!q || q.length < 2) continue;
+                    var lat = parseFloat(q[0]), lng = parseFloat(q[1]);
+                    if (isNaN(lat) || isNaN(lng)) continue;
+                    if (lat < a) a = lat;
+                    if (lat > d) d = lat;
+                    if (lng < c) c = lng;
+                    if (lng > e) e = lng;
+                }
+                if (a === Infinity) return null;
+                return { span: Math.max(d - a, e - c), area: (d - a) * (e - c) };
+            })(ring);
+            if (!b || b.span < 0.002) return;
+            scored.push({ ring: ring, area: b.area });
+        });
+        scored.sort(function (x, y) { return y.area - x.area; });
+        return scored.slice(0, 25).map(function (o) { return simplifyPageBigRingRDP(o.ring, 0.003); });
+    }
     function applyBiomeAreaRings(key, nome, color, rings) {
         savePolygonHistoryState();
         if (color) {
@@ -937,11 +964,11 @@ $(document).ready(function() {
             try { $('#polygon-color-picker').val(polygonColor); } catch (e) {}
         }
         draftPolygonsList = (draftPolygonsList || []).filter(r => r && r.length > 0);
-        // 5 decimais (~1m) + RDP em anéis gigantes (24k pts -> ~5k).
+        // 5 decimais (~1m) + seleção RDP: 219 anéis/0,9 MB -> ~25 anéis/~10 KB.
         const round5 = (v) => Math.round(parseFloat(v) * 1e5) / 1e5;
-        rings.forEach(ring => {
-            const rounded = ring.map(pt => [round5(pt[0]), round5(pt[1])]);
-            draftPolygonsList.push(simplifyPageBigRingRDP(rounded));
+        const slimRings = selectPageRepresentativeRings(rings.map(ring => ring.map(pt => [round5(pt[0]), round5(pt[1])])));
+        slimRings.forEach(ring => {
+            draftPolygonsList.push(ring);
         });
         selectBiomeChipByKey(key);
         redrawDraftPolygonLayers();
@@ -1455,8 +1482,8 @@ $(document).ready(function() {
     }
 
     // Gera o ícone a partir do enquadramento atual do preview.
-    // 192px JPEG com fundo escuro (exibido a 30-105px com recorte circular
-    // via CSS): ~20x mais leve que o PNG 500px e indistinguível na tela.
+    // 128px JPEG com fundo escuro (exibido a 30-105px com recorte circular
+    // via CSS): ~8 KB em vez de ~650 KB, indistinguível na tela.
     // Retorna Promise para o submit aguardar o recorte antes de enviar.
     function generatePageIconBase64() {
         if (!iconImg || iconImg.classList.contains('d-none') || !iconImg.src) return Promise.resolve(null);
@@ -1466,7 +1493,7 @@ $(document).ready(function() {
             // Nunca trava o submit: resolve mesmo se a imagem falhar (ex.: CORS).
             var timer = setTimeout(function() { done($('#input-icon-base64').val() || null); }, 1500);
             try {
-                const SIZE = 192;
+                const SIZE = 128;
                 const canvas = document.createElement('canvas');
                 canvas.width = SIZE;
                 canvas.height = SIZE;
@@ -1492,7 +1519,7 @@ $(document).ready(function() {
                     const drawY = (SIZE - drawH) / 2 + (iconCropState.currentY * scaleRatio);
 
                     ctx.drawImage(source, drawX, drawY, drawW, drawH);
-                    return canvas.toDataURL('image/jpeg', 0.85);
+                    return canvas.toDataURL('image/jpeg', 0.8);
                 };
 
                 // Atalho rápido: preview já decodificado no DOM, sem recarregar da rede.
@@ -1535,7 +1562,8 @@ $(document).ready(function() {
         });
     }
 
-    // Reduz fotos grandes antes do upload (máx. 1600px, JPEG 0.85).
+    // Reduz fotos grandes antes do upload (máx. 1000px, JPEG 0.75: ~60 KB
+    // por foto em vez de 500 KB–2 MB).
     // Nunca rejeita: em qualquer falha, usa o original.
     function downscalePagePhotoFile(file) {
         return new Promise(function (resolve) {
@@ -1552,7 +1580,7 @@ $(document).ready(function() {
                         var h = img.naturalHeight || img.height;
                         try { URL.revokeObjectURL(url); } catch (e) {}
                         if (!w || !h) return resolve(file);
-                        var scale = Math.min(1, 1600 / Math.max(w, h));
+                        var scale = Math.min(1, 1000 / Math.max(w, h));
                         if (scale >= 1) return resolve(file);
                         var cv = document.createElement('canvas');
                         cv.width = Math.round(w * scale);
@@ -1560,7 +1588,7 @@ $(document).ready(function() {
                         cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
                         var type = (file.type === 'image/png') ? 'image/png' : 'image/jpeg';
                         if (cv.toBlob) {
-                            cv.toBlob(function (b) { resolve(b || file); }, type, 0.85);
+                            cv.toBlob(function (b) { resolve(b || file); }, type, 0.75);
                         } else resolve(file);
                     } catch (e) { resolve(file); }
                 };
@@ -1573,6 +1601,15 @@ $(document).ready(function() {
     // Submissão do Formulário de Cadastro / Edição
     $('#form-species-create').submit(async function(e) {
         e.preventDefault();
+        var saveBtn = $('#btn-save-species');
+        var saveBtnHtml = saveBtn.length ? saveBtn.html() : null;
+        if (saveBtn.length) {
+            saveBtn.prop('disabled', true);
+            saveBtn.html('<i class="fa-solid fa-spinner fa-spin me-2"></i>Salvando espécie...');
+        }
+        var restoreSaveBtn = function () {
+            if (saveBtn.length) { saveBtn.prop('disabled', false); saveBtn.html(saveBtnHtml); }
+        };
         // Garante que o recorte atual do ícone foi gerado antes de montar o FormData
         try { await generatePageIconBase64(); } catch (err) {}
         const formData = new FormData(this);
@@ -1604,6 +1641,7 @@ $(document).ready(function() {
         fetch(url, { method: method, body: formData })
         .then(res => res.json())
         .then(data => {
+            restoreSaveBtn();
             if (data.success) {
                 systemAlert(animalId ? 'Espécie atualizada com sucesso!' : 'Espécie salva com sucesso!', 'success');
                 resetForm();
@@ -1613,6 +1651,7 @@ $(document).ready(function() {
             }
         })
         .catch(err => {
+            restoreSaveBtn();
             console.error('Erro na requisição:', err);
             systemAlert('Erro ao salvar espécie: ' + (err.message || 'Falha de comunicação com o servidor.'), 'error');
         });

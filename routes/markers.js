@@ -103,10 +103,12 @@ router.get('/', async (req, res) => {
         a.obs,
         a.nivel_extincao_id,
         (
-          SELECT json_agg(json_build_object('id', ai.id, 'imagem', ai.imagem, 'legenda', ai.legenda, 'ordem', ai.ordem) ORDER BY ai.ordem ASC)
+          SELECT ai.imagem
           FROM api_animalimagem ai
           WHERE ai.animal_id = a.id
-        ) as imagens_relacionadas,
+          ORDER BY ai.ordem ASC
+          LIMIT 1
+        ) as primeira_imagem,
         n.nome as nivel_extincao,
         n.sigla as nivel_sigla,
         (
@@ -145,10 +147,12 @@ router.get('/', async (req, res) => {
             a.obs,
             a.nivel_extincao_id,
             (
-              SELECT json_agg(json_build_object('id', ai.id, 'imagem', ai.imagem, 'legenda', ai.legenda, 'ordem', ai.ordem) ORDER BY ai.ordem ASC)
+              SELECT ai.imagem
               FROM api_animalimagem ai
               WHERE ai.animal_id = a.id
-            ) as imagens_relacionadas,
+              ORDER BY ai.ordem ASC
+              LIMIT 1
+            ) as primeira_imagem,
             n.nome as nivel_extincao,
             n.sigla as nivel_sigla,
             (
@@ -190,29 +194,11 @@ router.get('/', async (req, res) => {
         console.error("Error parsing geometry:", e);
       }
 
-      let imagensList = [];
-      if (m.imagens_relacionadas && Array.isArray(m.imagens_relacionadas)) {
-        imagensList = m.imagens_relacionadas.map(img => {
-          let u = img.imagem ? img.imagem.trim() : '';
-          if (u && !u.startsWith('http') && !u.startsWith('/') && !u.startsWith('data:')) {
-            u = `/media/${u}`;
-          }
-          return {
-            id: img.id,
-            imagem: u || '/assets/img/logotipo.png',
-            legenda: img.legenda || m.nome_comum,
-            ordem: img.ordem || 1
-          };
-        });
+      let imgUrl = m.primeira_imagem ? m.primeira_imagem.trim() : '';
+      if (imgUrl && !imgUrl.startsWith('http') && !imgUrl.startsWith('/') && !imgUrl.startsWith('data:')) {
+        imgUrl = `/media/${imgUrl}`;
       }
-
-      let imgUrl = imagensList.length > 0 ? imagensList[0].imagem : '/assets/img/logotipo.png';
-      if (imagensList.length === 0) {
-        imagensList = [{ id: 1, imagem: imgUrl, legenda: m.nome_comum, ordem: 1 }];
-      } else {
-        // Limita a até 3 imagens por animal
-        imagensList = imagensList.slice(0, 3);
-      }
+      if (!imgUrl) imgUrl = '/assets/img/logotipo.png';
 
       // Ícone do animal para o marcador: prioriza icone do banco se for foto real, senão primeira foto do animal
       let iconUrl = (m.icone && typeof m.icone === 'string' && m.icone.trim().length > 0 && !m.icone.includes('logotipo.png'))
@@ -221,6 +207,8 @@ router.get('/', async (req, res) => {
       if (iconUrl && !iconUrl.startsWith('http') && !iconUrl.startsWith('/') && !iconUrl.startsWith('data:')) {
         iconUrl = `/media/${iconUrl}`;
       }
+
+      let imagensList = [{ id: 1, imagem: imgUrl, legenda: m.nome_comum, ordem: 1 }];
 
       // Extrai polígono de área (armazenado em obs com delimitador [[POLYGON_DATA]])
       let areaPolygon = null;
@@ -263,7 +251,6 @@ router.get('/', async (req, res) => {
           nivel_extincao: m.nivel_extincao,
           nivel_sigla: m.nivel_sigla,
           icone: iconUrl,
-          imagem: imgUrl,
           biomas: m.biomas || [],
           imagens: imagensList
         }

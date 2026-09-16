@@ -15,8 +15,8 @@ block content
           input#animal-id-hidden(type="hidden", name="animal_id")
           input#coordenadas-json-hidden(type="hidden", name="coordenadas_json")
           input#area-polygon-json-hidden(type="hidden", name="area_polygon_json")
-          input.coord-lat(type="hidden", name="lat", value="-27.59")
-          input.coord-lng(type="hidden", name="lng", value="-48.54")
+          input.coord-lat(type="hidden", name="lat")
+          input.coord-lng(type="hidden", name="lng")
 
           //- Seção de Uploads (Imagens e Ícone Recortáveis com Drag e Wheel Zoom)
           .row.g-3.mb-4
@@ -271,7 +271,7 @@ block content
             | Iniciar Importação
 
 block scripts
-  script(src="/assets/js/animais.js?v=10")
+  script(src="/assets/js/animais.js?v=11")
 
 
 
