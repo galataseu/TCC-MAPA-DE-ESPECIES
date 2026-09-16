@@ -16,7 +16,8 @@ $(document).ready(function() {
         $("#toggle-btn-map").addClass("d-none");
     }
 
-    // Mapa de cores oficiais para níveis de extinção
+    // Mapa de cores oficiais para níveis de extinção — FONTE ÚNICA.
+    // Chave canônica: sigla minúscula. Chaves numéricas = fallback legado.
     const extinctionColorMap = {
         'ex': '#403E4C', 'ew': '#831F34', 'cr': '#FF4068', 'en': '#FF6426',
         'vu': '#FFA63A', 'nt': '#217757', 'lc': '#1A5FB4', 'dd': '#555555',
@@ -85,8 +86,8 @@ $(document).ready(function() {
                 select.append('<option value="" style="background-color: #2B2A33; color: #FFF;">NÍVEL DE EXTINÇÃO</option>');
                 res.data.forEach(n => {
                     const sigla = (n.sigla || '').toLowerCase();
-                    const color = extinctionColorMap[n.id] || extinctionColorMap[sigla] || '#383642';
-                    const textColor = (n.id == 3 || sigla === 'vu') ? '#111111' : '#FFFFFF';
+                    const color = extinctionColorMap[sigla] || extinctionColorMap[String(n.id)] || '#383642';
+                    const textColor = sigla === 'vu' ? '#111111' : '#FFFFFF';
                     select.append(`<option value="${n.id}" data-sigla="${sigla}" style="background-color: ${color}; color: ${textColor}; font-weight: bold; padding: 8px;">${n.nome}</option>`);
                 });
             }
@@ -104,11 +105,13 @@ $(document).ready(function() {
             }
         }).catch(err => console.error(err));
 
-    // Mudar cor dinamicamente ao selecionar Nível de Extinção
+    // Mudar cor dinamicamente ao selecionar Nível de Extinção.
+    // Usa a sigla da option (fonte canônica); o ID é só fallback.
     $(document).on('change', '.select-nivel-extincao', function() {
         const val = $(this).val();
-        const color = extinctionColorMap[val] || '#383642';
-        const textColor = val == '3' ? '#111111' : '#FFFFFF';
+        const sigla = String($(this).find('option:selected').data('sigla') || '').toLowerCase();
+        const color = extinctionColorMap[sigla] || extinctionColorMap[val] || '#383642';
+        const textColor = sigla === 'vu' ? '#111111' : '#FFFFFF';
         $(this).css({
             'background-color': color,
             'border-color': color,

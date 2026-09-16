@@ -1274,6 +1274,11 @@ html, body, #main-layout {
 .select-nivel-extincao option[value="5"] { background-color: #1A5FB4; color: #FFF; }
 .select-nivel-extincao option[data-sigla="dd"],
 .select-nivel-extincao option[value="6"] { background-color: #555555; color: #FFF; }
+/* EX/EW (IDs legados 7/8): mesma cor da legenda, marcadores e e-mails. */
+.select-nivel-extincao option[data-sigla="ex"],
+.select-nivel-extincao option[value="7"] { background-color: #403E4C; color: #FFF; }
+.select-nivel-extincao option[data-sigla="ew"],
+.select-nivel-extincao option[value="8"] { background-color: #831F34; color: #FFF; }
 
 
 

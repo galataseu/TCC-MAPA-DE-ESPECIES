@@ -24,12 +24,16 @@ var darkFull = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_a
   keepBuffer: 4
 });
 
-// Mapa de cores para níveis de extinção
+// Mapa de cores para níveis de extinção — FONTE ÚNICA NO FRONTEND.
+// Chave canônica: sigla minúscula (ex, ew, cr, en, vu, nt, lc, dd).
+// As chaves numéricas são APENAS fallback legado (IDs antigos do banco:
+// 1=CR, 2=EN, 3=VU, 4=NT, 5=LC, 6=DD, 7=EX, 8=EW) — prefira sempre a sigla,
+// pois o ID varia conforme o seed do banco.
 const extinctionColorMap = {
-  'ex': '#403E4C', 'ew': '#831F34', 'cr': '#FF4068', 'en': '#ff6426',
-  'vu': '#FFA63A', 'nt': '#217757', 'lc': '#1a5fb4', 'dd': '#555555',
-  '1': '#FF4068', '2': '#ff6426', '3': '#FFA63A',
-  '4': '#217757', '5': '#1a5fb4', '6': '#555555', '7': '#403E4C', '8': '#831F34'
+  'ex': '#403E4C', 'ew': '#831F34', 'cr': '#FF4068', 'en': '#FF6426',
+  'vu': '#FFA63A', 'nt': '#217757', 'lc': '#1A5FB4', 'dd': '#555555',
+  '1': '#FF4068', '2': '#FF6426', '3': '#FFA63A',
+  '4': '#217757', '5': '#1A5FB4', '6': '#555555', '7': '#403E4C', '8': '#831F34'
 };
 
 function formatErrorMessage(data, fallback = 'Tente novamente.') {
@@ -3315,9 +3319,10 @@ $(document).ready(function () {
         const niveis = niveisRes.data || niveisRes;
         if (Array.isArray(niveis)) {
           niveis.forEach(item => {
-            const color = extinctionColorMap[item.id] || '#383642';
-            const textColor = item.id == 3 ? '#111111' : '#FFFFFF';
-            selectNiveis.append(`<option value="${item.id}" style="background-color: ${color}; color: ${textColor}; font-weight: bold; padding: 8px;">${item.nome}</option>`);
+            const sigla = String(item.sigla || '').toLowerCase();
+            const color = extinctionColorMap[sigla] || extinctionColorMap[String(item.id)] || '#383642';
+            const textColor = sigla === 'vu' ? '#111111' : '#FFFFFF';
+            selectNiveis.append(`<option value="${item.id}" data-sigla="${sigla}" style="background-color: ${color}; color: ${textColor}; font-weight: bold; padding: 8px;">${item.nome}</option>`);
           });
         }
 
@@ -3336,11 +3341,13 @@ $(document).ready(function () {
       });
   }
 
-  // Mudar cor dinamicamente ao selecionar Nível de Extinção no Modal
+  // Mudar cor dinamicamente ao selecionar Nível de Extinção no Modal.
+  // Usa a sigla da option selecionada (fonte canônica); o ID é só fallback.
   $(document).on('change', '.select-nivel-extincao', function() {
     const val = $(this).val();
-    const color = extinctionColorMap[val] || '#383642';
-    const textColor = val == '3' ? '#111111' : '#FFFFFF';
+    const sigla = String($(this).find('option:selected').data('sigla') || '').toLowerCase();
+    const color = extinctionColorMap[sigla] || extinctionColorMap[val] || '#383642';
+    const textColor = sigla === 'vu' ? '#111111' : '#FFFFFF';
     $(this).css({
       'background-color': color,
       'border-color': color,

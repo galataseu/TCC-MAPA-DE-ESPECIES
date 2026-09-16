@@ -10,8 +10,8 @@ const nodemailer = require('nodemailer');
 
 // Mesmas cores do site por sigla de status (extinctionColorMap do frontend).
 const STATUS_COLORS = {
-  EX: '#403E4C', EW: '#831F34', CR: '#FF4068', EN: '#ff6426',
-  VU: '#FFA63A', NT: '#217757', LC: '#1a5fb4', DD: '#555555'
+  EX: '#403E4C', EW: '#831F34', CR: '#FF4068', EN: '#FF6426',
+  VU: '#FFA63A', NT: '#217757', LC: '#1A5FB4', DD: '#555555'
 };
 
 let transporter = null;
