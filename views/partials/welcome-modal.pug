@@ -828,11 +828,12 @@ script.
             var p = feature.properties || {};
             var borderColor = previewStatusColor(p.nivel_sigla);
             var iconSrc = p.icone || '/assets/img/logotipo.png';
+            var iconFb = (iconSrc || '').indexOf('logotipo.png') !== -1;
             L.marker([coords[1], coords[0]], {
               interactive: false,
               icon: L.divIcon({
                 className: 'custom-animal-marker',
-                html: '<div class="marker-pin" style="border-color: ' + borderColor + ';"><div class="marker-avatar"><img src="' + iconSrc + '" alt=""></div></div>',
+                html: '<div class="marker-pin" style="border-color: ' + borderColor + ';"><div class="marker-avatar"><img src="' + iconSrc + '" alt="' + (iconFb ? 'Imagem livre não encontrada' : '') + '">' + (iconFb ? '<span class="avatar-fallback-tag" title="Imagem livre não encontrada">Imagem livre não encontrada</span>' : '') + '</div></div>',
                 iconSize: [36, 36],
                 iconAnchor: [18, 18]
               })

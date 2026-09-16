@@ -36,6 +36,12 @@ const extinctionColorMap = {
   '4': '#217757', '5': '#1A5FB4', '6': '#555555', '7': '#403E4C', '8': '#831F34'
 };
 
+// Animal sem foto/ícone usa a logotipo do sistema como fallback. Quando a
+// URL for a logotipo, as views exibem o selo "IMAGEM LIVRE NÃO ENCONTRADA".
+function isFallbackLogoUrl(u) {
+  return typeof u === 'string' && u.indexOf('logotipo.png') !== -1;
+}
+
 function formatErrorMessage(data, fallback = 'Tente novamente.') {
   if (!data) return fallback;
   if (typeof data === 'string') return data;
@@ -536,6 +542,7 @@ $(document).ready(function () {
         const statusSigla = a.nivel_sigla ? a.nivel_sigla.toLowerCase() : 'dd';
         const color = extinctionColorMap[statusSigla] || '#1a5fb4';
         let imgUrl = a.icone || (a.imagens && a.imagens.length > 0 ? a.imagens[0].imagem : '/assets/img/logotipo.png');
+        const imgFallback = isFallbackLogoUrl(imgUrl);
 
         let lat = -27.59;
         let lng = -48.54;
@@ -548,7 +555,8 @@ $(document).ready(function () {
           <div class="search-item-animal">
             <div class="animal-left">
               <div class="animal-avatar">
-                <img src="${imgUrl}" alt="${a.nome_comum}">
+                <img src="${imgUrl}" alt="${a.nome_comum}${imgFallback ? ' — imagem livre não encontrada' : ''}" title="${imgFallback ? 'Imagem livre não encontrada' : a.nome_comum}">
+                ${imgFallback ? '<span class="avatar-fallback-tag">Imagem livre não encontrada</span>' : ''}
               </div>
               <div class="animal-info">
                 <div class="animal-names">
@@ -619,6 +627,7 @@ $(document).ready(function () {
     if (iconUrl && !iconUrl.startsWith('http') && !iconUrl.startsWith('/') && !iconUrl.startsWith('data:')) {
       iconUrl = `/media/${iconUrl}`;
     }
+    const iconFallback = isFallbackLogoUrl(iconUrl);
     return L.divIcon({
       className: 'custom-animal-marker',
       html: `
@@ -626,7 +635,8 @@ $(document).ready(function () {
           ${(typeof favIsFav === 'function' && favIsFav(p.animal_id || p.id)) ? '<span class="map-fav-star"><i class="fa-solid fa-star"></i></span>' : ''}
           <div class="marker-pin" style="border-color: ${borderColor};">
             <div class="marker-avatar">
-              <img src="${iconUrl}" alt="${p.nome_comum || ''}" loading="lazy">
+              <img src="${iconUrl}" alt="${p.nome_comum || ''}${iconFallback ? ' — imagem livre não encontrada' : ''}" loading="lazy">
+              ${iconFallback ? '<span class="avatar-fallback-tag" title="Imagem livre não encontrada">Imagem livre não encontrada</span>' : ''}
             </div>
             <span class="marker-name-label">${p.nome_comum || ''}</span>
           </div>
@@ -1822,6 +1832,7 @@ $(document).ready(function () {
                 const statusSigla = p.nivel_sigla ? p.nivel_sigla.toLowerCase() : 'dd';
                 const borderColor = extinctionColorMap[statusSigla] || '#1a5fb4';
                 const iconSrc = p.icone || (p.imagens && p.imagens.length > 0 ? p.imagens[0].imagem : '/assets/img/logotipo.png');
+                const iconSrcFallback = isFallbackLogoUrl(iconSrc);
 
                 return L.marker(latlng, {
                   icon: L.divIcon({
@@ -1830,6 +1841,7 @@ $(document).ready(function () {
                       <div class="marker-pin" style="border-color: ${borderColor};">
                         <div class="marker-avatar">
                           <img src="${iconSrc}" alt="${p.nome_comum}">
+                          ${iconSrcFallback ? '<span class="avatar-fallback-tag" title="Imagem livre não encontrada">Imagem livre não encontrada</span>' : ''}
                         </div>
                         <span class="marker-name-label">${p.nome_comum}</span>
                       </div>
@@ -2168,6 +2180,7 @@ $(document).ready(function () {
           const statusSigla = p.nivel_sigla ? p.nivel_sigla.toLowerCase() : 'dd';
           const borderColor = extinctionColorMap[statusSigla] || '#1a5fb4';
           const iconSrc = p.icone || (p.imagens && p.imagens.length > 0 ? p.imagens[0].imagem : '/assets/img/logotipo.png');
+          const iconSrcFallback = isFallbackLogoUrl(iconSrc);
           return L.marker(latlng, {
             icon: L.divIcon({
               className: 'custom-animal-marker',
@@ -2175,6 +2188,7 @@ $(document).ready(function () {
                 <div class="marker-pin" style="border-color: ${borderColor};">
                   <div class="marker-avatar">
                     <img src="${iconSrc}" alt="${p.nome_comum || ''}">
+                    ${iconSrcFallback ? '<span class="avatar-fallback-tag" title="Imagem livre não encontrada">Imagem livre não encontrada</span>' : ''}
                   </div>
                   <span class="marker-name-label">${p.nome_comum || ''}</span>
                 </div>
@@ -2887,8 +2901,9 @@ $(document).ready(function () {
         const biomasHtml = getAnimalBiomesHtmlApp(animal);
 
         const imgs = getAnimalImagesApp(animal);
+        const imgsFallback = imgs.length > 0 && imgs.every(isFallbackLogoUrl);
         const slidesHtml = imgs.map((src, i) => `
-          <img src="${src}" alt="${animal.nome_comum}" class="card-slide-img ${i === 0 ? 'active' : ''}">
+          <img src="${src}" alt="${animal.nome_comum}${isFallbackLogoUrl(src) ? ' — imagem livre não encontrada' : ''}" class="card-slide-img ${i === 0 ? 'active' : ''}">
         `).join('');
 
         const dotsHtml = imgs.length > 1 ? `
@@ -2921,6 +2936,7 @@ $(document).ready(function () {
             <div class="species-card-slideshow">
               ${slidesHtml}
               ${dotsHtml}
+              ${imgsFallback ? '<span class="no-photo-badge"><i class="fa-solid fa-triangle-exclamation"></i>Imagem livre não encontrada</span>' : ''}
               <div class="species-card-slideshow-overlay"></div>
             </div>
             <div class="species-card-body">
@@ -3593,6 +3609,7 @@ $(document).ready(function () {
     // De preferência de 1 a 3 fotos
     allImgs = allImgs.slice(0, 3);
     if (allImgs.length === 0) allImgs.push('/assets/img/logotipo.png');
+    const modalImgFallback = allImgs.length > 0 && allImgs.every(isFallbackLogoUrl);
 
     let biomas = (animal.biomas || []).map(b => b.nome).join(', ') || 'Não informado';
 
@@ -3601,7 +3618,8 @@ $(document).ready(function () {
         <div class="row g-0">
           <div class="col-md-5">
             <div class="modal-img-container" style="overflow: hidden; position: relative; border-left: 5px solid ${statusColor}; height: 100%; min-height: 280px;">
-              <img id="modalCarouselImg" src="${allImgs[0]}" class="modal-img-pan" data-current="0" data-imgs='${JSON.stringify(allImgs)}'>
+              <img id="modalCarouselImg" src="${allImgs[0]}" alt="${animal.nome_comum || ''}${modalImgFallback ? ' — imagem livre não encontrada' : ''}" class="modal-img-pan" data-current="0" data-imgs='${JSON.stringify(allImgs)}'>
+              ${modalImgFallback ? '<span class="no-photo-badge"><i class="fa-solid fa-triangle-exclamation"></i>Imagem livre não encontrada</span>' : ''}
               ${allImgs.length > 1 ? `
                 <button class="carousel-btn carousel-prev" onclick="changeModalImg(-1)" style="position: absolute; top: 50%; left: 10px; z-index: 10; border: none; background: ${statusColor}; color: white; border-radius: 50%; width: 36px; height: 36px; cursor: pointer;">
                   <i class="fas fa-chevron-left"></i>
@@ -3728,6 +3746,10 @@ $(document).ready(function () {
     imgTag.attr('data-current', targetIndex);
     $('.modal-thumb-dot').removeClass('bg-primary text-white').addClass('bg-dark text-muted')
       .eq(targetIndex).removeClass('bg-dark text-muted').addClass('bg-primary text-white');
+    try {
+      const badge = imgTag.closest('.modal-img-container').find('.no-photo-badge');
+      if (badge.length) badge.toggle(isFallbackLogoUrl(imgs[targetIndex]));
+    } catch (e) {}
 
     imgTag.stop(true, true).fadeOut(120, function() {
       imgTag.attr('src', imgs[targetIndex]);
