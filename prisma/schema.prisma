@@ -323,7 +323,9 @@ model api_microrregiao {
 /// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
 model api_animalimagem {
   id         BigInt     @id @default(autoincrement())
-  imagem     String     @db.VarChar(500)
+  /// URL remota, /media/... legado ou data URL (uploads vão p/ o banco p/
+  /// sobreviver a hospedagem efêmera como Vercel/Render).
+  imagem     String     @db.Text
   legenda    String?    @db.VarChar(250)
   ordem      Int
   animal_id  BigInt

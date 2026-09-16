@@ -1,10 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const os = require('os');
-const { PrismaClient } = require('@prisma/client');
 const prisma = require('../services/db');
 const { sendStatusChangeEmail } = require('../services/mailer');
 const { getBiomaGeometry } = require('../utils/biomaPolygons');
@@ -39,43 +35,34 @@ async function dispatchStatusChange(animalId, oldNivelId, newNivelId) {
   }
 }
 
-function getMediaDir() {
-  const localDir = path.join(__dirname, '..', 'public', 'media');
-  try {
-    if (!fs.existsSync(localDir)) {
-      fs.mkdirSync(localDir, { recursive: true });
-    }
-    fs.accessSync(localDir, fs.constants.W_OK);
-    return localDir;
-  } catch (e) {
-    const tmpDir = path.join(os.tmpdir(), 'media');
-    try {
-      if (!fs.existsSync(tmpDir)) {
-        fs.mkdirSync(tmpDir, { recursive: true });
-      }
-    } catch (err2) {
-      console.error('Erro ao preparar diretório de media temporário:', err2);
-    }
-    return tmpDir;
-  }
-}
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, getMediaDir());
-  },
-  filename: function (req, file, cb) {
-    const ext = path.extname(file.originalname) || '.png';
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
-  }
-});
-
+// Uploads 100% em memória (memoryStorage): nada é gravado em disco.
+// Por quê: o app roda na Vercel/Render, onde o disco é efêmero — arquivos
+// salvos em /media evaporavam e os ícones/fotos "sumiam" (404 no banco).
+// Fotos e ícones vão para o banco como data URL (colunas TEXT), que o
+// frontend já sabe exibir em todos os lugares (cards, modal, marcadores).
+// URLs remotas (http) continuam guardadas como estão.
 const upload = multer({
-  storage: storage,
-  // area_polygon_json de biomas precisos chega a centenas de KB por campo
-  limits: { fieldSize: 20 * 1024 * 1024 }
+  storage: multer.memoryStorage(),
+  limits: {
+    // area_polygon_json de biomas precisos chega a centenas de KB por campo
+    fieldSize: 20 * 1024 * 1024,
+    // 6 MB por foto (o base64 infla ~33%)
+    fileSize: 6 * 1024 * 1024,
+    files: 11
+  }
 });
+
+// Traduz erros do multer para JSON amigável (senão cai no 500 em HTML).
+function uploadFieldsSafe(req, res, next) {
+  uploadFields(req, res, function (err) {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ success: false, error: 'Imagem muito grande (máx. 6 MB por foto). Comprima a imagem e tente de novo.', message: 'Imagem muito grande (máx. 6 MB por foto). Comprima a imagem e tente de novo.' });
+      if (err.code === 'LIMIT_FIELD_VALUE') return res.status(413).json({ success: false, error: 'Dados grandes demais para o servidor. Tente com menos fotos por vez.', message: 'Dados grandes demais para o servidor. Tente com menos fotos por vez.' });
+      return res.status(400).json({ success: false, error: 'Falha no upload: ' + (err.message || err.code), message: 'Falha no upload: ' + (err.message || err.code) });
+    }
+    next();
+  });
+}
 
 const serialize = (obj) => JSON.parse(JSON.stringify(obj, (key, value) =>
   typeof value === 'bigint' ? value.toString() : value
@@ -93,25 +80,25 @@ function formatPrismaError(err) {
   return err.message || 'Erro ao processar a requisição no banco de dados.';
 }
 
-// Helper para salvar imagem em base64 (crop de ícone)
-function saveBase64Image(dataString, prefix = 'icon') {
+// Converte arquivo enviado (memória) em data URL pronta p/ guardar no banco.
+// Retorna null se não for imagem.
+function fileToDataUrl(file) {
+  if (!file || !file.buffer || file.buffer.length === 0) return null;
+  const mime = file.mimetype || 'image/png';
+  if (!mime.startsWith('image/')) return null;
+  return `data:${mime};base64,${file.buffer.toString('base64')}`;
+}
+
+// Valida o crop do ícone (base64 vindo do canvas) e devolve a data URL
+// pronta p/ o banco. Limite de ~1,5M chars (~1,1 MB) contra payload absurdo.
+function cleanIconDataUrl(dataString) {
   if (!dataString || typeof dataString !== 'string' || !dataString.startsWith('data:image')) {
     return null;
   }
-  const matches = dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-  if (!matches || matches.length !== 3) return null;
-
-  try {
-    const ext = matches[1].includes('jpeg') ? '.jpg' : '.png';
-    const buffer = Buffer.from(matches[2], 'base64');
-    const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`;
-    const dir = getMediaDir();
-    fs.writeFileSync(path.join(dir, filename), buffer);
-    return `/media/${filename}`;
-  } catch (err) {
-    console.error('Erro ao salvar imagem base64:', err);
+  if (!/^data:image\/[A-Za-z0-9+.-]+;base64,/.test(dataString.slice(0, 60)) || dataString.length > 1500000) {
     return null;
   }
+  return dataString;
 }
 
 // GET /api/v1/niveis-extincao/
@@ -209,29 +196,29 @@ const uploadFields = upload.fields([
 ]);
 
 // POST /api/v1/animais/
-router.post('/animais/', uploadFields, async (req, res) => {
+router.post('/animais/', uploadFieldsSafe, async (req, res) => {
   try {
     const b = req.body;
     const now = new Date();
 
     const nivelExtincaoId = b.nivel_extincao_id ? BigInt(b.nivel_extincao_id) : 1n;
     
-    // 1. Capturar arquivo ou URL da imagem principal
+    // 1. Capturar arquivo ou URL da imagem principal (data URL p/ uploads)
     let imgPath = null;
     if (req.files && req.files['animal_imagem'] && req.files['animal_imagem'].length > 0) {
-      imgPath = `/media/${req.files['animal_imagem'][0].filename}`;
+      imgPath = fileToDataUrl(req.files['animal_imagem'][0]);
     } else if (b.imagem_url && b.imagem_url.trim().length > 0) {
       imgPath = b.imagem_url.trim();
     } else if (b.imagem) {
       imgPath = b.imagem;
     }
 
-    // 2. Capturar arquivo ou base64 do ícone
+    // 2. Capturar arquivo ou base64 do ícone (data URL p/ uploads/crop)
     let iconPath = null;
     if (b.icone_base64 && typeof b.icone_base64 === 'string' && b.icone_base64.startsWith('data:image')) {
-      iconPath = saveBase64Image(b.icone_base64, 'icon');
+      iconPath = cleanIconDataUrl(b.icone_base64);
     } else if (req.files && req.files['animal_icone'] && req.files['animal_icone'].length > 0) {
-      iconPath = `/media/${req.files['animal_icone'][0].filename}`;
+      iconPath = fileToDataUrl(req.files['animal_icone'][0]);
     } else if (b.icone) {
       iconPath = b.icone;
     }
@@ -264,10 +251,12 @@ router.post('/animais/', uploadFields, async (req, res) => {
     // 3. Salvar imagens enviadas na tabela api_animalimagem
     if (req.files && req.files['animal_imagem'] && req.files['animal_imagem'].length > 0) {
       for (let i = 0; i < req.files['animal_imagem'].length; i++) {
+        const dataUrl = fileToDataUrl(req.files['animal_imagem'][i]);
+        if (!dataUrl) continue;
         await prisma.api_animalimagem.create({
           data: {
             animal_id: animal.id,
-            imagem: `/media/${req.files['animal_imagem'][i].filename}`,
+            imagem: dataUrl,
             legenda: b.nome_comum || '',
             ordem: i + 1
           }
@@ -339,7 +328,7 @@ router.post('/animais/', uploadFields, async (req, res) => {
 });
 
 // PATCH /api/v1/animais/:id/ (Edição)
-router.patch('/animais/:id/', uploadFields, async (req, res) => {
+router.patch('/animais/:id/', uploadFieldsSafe, async (req, res) => {
   try {
     const id = BigInt(req.params.id);
     const b = req.body;
@@ -354,16 +343,16 @@ router.patch('/animais/:id/', uploadFields, async (req, res) => {
 
     let imgPath = null;
     if (req.files && req.files['animal_imagem'] && req.files['animal_imagem'].length > 0) {
-      imgPath = `/media/${req.files['animal_imagem'][0].filename}`;
+      imgPath = fileToDataUrl(req.files['animal_imagem'][0]);
     } else if (b.imagem_url && b.imagem_url.trim().length > 0) {
       imgPath = b.imagem_url.trim();
     }
 
     let iconPath = null;
     if (b.icone_base64 && typeof b.icone_base64 === 'string' && b.icone_base64.startsWith('data:image')) {
-      iconPath = saveBase64Image(b.icone_base64, 'icon');
+      iconPath = cleanIconDataUrl(b.icone_base64);
     } else if (req.files && req.files['animal_icone'] && req.files['animal_icone'].length > 0) {
-      iconPath = `/media/${req.files['animal_icone'][0].filename}`;
+      iconPath = fileToDataUrl(req.files['animal_icone'][0]);
     } else if (b.icone) {
       iconPath = b.icone;
     }
@@ -419,10 +408,12 @@ router.patch('/animais/:id/', uploadFields, async (req, res) => {
     if (req.files && req.files['animal_imagem'] && req.files['animal_imagem'].length > 0) {
       await prisma.api_animalimagem.deleteMany({ where: { animal_id: id } });
       for (let i = 0; i < req.files['animal_imagem'].length; i++) {
+        const dataUrl = fileToDataUrl(req.files['animal_imagem'][i]);
+        if (!dataUrl) continue;
         await prisma.api_animalimagem.create({
           data: {
             animal_id: id,
-            imagem: `/media/${req.files['animal_imagem'][i].filename}`,
+            imagem: dataUrl,
             legenda: animal.nome_comum || '',
             ordem: i + 1
           }

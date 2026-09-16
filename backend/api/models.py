@@ -141,7 +141,7 @@ class Animal(SoftDeleteModel):
 
 class AnimalImagem(models.Model):
     animal = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='imagens')
-    imagem = models.CharField(max_length=500)
+    imagem = models.TextField(help_text='URL remota, /media/... legado ou data URL')
     legenda = models.CharField(max_length=100, null=True, blank=True)
     ordem = models.PositiveIntegerField(default=0)
 
