@@ -329,7 +329,7 @@ $(document).ready(function() {
             const imgs = getAnimalImages(animal);
             const imgsFallback = imgs.length > 0 && imgs.every(isFallbackLogoUrl);
             const slidesHtml = imgs.map((src, i) => `
-                <img src="${src}" alt="${animal.nome_comum}${isFallbackLogoUrl(src) ? ' — imagem livre não encontrada' : ''}" class="card-slide-img ${i === 0 ? 'active' : ''}">
+                <img src="${src}" alt="${animal.nome_comum}${isFallbackLogoUrl(src) ? ' — imagem livre não encontrada' : ''}" class="card-slide-img ${i === 0 ? 'active' : ''}${isFallbackLogoUrl(src) ? ' img-fallback-logo' : ''}">
             `).join('');
 
             const dotsHtml = imgs.length > 1 ? `
@@ -1533,7 +1533,7 @@ $(document).ready(function() {
             <div class="row g-0">
               <div class="col-md-5">
                 <div class="modal-img-container" style="overflow: hidden; position: relative; border-left: 5px solid ${statusColor}; height: 100%; min-height: 280px;">
-                  <img id="modalCarouselImg" src="${allImgs[0]}" alt="${animal.nome_comum || ''}${modalImgFallback ? ' — imagem livre não encontrada' : ''}" class="modal-img-pan" data-current="0" data-imgs='${JSON.stringify(allImgs)}'>
+                  <img id="modalCarouselImg" src="${allImgs[0]}" alt="${animal.nome_comum || ''}${modalImgFallback ? ' — imagem livre não encontrada' : ''}" class="modal-img-pan${isFallbackLogoUrl(allImgs[0]) ? ' img-fallback-logo' : ''}" data-current="0" data-imgs='${JSON.stringify(allImgs)}'>
                   ${modalImgFallback ? '<span class="no-photo-badge"><i class="fa-solid fa-triangle-exclamation"></i>Imagem livre não encontrada</span>' : ''}
                   ${allImgs.length > 1 ? `
                     <button class="carousel-btn carousel-prev" onclick="changeModalImg(-1)" style="position: absolute; top: 50%; left: 10px; z-index: 10; border: none; background: ${statusColor}; color: white; border-radius: 50%; width: 36px; height: 36px; cursor: pointer;">
@@ -1636,6 +1636,7 @@ $(document).ready(function() {
         try {
             const badge = imgTag.closest('.modal-img-container').find('.no-photo-badge');
             if (badge.length) badge.toggle(isFallbackLogoUrl(imgs[targetIndex]));
+            imgTag.toggleClass('img-fallback-logo', isFallbackLogoUrl(imgs[targetIndex]));
         } catch (e) {}
 
         imgTag.stop(true, true).fadeOut(120, function() {
