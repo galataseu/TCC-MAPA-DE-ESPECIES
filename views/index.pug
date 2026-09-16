@@ -58,15 +58,18 @@ block content
 
       .legend-section-title Níveis de Extinção
       .legend-items.extinction-legend-items
-        //- Lista completa (8 classificações). Cores idênticas às dos marcadores
-        //- (extinctionColorMap em app.js): EX #403E4C e EW #831F34 já existiam
-        //- no esquema do site — nenhuma cor nova foi criada.
+        //- Lista completa (9 classificações). Cores idênticas às dos marcadores
+        //- (extinctionColorMap em app.js): EX #403E4C, EW #831F34 e RE #B0214F
+        //- (vinho-rosado entre EW e CR — regionalmente extinta).
         .legend-item
           span.extinction-badge(style="background-color: #403E4C;") EX
           span.legend-text Extinta
         .legend-item
           span.extinction-badge(style="background-color: #831F34;") EW
           span.legend-text Extinta na Natureza
+        .legend-item
+          span.extinction-badge(style="background-color: #B0214F;") RE
+          span.legend-text Regionalmente Extinta
         .legend-item
           span.extinction-badge(style="background-color: #FF4068;") CR
           span.legend-text Criticamente em Perigo
@@ -282,6 +285,15 @@ block content
               button#modal-btn-clear-polygon.btn.btn-outline-danger.btn-sm.rounded-pill.ms-1(type="button")
                 i.fa-solid.fa-eraser.me-1
                 | Limpar
+              .d-flex.align-items-center.gap-1.ms-1(title="Preencher a área de ocorrência com o bioma inteiro, sem desenhar manualmente")
+                label.small.text-light.mb-0 Bioma:
+                select#modal-biome-area-selector.form-select.form-select-sm(style="background: #191820; color: #FFF; border-color: #444; max-width: 150px;")
+                  option(value="mata_atlantica") Mata Atlântica
+                  option(value="pampa") Pampa
+                  option(value="cerrado") Cerrado
+                button#modal-btn-use-biome-area.btn.btn-success.btn-sm.rounded-pill.fw-bold(type="button", title="Carrega o polígono do bioma como área de ocorrência (editável depois)")
+                  i.fa-solid.fa-leaf.me-1
+                  | Usar bioma
               span#modal-polygon-status-badge.badge.bg-dark.text-warning.border.border-warning.ms-auto Área: Todo o Mapa
             .flex-grow-1(style="min-height: 0;")
               #modal-right-panel-map.h-100(style="border-radius: 16px; overflow: hidden; border: 1px solid #3B3A48;")

@@ -53,6 +53,7 @@ class Command(BaseCommand):
         niveis_ext = [
             ('EX', 'Extinta', 'Não restam dúvidas de que o último indivíduo tenha morrido.'),
             ('EW', 'Extinta na Natureza', 'Sobrevive apenas em cultivo, cativeiro ou como população naturalizada.'),
+            ('RE', 'Regionalmente Extinta', 'Desapareceu da região avaliada, mas ainda ocorre em outras regiões.'),
             ('CR', 'Criticamente em Perigo', 'Enfrenta um risco extremamente elevado de extinção na natureza.'),
             ('EN', 'Em Perigo', 'Enfrenta um risco muito elevado de extinção na natureza.'),
             ('VU', 'Vulnerável', 'Enfrenta um risco elevado de extinção na natureza.'),

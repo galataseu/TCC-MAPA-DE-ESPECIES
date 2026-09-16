@@ -4,10 +4,11 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting Prisma seeding...');
 
-  // 1. Levels of Extinction (Official IUCN/MMA)
+  // 1. Levels of Extinction (Official IUCN/MMA + Regional)
   const niveisExt = [
     { sigla: 'EX', nome: 'Extinta', descricao: 'Não restam dúvidas de que o último indivíduo tenha morrido.' },
     { sigla: 'EW', nome: 'Extinta na Natureza', descricao: 'Sobrevive apenas em cultivo, cativeiro ou como população naturalizada.' },
+    { sigla: 'RE', nome: 'Regionalmente Extinta', descricao: 'Desapareceu da região avaliada, mas ainda ocorre em outras regiões.' },
     { sigla: 'CR', nome: 'Criticamente em Perigo', descricao: 'Enfrenta um risco extremamente elevado de extinção na natureza.' },
     { sigla: 'EN', nome: 'Em Perigo', descricao: 'Enfrenta um risco muito elevado de extinção na natureza.' },
     { sigla: 'VU', nome: 'Vulnerável', descricao: 'Enfrenta um risco elevado de extinção na natureza.' },

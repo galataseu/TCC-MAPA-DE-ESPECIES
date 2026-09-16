@@ -7,6 +7,7 @@ const os = require('os');
 const { PrismaClient } = require('@prisma/client');
 const prisma = require('../services/db');
 const { sendStatusChangeEmail } = require('../services/mailer');
+const { getBiomaGeometry } = require('../utils/biomaPolygons');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -131,6 +132,33 @@ router.get('/biomas/', async (req, res) => {
     res.json({ success: true, data: serialize(biomas) });
   } catch (err) {
     console.error('Error fetching biomas:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/v1/biomas-areas/
+// Áreas de referência dos biomas (polígonos simplificados [lat,lng]) para
+// preencher a zona de ocorrência no cadastro sem desenhar manualmente.
+router.get('/biomas-areas/', async (req, res) => {
+  try {
+    const defs = [
+      { key: 'mata_atlantica', nome: 'Mata Atlântica', query: 'mata atlantica' },
+      { key: 'pampa', nome: 'Pampa', query: 'pampa' },
+      { key: 'cerrado', nome: 'Cerrado', query: 'cerrado' }
+    ];
+    const data = defs.map(d => {
+      const geo = getBiomaGeometry(d.query);
+      return {
+        key: d.key,
+        nome: d.nome,
+        color: geo.color,
+        centroid: geo.centroid,
+        polygons: geo.polygons
+      };
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching biomas-areas:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

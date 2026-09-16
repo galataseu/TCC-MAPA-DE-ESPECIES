@@ -49,33 +49,64 @@ const MATA_ATLANTICA_POLYGON = [
   [-22.77, -53.27]  // Fechamento do anel
 ];
 
+// Polígono do Bioma Cerrado no Sul (enclave dos Campos Gerais, PR:
+// Jaguariaíva / Sengés / Ponta Grossa — savana entre a Mata Atlântica)
+const CERRADO_POLYGON = [
+  [-23.90, -49.70], // Sengés / divisa SP
+  [-24.10, -49.30], // Jaguariaíva
+  [-24.45, -49.15], // Arapoti
+  [-24.80, -49.25], // Tibagi
+  [-25.05, -49.60], // Ponta Grossa / Vila Velha
+  [-25.00, -50.00], // Campos Gerais oeste
+  [-24.65, -50.20], // Reserva / Cândido de Abreu
+  [-24.20, -50.00], // Telêmaco Borba
+  [-23.90, -49.70]  // Fechamento do anel
+];
+
 // Centróides de referência para marcadores (lat, lng)
 const CENTROIDS = {
   PAMPA: { lat: -30.85, lng: -54.80 },
   MATA_ATLANTICA: { lat: -26.75, lng: -50.60 },
+  CERRADO: { lat: -24.55, lng: -49.65 },
   SUL_GERAL: { lat: -28.20, lng: -51.90 }
 };
 
 /**
  * Normaliza e identifica os biomas a partir de string (ex: "Pampa, Mata Atlântica")
  * @param {string} biomaStr 
- * @returns {object} { hasPampa, hasMataAtlantica, color, polygons, centroid, label }
+ * @returns {object} { hasPampa, hasMataAtlantica, hasCerrado, color, polygons, centroid, label }
  */
 function getBiomaGeometry(biomaStr = '') {
   const norm = (biomaStr || '').toLowerCase();
   const hasPampa = norm.includes('pampa');
   const hasMataAtlantica = norm.includes('mata atlântica') || norm.includes('mata atlantica') || norm.includes('floresta');
+  const hasCerrado = norm.includes('cerrado');
 
   let polygons = [];
   let color = '#2E7D32'; // Verde floresta por padrão
   let centroid = CENTROIDS.SUL_GERAL;
   let label = 'Sul do Brasil';
 
-  if (hasPampa && hasMataAtlantica) {
+  if (hasPampa && hasMataAtlantica && hasCerrado) {
+    polygons = [PAMPA_POLYGON, MATA_ATLANTICA_POLYGON, CERRADO_POLYGON];
+    color = '#4E7D32';
+    centroid = CENTROIDS.SUL_GERAL;
+    label = 'Pampa, Mata Atlântica e Cerrado';
+  } else if (hasPampa && hasMataAtlantica) {
     polygons = [PAMPA_POLYGON, MATA_ATLANTICA_POLYGON];
     color = '#4E7D32';
     centroid = CENTROIDS.SUL_GERAL;
     label = 'Pampa e Mata Atlântica';
+  } else if (hasPampa && hasCerrado) {
+    polygons = [PAMPA_POLYGON, CERRADO_POLYGON];
+    color = '#8A7A2E';
+    centroid = CENTROIDS.SUL_GERAL;
+    label = 'Pampa e Cerrado';
+  } else if (hasMataAtlantica && hasCerrado) {
+    polygons = [MATA_ATLANTICA_POLYGON, CERRADO_POLYGON];
+    color = '#4E7D32';
+    centroid = CENTROIDS.MATA_ATLANTICA;
+    label = 'Mata Atlântica e Cerrado';
   } else if (hasPampa) {
     polygons = [PAMPA_POLYGON];
     color = '#9C7A2E'; // Tom de estepe/savana pampa
@@ -86,6 +117,11 @@ function getBiomaGeometry(biomaStr = '') {
     color = '#1B5E20'; // Verde fechado Mata Atlântica
     centroid = CENTROIDS.MATA_ATLANTICA;
     label = 'Bioma Mata Atlântica';
+  } else if (hasCerrado) {
+    polygons = [CERRADO_POLYGON];
+    color = '#B8912E'; // Amarelo-queimado do Cerrado
+    centroid = CENTROIDS.CERRADO;
+    label = 'Bioma Cerrado';
   } else {
     // Fallback: se não informado ou outro bioma com ocorrência no Sul
     polygons = [MATA_ATLANTICA_POLYGON];
@@ -102,6 +138,7 @@ function getBiomaGeometry(biomaStr = '') {
   return {
     hasPampa,
     hasMataAtlantica,
+    hasCerrado,
     color,
     polygons,
     centroid,
@@ -211,6 +248,7 @@ function getDistributedCoordinate(scientificName = '', classe = '', biomaRaw = '
 module.exports = {
   PAMPA_POLYGON,
   MATA_ATLANTICA_POLYGON,
+  CERRADO_POLYGON,
   CENTROIDS,
   getBiomaGeometry,
   getDistributedCoordinate

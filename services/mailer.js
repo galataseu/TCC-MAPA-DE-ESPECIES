@@ -9,8 +9,10 @@
 const nodemailer = require('nodemailer');
 
 // Mesmas cores do site por sigla de status (extinctionColorMap do frontend).
+// RE (#B0214F): vinho-rosado entre EW (#831F34) e CR (#FF4068) — extinta na
+// região, mas ainda ocorre fora dela.
 const STATUS_COLORS = {
-  EX: '#403E4C', EW: '#831F34', CR: '#FF4068', EN: '#FF6426',
+  EX: '#403E4C', EW: '#831F34', RE: '#B0214F', CR: '#FF4068', EN: '#FF6426',
   VU: '#FFA63A', NT: '#217757', LC: '#1A5FB4', DD: '#555555'
 };
 

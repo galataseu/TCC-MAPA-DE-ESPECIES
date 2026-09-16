@@ -338,11 +338,20 @@ async function importSalveCSV(csvContent, options = { autoImages: true, maxRows:
     // Mapeia nível de extinção
     let nivelId = defaultNivelId;
     if (categoriaRaw) {
-      // Procura sigla exata (ex: "CR", "EN", "VU", "NT", "LC")
-      for (const [key, id] of nivelMap.entries()) {
-        if (categoriaRaw === key || categoriaRaw.includes(key)) {
-          nivelId = id;
-          break;
+      // RE primeiro: "RE" de 2 letras dá falso-positivo no includes genérico
+      // (ex: "REGIONALMENTE EXTINTA" contém "EX"), então trata antes.
+      const isRegional = categoriaRaw === 'RE'
+        || categoriaRaw.includes('REGION')
+        || categoriaRaw.includes('REGIONALMENTE EXTINTA');
+      if (isRegional && nivelMap.has('RE')) {
+        nivelId = nivelMap.get('RE');
+      } else {
+        // Procura sigla exata (ex: "CR", "EN", "VU", "NT", "LC")
+        for (const [key, id] of nivelMap.entries()) {
+          if (categoriaRaw === key || categoriaRaw.includes(key)) {
+            nivelId = id;
+            break;
+          }
         }
       }
     }

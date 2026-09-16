@@ -18,8 +18,9 @@ $(document).ready(function() {
 
     // Mapa de cores oficiais para níveis de extinção — FONTE ÚNICA.
     // Chave canônica: sigla minúscula. Chaves numéricas = fallback legado.
+    // RE (#B0214F): vinho-rosado entre EW e CR — regionalmente extinta.
     const extinctionColorMap = {
-        'ex': '#403E4C', 'ew': '#831F34', 'cr': '#FF4068', 'en': '#FF6426',
+        'ex': '#403E4C', 'ew': '#831F34', 're': '#B0214F', 'cr': '#FF4068', 'en': '#FF6426',
         'vu': '#FFA63A', 'nt': '#217757', 'lc': '#1A5FB4', 'dd': '#555555',
         '1': '#FF4068', // CR
         '2': '#FF6426', // EN
@@ -28,8 +29,12 @@ $(document).ready(function() {
         '5': '#1A5FB4', // LC
         '6': '#555555', // DD
         '7': '#403E4C', // EX
-        '8': '#831F34'  // EW
+        '8': '#831F34',  // EW
+        '9': '#B0214F'  // RE
     };
+
+    // Ordem lógica de severidade (o ID do RE no banco é 9, fora de ordem).
+    const extinctionSeverityOrder = ['ex', 'ew', 're', 'cr', 'en', 'vu', 'nt', 'lc', 'dd'];
 
     // Animal sem foto/ícone usa a logotipo do sistema como fallback. Quando a
     // URL for a logotipo, as views exibem o selo "IMAGEM LIVRE NÃO ENCONTRADA".
@@ -90,7 +95,12 @@ $(document).ready(function() {
                 const select = $('.select-nivel-extincao');
                 select.empty();
                 select.append('<option value="" style="background-color: #2B2A33; color: #FFF;">NÍVEL DE EXTINÇÃO</option>');
-                res.data.forEach(n => {
+                const ordered = [...res.data].sort((a, b) => {
+                    const ia = extinctionSeverityOrder.indexOf(String(a.sigla || '').toLowerCase());
+                    const ib = extinctionSeverityOrder.indexOf(String(b.sigla || '').toLowerCase());
+                    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+                });
+                ordered.forEach(n => {
                     const sigla = (n.sigla || '').toLowerCase();
                     const color = extinctionColorMap[sigla] || extinctionColorMap[String(n.id)] || '#383642';
                     const textColor = sigla === 'vu' ? '#111111' : '#FFFFFF';
@@ -799,6 +809,70 @@ $(document).ready(function() {
         updatePolygonHiddenInput();
     });
 
+    // Usar bioma inteiro como área de ocorrência (sem desenhar manualmente).
+    // Carrega o polígono de referência do bioma como área(s) editável(eis):
+    // depois dá para editar/excluir via botão direito, desfazer (Ctrl+Z) etc.
+    let biomasAreasCache = null;
+    function fetchBiomasAreas() {
+        if (biomasAreasCache) return Promise.resolve(biomasAreasCache);
+        return fetch('/api/v1/biomas-areas/')
+            .then(r => r.json())
+            .then(res => {
+                const arr = (res && res.data) || res || [];
+                biomasAreasCache = Array.isArray(arr) ? arr : [];
+                return biomasAreasCache;
+            });
+    }
+    function selectBiomeChipByKey(key) {
+        const term = key === 'mata_atlantica' ? 'mata' : key;
+        let matched = false;
+        $('.biome-chip').each(function() {
+            const label = ($(this).text() || '').toLowerCase();
+            if (label.includes(term)) {
+                $(this).attr('data-selected', 'true');
+                $(this).find('.chip-icon').removeClass('fa-plus').addClass('fa-check');
+                matched = true;
+            }
+        });
+        if (matched) {
+            const selectedIds = [];
+            $('.biome-chip[data-selected="true"]').each(function() {
+                selectedIds.push($(this).attr('data-id'));
+            });
+            $('#bioma-selector').val(selectedIds);
+        }
+    }
+    $(document).on('click', '#btn-use-biome-area', function() {
+        const key = $('#biome-area-selector').val() || 'mata_atlantica';
+        fetchBiomasAreas().then(list => {
+            const found = list.find(b => b.key === key);
+            if (!found || !found.polygons || found.polygons.length === 0) {
+                systemAlert('Bioma não encontrado. Tente novamente.', 'warning');
+                return;
+            }
+            savePolygonHistoryState();
+            if (found.color) {
+                polygonColor = found.color;
+                try { $('#polygon-color-picker').val(polygonColor); } catch (e) {}
+            }
+            draftPolygonsList = (draftPolygonsList || []).filter(r => r && r.length > 0);
+            found.polygons.forEach(ring => {
+                draftPolygonsList.push(ring.map(pt => [parseFloat(pt[0]), parseFloat(pt[1])]));
+            });
+            selectBiomeChipByKey(key);
+            redrawDraftPolygonLayers();
+            try {
+                const bounds = L.latLngBounds([]);
+                found.polygons.forEach(ring => ring.forEach(pt => bounds.extend(pt)));
+                if (bounds.isValid() && rightPanelMap) rightPanelMap.fitBounds(bounds.pad(0.1));
+            } catch (e) {}
+            systemAlert(`Área do bioma ${found.nome} aplicada (${found.polygons.length} área(s)). Dá para ajustar ou apagar depois.`, 'success');
+        }).catch(err => {
+            console.error('Erro ao carregar bioma:', err);
+            systemAlert('Erro ao carregar área do bioma.', 'error');
+        });
+    });
+
     // Atalhos de teclado Ctrl+Z e Ctrl+Y
     $(document).on('keydown', function(e) {
         if (!$('#panel-view-map').is(':visible')) return;
@@ -1418,6 +1492,7 @@ $(document).ready(function() {
         const statusConfig = {
             'ex': { color: '#403E4C', icon: 'fa-skull' },
             'ew': { color: '#831F34', icon: 'fa-skull-crossbones' },
+            're': { color: '#B0214F', icon: 'fa-eye-slash' },
             'cr': { color: '#FF4068', icon: 'fa-exclamation-triangle' },
             'en': { color: '#ff6426', icon: 'fa-triangle-exclamation' },
             'vu': { color: '#FFA63A', icon: 'fa-shield-halved' },
