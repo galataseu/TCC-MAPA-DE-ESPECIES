@@ -2245,8 +2245,10 @@ $(document).ready(function () {
       try { $('#modal-polygon-color-picker').val(modalPolygonColor); } catch (e) {}
     }
     modalDraftPolygonsList = (modalDraftPolygonsList || []).filter(r => r && r.length > 0);
+    // 5 decimais (~1m): evita payload gigante ("Field value too long" no multer).
+    const round5 = (v) => Math.round(parseFloat(v) * 1e5) / 1e5;
     rings.forEach(ring => {
-      modalDraftPolygonsList.push(ring.map(pt => [parseFloat(pt[0]), parseFloat(pt[1])]));
+      modalDraftPolygonsList.push(ring.map(pt => [round5(pt[0]), round5(pt[1])]));
     });
     selectModalBiomeChipByKey(key);
     redrawModalDraftPolygonLayers();

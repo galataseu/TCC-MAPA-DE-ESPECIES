@@ -902,8 +902,11 @@ $(document).ready(function() {
             try { $('#polygon-color-picker').val(polygonColor); } catch (e) {}
         }
         draftPolygonsList = (draftPolygonsList || []).filter(r => r && r.length > 0);
+        // 5 decimais (~1m): o turf cospe até 15 casas e o payload da Mata
+        // passa de 0,9MB — estoura o fieldSize do multer ("Field value too long").
+        const round5 = (v) => Math.round(parseFloat(v) * 1e5) / 1e5;
         rings.forEach(ring => {
-            draftPolygonsList.push(ring.map(pt => [parseFloat(pt[0]), parseFloat(pt[1])]));
+            draftPolygonsList.push(ring.map(pt => [round5(pt[0]), round5(pt[1])]));
         });
         selectBiomeChipByKey(key);
         redrawDraftPolygonLayers();

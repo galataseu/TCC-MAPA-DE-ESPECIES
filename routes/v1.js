@@ -71,7 +71,11 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({
+  storage: storage,
+  // area_polygon_json de biomas precisos chega a centenas de KB por campo
+  limits: { fieldSize: 20 * 1024 * 1024 }
+});
 
 const serialize = (obj) => JSON.parse(JSON.stringify(obj, (key, value) =>
   typeof value === 'bigint' ? value.toString() : value
