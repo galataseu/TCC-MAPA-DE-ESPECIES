@@ -236,14 +236,11 @@ block content
                 label.species-form-label Dieta
                 input.form-control.colored-pill-input-crimson(type="text", name="dieta", placeholder="Ex: Onívoro, Insetos")
 
-            //- Linha 5: Hábitos e Observações
+            //- Linha 5: Descrição / Curiosidade (campo único)
             .row.g-3.mb-4
-              .col-md-6
-                label.species-form-label Descrição / Hábitos
-                textarea.form-control.colored-pill-input-bronze(name="habitos", rows="2", placeholder="Detalhes dos hábitos e comportamento...")
-              .col-md-6
-                label.species-form-label Observações / Curiosidades
-                textarea.form-control.colored-pill-input-green(name="obs", rows="2", placeholder="Curiosidades e notas de conservação...")
+              .col-12
+                label.species-form-label Descrição / Curiosidade
+                textarea.form-control.colored-pill-input-bronze(name="habitos", rows="2", placeholder="Descrição, curiosidades e notas de conservação...")
 
             //- Botões de Ação
             .d-flex.gap-3.mt-auto
@@ -532,5 +529,5 @@ block content
 
 block scripts
   script(src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.10.5/typeahead.bundle.min.js")
-  script(src="/assets/js/app.js?v=6")
+  script(src="/assets/js/app.js?v=7")
 

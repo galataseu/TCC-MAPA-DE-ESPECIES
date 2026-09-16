@@ -114,14 +114,11 @@ block content
               label.species-form-label(for="dieta") Dieta
               input#dieta.form-control.colored-pill-input-crimson(type="text", name="dieta", placeholder="Ex: Onívoro, Insetos")
 
-          //- Linha 5: Hábitos e Observações
+          //- Linha 5: Descrição / Curiosidade (campo único)
           .row.g-3.mb-4
-            .col-md-6
-              label.species-form-label(for="habitos") Descrição / Hábitos
-              textarea#habitos.form-control.colored-pill-input-bronze(name="habitos", rows="2", placeholder="Detalhes dos hábitos e comportamento...")
-            .col-md-6
-              label.species-form-label(for="obs") Observações / Curiosidades
-              textarea#obs.form-control.colored-pill-input-green(name="obs", rows="2", placeholder="Curiosidades e notas de conservação...")
+            .col-12
+              label.species-form-label(for="habitos") Descrição / Curiosidade
+              textarea#habitos.form-control.colored-pill-input-bronze(name="habitos", rows="2", placeholder="Descrição, curiosidades e notas de conservação...")
 
           //- Botões de Ação
           .d-flex.gap-3.mt-auto

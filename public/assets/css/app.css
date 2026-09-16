@@ -2015,3 +2015,17 @@ html, body, #main-layout {
   box-shadow: 0 0 0 2px rgba(255, 170, 68, 0.25) !important;
   outline: none;
 }
+
+/* Telas de criação (animal / instituição / área): oculta a logo
+   Gralha dos Ventos e a barra de pesquisa de localidades, que ficam
+   por cima dos modais fullscreen (z-index 3000 > 2900). */
+body.creation-open #brand-header,
+body.creation-open #floating-search,
+body:has(#species-admin-modal:not(.d-none)) #brand-header,
+body:has(#species-admin-modal:not(.d-none)) #floating-search,
+body:has(#ong-admin-modal:not(.d-none)) #brand-header,
+body:has(#ong-admin-modal:not(.d-none)) #floating-search,
+body:has(#zona-admin-modal:not(.d-none)) #brand-header,
+body:has(#zona-admin-modal:not(.d-none)) #floating-search {
+  display: none !important;
+}

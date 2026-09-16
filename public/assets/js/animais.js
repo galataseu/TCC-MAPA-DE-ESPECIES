@@ -420,8 +420,7 @@ $(document).ready(function() {
         $('#peso').val(animal.peso || '');
         $('#altura').val(animal.altura || '');
         $('#dieta').val(animal.dieta || '');
-        $('#habitos').val(animal.habitos || '');
-        $('#obs').val(animal.obs || '');
+        $('#habitos').val(animal.habitos || animal.obs || '');
 
         if (animal.nivel_extincao_id) {
             $('.select-nivel-extincao').val(animal.nivel_extincao_id).trigger('change');
@@ -454,7 +453,9 @@ $(document).ready(function() {
             $('#icon-preview-content').addClass('d-none');
         }
 
-        // Atualizar coordenadas e marcadores no minimapa
+        // Atualizar coordenadas e marcadores no minimapa.
+        // Se o polígono ainda não foi carregado via /api/animals, tenta via
+        // /api/markers (que sempre traz area_polygon parseado).
         clearDraftMarkers();
         $.getJSON('/api/markers', function(markersData) {
             if (markersData && markersData.features) {
@@ -466,6 +467,15 @@ $(document).ready(function() {
                     });
                     const first = animalFeatures[0].geometry.coordinates;
                     if (rightPanelMap) rightPanelMap.setView([first[1], first[0]], 8);
+                    const mp = animalFeatures[0].properties || {};
+                    const stillEmpty = !draftPolygonsList || draftPolygonsList.length === 0 ||
+                        draftPolygonsList.every(r => !r || r.length === 0);
+                    if (stillEmpty && mp.area_polygon) {
+                        if (loadPolygonFromData(mp.area_polygon, mp.area_polygon_color)) {
+                            try { $('#polygon-color-picker').val(polygonColor); } catch (e) {}
+                            redrawDraftPolygonLayers();
+                        }
+                    }
                 } else {
                     addDraftMarker(-27.59, -48.54);
                 }
@@ -476,31 +486,44 @@ $(document).ready(function() {
             addDraftMarker(-27.59, -48.54);
         });
 
-        // Carregar polígono de área de ocorrência existente (se houver)
-        if (animal.area_polygon) {
-            let data = animal.area_polygon;
+        // Carregar polígono de área de ocorrência existente (se houver).
+        // Aceita `area_polygon` já parseado (novo /api/animals) ou o formato
+        // legado embutido em `obs` com [[POLYGON_DATA]].
+        function loadPolygonFromData(data, fallbackColor) {
+            if (!data) return false;
             if (typeof data === 'string') {
-                try { data = JSON.parse(data); } catch(e){}
+                try { data = JSON.parse(data); } catch(e){ return false; }
             }
             if (data && typeof data === 'object' && !Array.isArray(data) && data.polygons) {
-                polygonColor = data.color || '#FFAA44';
+                polygonColor = data.color || fallbackColor || '#FFAA44';
                 draftPolygonsList = data.polygons;
+                return true;
             } else if (Array.isArray(data) && data.length > 0) {
-                polygonColor = animal.area_polygon_color || '#FFAA44';
+                polygonColor = fallbackColor || '#FFAA44';
                 if (Array.isArray(data[0]) && Array.isArray(data[0][0])) {
                     draftPolygonsList = data;
                 } else {
                     draftPolygonsList = [data];
                 }
-            } else {
-                draftPolygonsList = [[]];
+                return true;
             }
-            $('#polygon-color-picker').val(polygonColor);
-            redrawDraftPolygonLayers();
-        } else {
-            draftPolygonsList = [[]];
-            redrawDraftPolygonLayers();
+            return false;
         }
+        polygonHistory = [];
+        polygonRedo = [];
+        updateUndoRedoButtonsUI();
+        let polygonLoaded = loadPolygonFromData(animal.area_polygon, animal.area_polygon_color);
+        if (!polygonLoaded && animal.obs && typeof animal.obs === 'string' && animal.obs.includes('[[POLYGON_DATA]]')) {
+            try {
+                const parsed = JSON.parse(animal.obs.split('[[POLYGON_DATA]]')[1].trim());
+                polygonLoaded = loadPolygonFromData(parsed, animal.area_polygon_color);
+            } catch (e) {}
+        }
+        if (!polygonLoaded) {
+            draftPolygonsList = [[]];
+        }
+        try { $('#polygon-color-picker').val(polygonColor); } catch (e) {}
+        redrawDraftPolygonLayers();
     };
 
     // Pesquisa em tempo real ultra-rápida na lista
@@ -597,15 +620,23 @@ $(document).ready(function() {
     function updatePolygonHiddenInput() {
         const validPolygons = draftPolygonsList.filter(ring => ring && ring.length >= 3);
         const totalPoints = validPolygons.reduce((acc, ring) => acc + ring.length, 0);
+        const currentRing = draftPolygonsList[draftPolygonsList.length - 1];
+        const currentPts = (currentRing && currentRing.length > 0) ? currentRing.length : 0;
 
-        if (validPolygons.length > 0) {
+        if (validPolygons.length > 0 || currentPts > 0) {
             const payload = {
                 color: polygonColor,
                 polygons: validPolygons
             };
             $('#area-polygon-json-hidden').val(JSON.stringify(payload));
+            let badgeText = `Área: ${validPolygons.length} área(s) (${totalPoints} pts)`;
+            if (isDrawingPolygon && currentPts < 3) {
+                badgeText = `Desenhando: ${currentPts} ponto(s)... (mín 3)`;
+            } else if (isDrawingPolygon) {
+                badgeText = `Desenhando: ${currentPts} pts na área atual`;
+            }
             $('#polygon-status-badge')
-                .text(`Área: ${validPolygons.length} área(s) (${totalPoints} pts)`)
+                .text(badgeText)
                 .removeClass('bg-dark text-warning')
                 .addClass('bg-success text-white');
         } else {
@@ -650,6 +681,17 @@ $(document).ready(function() {
             if (!ring || ring.length === 0) return;
             const isCurrentActive = (idx === draftPolygonsList.length - 1);
             let polyLayer = null;
+
+            ring.forEach((pt) => {
+                L.circleMarker(pt, {
+                    radius: 5,
+                    color: polygonColor,
+                    fillColor: '#FFFFFF',
+                    fillOpacity: 1,
+                    weight: 2,
+                    interactive: false
+                }).addTo(polygonLayersGroup);
+            });
 
             if (ring.length >= 3) {
                 polyLayer = L.polygon(ring, {
@@ -730,8 +772,8 @@ $(document).ready(function() {
     });
 
     $(document).on('change input', '#polygon-color-picker', function() {
-        polygonColor = $(this).val();
         savePolygonHistoryState();
+        polygonColor = $(this).val();
         redrawDraftPolygonLayers();
     });
 
@@ -1325,6 +1367,7 @@ $(document).ready(function() {
         $('#form-species-create')[0].reset();
         $('#animal-id-hidden').val('');
         $('#coordenadas-json-hidden').val('');
+        $('#area-polygon-json-hidden').val('');
         $('#image-preview-img').addClass('d-none');
         $('#image-preview-content').removeClass('d-none');
         $('#icon-preview-img').addClass('d-none').css('transform', 'none');
@@ -1335,6 +1378,18 @@ $(document).ready(function() {
         $('.card-back-1, .card-back-2').empty();
         $('.select-nivel-extincao').val('').css({ 'background-color': '#383642', 'border-color': '#484654', 'color': '#FFFFFF' });
         $('.biome-chip').attr('data-selected', 'false').find('.chip-icon').removeClass('fa-check').addClass('fa-plus');
+        // Reseta o editor de área para não vazar o polígono anterior no próximo cadastro
+        isDrawingPolygon = false;
+        $('#btn-draw-polygon-mode').removeClass('btn-success text-white').addClass('btn-info text-dark')
+            .html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
+        if (rightPanelMap) rightPanelMap.getContainer().style.cursor = '';
+        draftPolygonsList = [[]];
+        polygonHistory = [];
+        polygonRedo = [];
+        polygonColor = '#FFAA44';
+        try { $('#polygon-color-picker').val(polygonColor); } catch (e) {}
+        updateUndoRedoButtonsUI();
+        redrawDraftPolygonLayers();
         clearDraftMarkers();
         addDraftMarker(-27.59, -48.54);
     }
@@ -1440,9 +1495,9 @@ $(document).ready(function() {
                   <hr style="border-color: ${statusColor}; opacity: 0.3;" class="my-2">
                   <div class="mt-2 text-white">
                       <h6 class="fst-italic text-muted small mb-1">Biomas</h6>
-                      <p class="mb-2 fw-bold" style="color: ${statusColor};">${biomas}</p>
-                      <h6 class="fst-italic text-muted small mb-1">Descrição / Hábitos</h6>
-                      <p class="mb-0 small text-light" style="line-height: 1.5; text-align: justify;">${animal.habitos || 'Descrição detalhada não disponível.'}</p>
+                      <p class="mb-2 fw-bold" style="color: #FFFFFF;">${biomas}</p>
+                      <h6 class="fst-italic text-muted small mb-1">Descrição / Curiosidade</h6>
+                      <p class="mb-0 small text-light" style="line-height: 1.5; text-align: justify;">${animal.habitos || animal.obs || 'Descrição detalhada não disponível.'}</p>
                   </div>
                   <div class="d-flex justify-content-end mt-3">
                     <a class="btn btn-sm btn-outline-secondary rounded-pill px-3" href="https://salve.icmbio.gov.br/" target="_blank" rel="noopener noreferrer" title="Abrir ficha no SALVE/ICMBio">

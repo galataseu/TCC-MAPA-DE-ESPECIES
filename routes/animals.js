@@ -73,6 +73,28 @@ router.get('/', async (req, res) => {
       obj.imagens = imgs;
       obj.icone = iconeUrl;
       obj.biomas = (obj.api_animal_biomas || []).map(b => b.api_bioma);
+
+      // Expõe a área de ocorrência desenhada (armazenada em obs com
+      // delimitador [[POLYGON_DATA]]) no mesmo formato de /api/markers,
+      // para a tela de espécies conseguir recarregar o polígono na edição.
+      let areaPolygon = null;
+      let areaPolygonColor = '#FFAA44';
+      const rawObs = obj.obs;
+      if (rawObs && typeof rawObs === 'string' && rawObs.includes('[[POLYGON_DATA]]')) {
+        try {
+          const parsed = JSON.parse(rawObs.split('[[POLYGON_DATA]]')[1].trim());
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.polygons) {
+            areaPolygon = parsed.polygons;
+            areaPolygonColor = parsed.color || '#FFAA44';
+          } else if (Array.isArray(parsed) && parsed.length > 0) {
+            areaPolygon = (Array.isArray(parsed[0]) && Array.isArray(parsed[0][0])) ? parsed : [parsed];
+          }
+        } catch (e) {
+          console.error('Error parsing areaPolygon in /api/animals:', e);
+        }
+      }
+      obj.area_polygon = areaPolygon;
+      obj.area_polygon_color = areaPolygonColor;
       return obj;
     });
 

@@ -348,11 +348,34 @@ router.patch('/animais/:id/', uploadFields, async (req, res) => {
     if (b.dieta) updateData.dieta = b.dieta;
     if (b.habitos) updateData.habitos = b.habitos;
     if (b.obs !== undefined || b.area_polygon_json !== undefined) {
-      let obsBase = b.obs !== undefined ? b.obs : '';
-      if (b.area_polygon_json && typeof b.area_polygon_json === 'string' && b.area_polygon_json.trim().length > 0) {
-        obsBase = `${obsBase} [[POLYGON_DATA]]${b.area_polygon_json.trim()}`;
+      // Quando o form não envia mais `obs` (campo único Descrição/Curiosidade),
+      // preserva o texto existente em vez de apagar — só troca o polígono.
+      let obsBase = null;
+      if (b.obs !== undefined) {
+        obsBase = b.obs || '';
+        if (typeof obsBase === 'string' && obsBase.includes('[[POLYGON_DATA]]')) {
+          obsBase = obsBase.split('[[POLYGON_DATA]]')[0].trim();
+        }
+      } else {
+        try {
+          const current = await prisma.api_animal.findUnique({ where: { id }, select: { obs: true } });
+          const curObs = current && current.obs ? current.obs : '';
+          obsBase = typeof curObs === 'string' && curObs.includes('[[POLYGON_DATA]]')
+            ? curObs.split('[[POLYGON_DATA]]')[0].trim()
+            : (curObs || '');
+        } catch (e) {
+          obsBase = '';
+        }
       }
-      updateData.obs = obsBase || null;
+      if (b.area_polygon_json !== undefined) {
+        if (b.area_polygon_json && typeof b.area_polygon_json === 'string' && b.area_polygon_json.trim().length > 0) {
+          obsBase = `${obsBase} [[POLYGON_DATA]]${b.area_polygon_json.trim()}`.trim();
+        }
+        // area_polygon_json === '' significa "Limpar área": mantém só o texto.
+      } else if (b.obs !== undefined && typeof b.obs === 'string' && b.obs.includes('[[POLYGON_DATA]]')) {
+        obsBase = b.obs;
+      }
+      updateData.obs = (obsBase && obsBase.trim().length > 0) ? obsBase.trim() : null;
     }
     if (b.nivel_extincao_id) updateData.nivel_extincao_id = BigInt(b.nivel_extincao_id);
 
