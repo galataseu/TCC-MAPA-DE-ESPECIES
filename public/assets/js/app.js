@@ -1569,6 +1569,10 @@ $(document).ready(function () {
     $("#animal-edit-id").val(props.animal_id || props.id || "");
     form.find(".coord-lat").val(lat);
     form.find(".coord-lng").val(lng);
+    // Sincroniza o hidden de coordenadas com ESTE animal: sem isso o PATCH
+    // reaproveitava o valor antigo (posição do animal criado/editado antes)
+    // e teleportava o marcador para o lugar errado.
+    $("#modal-coordenadas-json-hidden").val(JSON.stringify([{ lat: lat, lng: lng }]));
     form.find('input[name="nome_comum"]').val(props.nome_comum || "");
     form.find('input[name="nome_cientifico"]').val(props.nome_cientifico || "");
     form.find('select[name="classe"]').val(props.classe || "Mammalia");
@@ -1602,6 +1606,9 @@ $(document).ready(function () {
     renderModalImageGallery();
 
     let iconUrl = props.icone;
+    // Limpa base64 antigo: ele é regenerado do preview no submit; sem isso
+    // o ícone do animal editado ANTES vazava para ESTE animal.
+    $('#modal-input-icon-base64').val('');
     if (iconUrl) {
       if (!iconUrl.startsWith('http') && !iconUrl.startsWith('/') && !iconUrl.startsWith('data:')) iconUrl = `/media/${iconUrl}`;
       $('#modal-icon-preview-img').attr('src', iconUrl).removeClass('d-none');

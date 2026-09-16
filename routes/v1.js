@@ -465,7 +465,18 @@ router.patch('/animais/:id/', uploadFields, async (req, res) => {
       }
     }
 
-    const iconVal = iconPath || imgPath || '/assets/img/logotipo.png';
+    // Preservar o ícone atual quando a edição não envia um novo: sem isso
+    // o marcador era recriado com a logotipo e o ícone "sumia" a cada edição.
+    let existingIcon = null;
+    try {
+      const existingForIcon = await prisma.api_marcador.findFirst({
+        where: { animal_id: id },
+        select: { icone: true }
+      });
+      if (existingForIcon && existingForIcon.icone) existingIcon = existingForIcon.icone;
+    } catch (e) {}
+
+    const iconVal = iconPath || imgPath || existingIcon || '/assets/img/logotipo.png';
 
     if (Array.isArray(coordsList) && coordsList.length > 0) {
       await prisma.api_marcador.deleteMany({ where: { animal_id: id } });

@@ -472,6 +472,9 @@ $(document).ready(function() {
         }
 
         // Preview do ícone
+        // Limpa base64 antigo: regenerado do preview no submit; sem isso o
+        // ícone do animal editado ANTES vazava para ESTE animal.
+        $('#input-icon-base64').val('');
         let iconUrl = animal.icone || imgUrl;
         if (iconUrl) {
             $('#icon-preview-img').attr('src', iconUrl.startsWith('http') || iconUrl.startsWith('/') || iconUrl.startsWith('data:') ? iconUrl : `/media/${iconUrl}`).removeClass('d-none').css('transform', 'none');
