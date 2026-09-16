@@ -195,10 +195,7 @@ $(document).ready(function() {
             const u = animal.imagem.startsWith('http') || animal.imagem.startsWith('/') || animal.imagem.startsWith('data:') ? animal.imagem : `/media/${animal.imagem}`;
             if (!images.includes(u)) images.push(u);
         }
-        if (animal.icone && typeof animal.icone === 'string' && !animal.icone.includes('logotipo.png') && !animal.icone.includes('falta_imagem') && !animal.icone.includes('Falta_imagem')) {
-            const u = animal.icone.startsWith('http') || animal.icone.startsWith('/') || animal.icone.startsWith('data:') ? animal.icone : `/media/${animal.icone}`;
-            if (!images.includes(u)) images.push(u);
-        }
+        // Ícone NÃO entra na galeria: é exibido só no pino do mapa e no preview de edição.
         // De preferência de 1 a 3 imagens por card
         const finalImgs = images.slice(0, 3);
         if (finalImgs.length === 0) {
@@ -1724,9 +1721,7 @@ $(document).ready(function() {
         if (animal.imagem && !animal.imagem.includes('logotipo.png') && !animal.imagem.includes('falta_imagem') && !animal.imagem.includes('Falta_imagem') && !allImgs.includes(animal.imagem)) {
             allImgs.push(animal.imagem);
         }
-        if (animal.icone && !animal.icone.includes('logotipo.png') && !animal.icone.includes('falta_imagem') && !animal.icone.includes('Falta_imagem') && !allImgs.includes(animal.icone)) {
-            allImgs.push(animal.icone);
-        }
+        // Ícone fora do carrossel: só pino do mapa e edição (nunca como foto).
         allImgs = allImgs.map(url => (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:') ? url : `/media/${url}`));
         // De preferência de 1 a 3 fotos
         allImgs = allImgs.slice(0, 3);
