@@ -2319,6 +2319,39 @@ $(document).ready(function () {
       $('.select-biomas').val(selectedIds);
     }
   }
+  // Ramer-Douglas-Peucker puro (sem turf, que quebra em anéis grandes):
+  // afina anéis gigantes (biomas precisos têm 20k+ pontos) para ~220m de
+  // desvio máx. Anéis pequenos passam intactos.
+  function simplifyBigRingRDP(ring, eps) {
+    var pts = ring.map(function (p) { return [parseFloat(p[0]), parseFloat(p[1])]; });
+    if (pts.length <= 1000) return pts;
+    eps = eps || 0.002;
+    var keep = new Array(pts.length).fill(false);
+    keep[0] = keep[pts.length - 1] = true;
+    var segD2 = function (p, a, b) {
+      var dx = b[1] - a[1], dy = b[0] - a[0];
+      var L2 = dx * dx + dy * dy;
+      var t = L2 > 0 ? ((p[1] - a[1]) * dx + (p[0] - a[0]) * dy) / L2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      var ex = a[1] + t * dx - p[1], ey = a[0] + t * dy - p[0];
+      return ex * ex + ey * ey;
+    };
+    var stack = [[0, pts.length - 1]];
+    while (stack.length) {
+      var seg = stack.pop();
+      var i0 = seg[0], i1 = seg[1];
+      var dmax = -1, imax = -1;
+      for (var i = i0 + 1; i < i1; i++) {
+        var d = segD2(pts[i], pts[i0], pts[i1]);
+        if (d > dmax) { dmax = d; imax = i; }
+      }
+      if (dmax > eps * eps && imax > 0) {
+        keep[imax] = true;
+        stack.push([i0, imax], [imax, i1]);
+      }
+    }
+    return pts.filter(function (_, i) { return keep[i]; });
+  }
   function applyModalBiomeAreaRings(key, nome, color, rings) {
     saveModalPolygonHistoryState();
     if (color) {
@@ -2327,9 +2360,11 @@ $(document).ready(function () {
     }
     modalDraftPolygonsList = (modalDraftPolygonsList || []).filter(r => r && r.length > 0);
     // 5 decimais (~1m): evita payload gigante ("Field value too long" no multer).
+    // + RDP em anéis gigantes: 24k pts -> ~5k sem perda visual.
     const round5 = (v) => Math.round(parseFloat(v) * 1e5) / 1e5;
     rings.forEach(ring => {
-      modalDraftPolygonsList.push(ring.map(pt => [round5(pt[0]), round5(pt[1])]));
+      const rounded = ring.map(pt => [round5(pt[0]), round5(pt[1])]);
+      modalDraftPolygonsList.push(simplifyBigRingRDP(rounded));
     });
     selectModalBiomeChipByKey(key);
     redrawModalDraftPolygonLayers();
@@ -3447,7 +3482,9 @@ $(document).ready(function () {
     }, { passive: false });
   }
 
-  // Gera o PNG circular do ícone a partir do enquadramento atual do preview.
+  // Gera o ícone a partir do enquadramento atual do preview.
+  // 192px JPEG com fundo escuro (exibido a 30-105px com recorte circular via
+  // CSS): ~20x mais leve que o PNG 500px e indistinguível na tela.
   // Retorna Promise para o submit aguardar o recorte antes de enviar.
   function generateModalIconBase64() {
     const img = document.getElementById('modal-icon-preview-img');
@@ -3459,36 +3496,33 @@ $(document).ready(function () {
       // Nunca trava o submit: resolve mesmo se a imagem falhar (ex.: CORS).
       var timer = setTimeout(function() { done($('#modal-input-icon-base64').val() || null); }, 1500);
       try {
+        const SIZE = 192;
         const canvas = document.createElement('canvas');
-        canvas.width = 500;
-        canvas.height = 500;
+        canvas.width = SIZE;
+        canvas.height = SIZE;
         const ctx = canvas.getContext('2d');
 
         const paintCircle = function (source) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(250, 250, 250, 0, Math.PI * 2, true);
-          ctx.closePath();
-          ctx.clip();
+          ctx.fillStyle = '#121118';
+          ctx.fillRect(0, 0, SIZE, SIZE);
 
-          const naturalW = source.naturalWidth || 500;
-          const naturalH = source.naturalHeight || 500;
+          const naturalW = source.naturalWidth || SIZE;
+          const naturalH = source.naturalHeight || SIZE;
           const aspect = naturalW / naturalH;
-          let drawW = 500, drawH = 500;
+          let drawW = SIZE, drawH = SIZE;
 
-          if (aspect > 1) drawW = 500 * aspect;
-          else drawH = 500 / aspect;
+          if (aspect > 1) drawW = SIZE * aspect;
+          else drawH = SIZE / aspect;
 
-          const scaleRatio = 500 / 105;
+          const scaleRatio = SIZE / 105;
           drawW = drawW * (modalIconCropState.scale || 1.0);
           drawH = drawH * (modalIconCropState.scale || 1.0);
 
-          const drawX = (500 - drawW) / 2 + (modalIconCropState.currentX * scaleRatio);
-          const drawY = (500 - drawH) / 2 + (modalIconCropState.currentY * scaleRatio);
+          const drawX = (SIZE - drawW) / 2 + (modalIconCropState.currentX * scaleRatio);
+          const drawY = (SIZE - drawH) / 2 + (modalIconCropState.currentY * scaleRatio);
 
           ctx.drawImage(source, drawX, drawY, drawW, drawH);
-          ctx.restore();
-          return canvas.toDataURL('image/png');
+          return canvas.toDataURL('image/jpeg', 0.85);
         };
 
         // Atalho rápido: o preview já está decodificado no DOM — desenha
