@@ -829,6 +829,7 @@ $(document).ready(function() {
         const collect = (g) => {
             if (!g) return;
             if (g.type === 'FeatureCollection') (g.features || []).forEach(collect);
+            else if (g.type === 'GeometryCollection') (g.geometries || []).forEach(collect);
             else if (g.type === 'Feature') collect(g.geometry);
             else if (g.type === 'Polygon') { if (g.coordinates && g.coordinates[0]) rings.push(g.coordinates[0]); }
             else if (g.type === 'MultiPolygon') (g.coordinates || []).forEach(p => { if (p && p[0]) rings.push(p[0]); });
@@ -839,18 +840,29 @@ $(document).ready(function() {
             .filter(ring => ring.length >= 3);
     }
     // A Mata da lei é nacional: recorta p/ PR+SC+RS p/ não vazar p/ fora do Sul.
+    // Um intersect por estado (sem union global): se um falhar, os outros
+    // ainda valem — nunca cai no polígono grosseiro da API por um erro só.
     function clipForestToSouth(cleanForest, prData, scData, rsData) {
         try {
             if (!window.turf || !cleanForest) return null;
-            let south = null;
+            const parts = [];
             [prData, scData, rsData].forEach(d => {
-                const f = d && d.features && d.features[0];
-                if (!f) return;
-                const simp = turf.simplify(turf.buffer(f, 0), { tolerance: 0.003 });
-                south = south ? (turf.union(south, simp) || south) : simp;
+                try {
+                    const f = d && d.features && d.features[0];
+                    if (!f) return;
+                    let part = null;
+                    try {
+                        part = turf.intersect(cleanForest, f);
+                    } catch (e1) {
+                        try {
+                            part = turf.intersect({ type: 'FeatureCollection', features: [cleanForest, f] });
+                        } catch (e2) { part = null; }
+                    }
+                    if (part) parts.push(part);
+                } catch (e) {}
             });
-            if (!south) return null;
-            return turf.intersect(cleanForest, south) || null;
+            if (parts.length === 0) return null;
+            return { type: 'FeatureCollection', features: parts };
         } catch (e) { return null; }
     }
     let biomasAreasCache = null;
