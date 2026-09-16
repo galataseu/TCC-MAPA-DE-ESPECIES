@@ -1135,6 +1135,10 @@ $(document).ready(function () {
     } catch (e) {}
   }
 
+  // Separação mínima em pixels entre âncoras clampadas (marcadores de 36px
+  // + etiqueta). Coordenadas reais nunca são movidas (cluster cuida delas).
+  var DECLUTTER_MIN_PX = 52;
+
   function refreshAreaViewport() {
     if (!map || !rawMarkersGeoJson || !rawMarkersGeoJson.features) return;
     var bounds;
@@ -1143,6 +1147,7 @@ $(document).ready(function () {
     var zoomOk = true;
     try { zoomOk = map.getZoom() >= CLAMP_MIN_ZOOM; } catch (e) {}
     var seen = new Set();
+    var plan = new Map(); // animalId -> { marker, target, clamped, rings }
     rawMarkersGeoJson.features.forEach(function (f) {
       var p = f.properties || {};
       var animalId = String(p.animal_id || p.id);
@@ -1153,8 +1158,11 @@ $(document).ready(function () {
       var real = realLatLngOfFeature(f);
       if (!real) return;
       var target = real;
+      var clamped = false;
       var rings = getAreaRingsOf(p);
-      if (rings.length > 0 && zoomOk) {
+      // Caminho barato primeiro (bbox): só roda o teste caro (turf) quando
+      // a zona está grande na tela e o zoom permite clampar.
+      if (rings.length > 0 && zoomOk && ringsCoverageOfViewport(rings, bounds) >= CLAMP_RELEASE) {
         var outside = !rings.some(function (ring) { return isPointInsidePolygon(real[0], real[1], ring); });
         if (outside) {
           var cov = ringsCoverageOfViewport(rings, bounds);
@@ -1171,7 +1179,7 @@ $(document).ready(function () {
               anchor = anchorPointInRings(rings, animalId + '|' + (p.nome_cientifico || ''));
               if (anchor) clampTargetByAnimal.set(animalId, anchor);
             }
-            if (anchor) target = anchor;
+            if (anchor) { target = anchor; clamped = true; }
           }
         } else {
           clampActiveByAnimal.set(animalId, false);
@@ -1179,12 +1187,96 @@ $(document).ready(function () {
       } else {
         clampActiveByAnimal.set(animalId, false);
       }
+      plan.set(animalId, { marker: marker, target: target, clamped: clamped, rings: rings });
+    });
+    declutterClampedAnchors(plan);
+    plan.forEach(function (t, animalId) {
       var cur = null;
-      try { cur = marker.getLatLng(); } catch (e) {}
-      if (cur && (Math.abs(cur.lat - target[0]) > 1e-9 || Math.abs(cur.lng - target[1]) > 1e-9)) {
-        tweenMarkerTo(marker, animalId, target);
+      try { cur = t.marker.getLatLng(); } catch (e) {}
+      if (cur && (Math.abs(cur.lat - t.target[0]) > 1e-9 || Math.abs(cur.lng - t.target[1]) > 1e-9)) {
+        tweenMarkerTo(t.marker, animalId, t.target);
       }
     });
+  }
+
+  // Afasta âncoras clampadas que cairiam uma dentro da outra (até 3
+  // passadas). Reais ficam fixos; âncora que sair da zona volta atrás.
+  function declutterClampedAnchors(plan) {
+    var toPx = function (t) {
+      try { return map.latLngToContainerPoint([t.target[0], t.target[1]]); } catch (e) { return null; }
+    };
+    var toLatLng = function (pt) {
+      try { return map.containerPointToLatLng(pt); } catch (e) { return null; }
+    };
+    var insideRings = function (lat, lng, rings) {
+      for (var i = 0; i < rings.length; i++) {
+        if (isPointInsidePolygon(lat, lng, rings[i])) return true;
+      }
+      return false;
+    };
+    for (var iter = 0; iter < 3; iter++) {
+      var moved = false;
+      var ids = Array.from(plan.keys());
+      for (var a = 0; a < ids.length; a++) {
+        var ta = plan.get(ids[a]);
+        if (!ta || !ta.clamped) continue;
+        var pa = toPx(ta);
+        if (!pa) continue;
+        for (var b = 0; b < ids.length; b++) {
+          if (b === a) continue;
+          var tb = plan.get(ids[b]);
+          if (!tb) continue;
+          // Real x real o cluster resolve; só mexe se âncora envolvida.
+          if (!tb.clamped && !ta.clamped) continue;
+          var pb = toPx(tb);
+          if (!pb) continue;
+          var dx = pa.x - pb.x;
+          var dy = pa.y - pb.y;
+          var d2 = dx * dx + dy * dy;
+          if (d2 >= DECLUTTER_MIN_PX * DECLUTTER_MIN_PX) continue;
+          var d = Math.sqrt(d2);
+          var ux, uy;
+          if (d < 1e-6) {
+            // Pontos coincidentes: direção determinística p/ desempatar.
+            var fa = (a * 2.39996) % (Math.PI * 2);
+            ux = Math.cos(fa);
+            uy = Math.sin(fa);
+            d = 0;
+          } else {
+            ux = dx / d;
+            uy = dy / d;
+          }
+          var gap = DECLUTTER_MIN_PX - d;
+          // Fecha o vão de uma vez: divide entre os dois se ambos móveis.
+          var shareA = tb.clamped ? 0.5 : 1;
+          if (nudgeAnchor(ta, pa, ux * gap * shareA, uy * gap * shareA, toPx, toLatLng, insideRings)) {
+            pa = toPx(ta);
+            moved = true;
+          }
+          // Se ambos clampados, empurra o outro na direção oposta.
+          if (tb.clamped) {
+            if (nudgeAnchor(tb, pb, -ux * gap * 0.5, -uy * gap * 0.5, toPx, toLatLng, insideRings)) moved = true;
+          }
+        }
+      }
+      if (!moved) break;
+    }
+  }
+
+  // Tenta deslocar a âncora em pixels, com recuo progressivo para continuar
+  // dentro da zona. Retorna true se moveu.
+  function nudgeAnchor(t, p, dpx, dpy, toPx, toLatLng, insideRings) {
+    for (var k = 0; k < 5; k++) {
+      var ll = toLatLng({ x: p.x + dpx, y: p.y + dpy });
+      if (!ll) return false;
+      if (insideRings(ll.lat, ll.lng, t.rings)) {
+        t.target = [ll.lat, ll.lng];
+        return true;
+      }
+      dpx /= 2;
+      dpy /= 2;
+    }
+    return false;
   }
 
   function areaPolygonToTurf(polygonCoords) {
@@ -3161,6 +3253,43 @@ $(document).ready(function () {
     }
   });
 
+  // Reduz fotos grandes antes do upload (máx. 1600px, JPEG 0.85): upload,
+  // banco e recarregamentos ficam ordens de magnitude mais leves. Arquivos
+  // pequenos e não-imagens passam intactos. Nunca rejeita: em qualquer
+  // falha, usa o original.
+  function downscalePhotoFile(file) {
+    return new Promise(function (resolve) {
+      try {
+        if (!file || typeof file === 'string' || !(file instanceof Blob)) return resolve(file);
+        if (!file.type || file.type.indexOf('image/') !== 0) return resolve(file);
+        if (file.size <= 700 * 1024) return resolve(file);
+        var url;
+        try { url = URL.createObjectURL(file); } catch (e) { return resolve(file); }
+        var img = new Image();
+        img.onload = function () {
+          try {
+            var w = img.naturalWidth || img.width;
+            var h = img.naturalHeight || img.height;
+            try { URL.revokeObjectURL(url); } catch (e) {}
+            if (!w || !h) return resolve(file);
+            var scale = Math.min(1, 1600 / Math.max(w, h));
+            if (scale >= 1) return resolve(file);
+            var cv = document.createElement('canvas');
+            cv.width = Math.round(w * scale);
+            cv.height = Math.round(h * scale);
+            cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+            var type = (file.type === 'image/png') ? 'image/png' : 'image/jpeg';
+            if (cv.toBlob) {
+              cv.toBlob(function (b) { resolve(b || file); }, type, 0.85);
+            } else resolve(file);
+          } catch (e) { resolve(file); }
+        };
+        img.onerror = function () { try { URL.revokeObjectURL(url); } catch (e) {} resolve(file); };
+        img.src = url;
+      } catch (e) { resolve(file); }
+    });
+  }
+
   function renderModalImageGallery() {
     const listContainer = $('#modal-image-preview-list');
     listContainer.empty();
@@ -3335,34 +3464,52 @@ $(document).ready(function () {
         canvas.height = 500;
         const ctx = canvas.getContext('2d');
 
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(250, 250, 250, 0, Math.PI * 2, true);
-        ctx.closePath();
-        ctx.clip();
+        const paintCircle = function (source) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(250, 250, 250, 0, Math.PI * 2, true);
+          ctx.closePath();
+          ctx.clip();
 
-        const naturalW = img.naturalWidth || 500;
-        const naturalH = img.naturalHeight || 500;
-        const aspect = naturalW / naturalH;
-        let drawW = 500, drawH = 500;
+          const naturalW = source.naturalWidth || 500;
+          const naturalH = source.naturalHeight || 500;
+          const aspect = naturalW / naturalH;
+          let drawW = 500, drawH = 500;
 
-        if (aspect > 1) drawW = 500 * aspect;
-        else drawH = 500 / aspect;
+          if (aspect > 1) drawW = 500 * aspect;
+          else drawH = 500 / aspect;
 
-        const scaleRatio = 500 / 105;
-        drawW = drawW * (modalIconCropState.scale || 1.0);
-        drawH = drawH * (modalIconCropState.scale || 1.0);
+          const scaleRatio = 500 / 105;
+          drawW = drawW * (modalIconCropState.scale || 1.0);
+          drawH = drawH * (modalIconCropState.scale || 1.0);
 
-        const drawX = (500 - drawW) / 2 + (modalIconCropState.currentX * scaleRatio);
-        const drawY = (500 - drawH) / 2 + (modalIconCropState.currentY * scaleRatio);
+          const drawX = (500 - drawW) / 2 + (modalIconCropState.currentX * scaleRatio);
+          const drawY = (500 - drawH) / 2 + (modalIconCropState.currentY * scaleRatio);
+
+          ctx.drawImage(source, drawX, drawY, drawW, drawH);
+          ctx.restore();
+          return canvas.toDataURL('image/png');
+        };
+
+        // Atalho rápido: o preview já está decodificado no DOM — desenha
+        // direto, sem recarregar da rede (evita travar o submit em CORS lento).
+        try {
+          if (img.complete && img.naturalWidth > 0) {
+            const dataUrl = paintCircle(img);
+            $('#modal-input-icon-base64').val(dataUrl);
+            clearTimeout(timer);
+            done(dataUrl);
+            return;
+          }
+        } catch (e) {
+          // Canvas "tainted" ou preview quebrado: cai no fluxo com recarga.
+        }
 
         const tempImg = new Image();
         tempImg.crossOrigin = 'anonymous';
         tempImg.onload = function() {
           try {
-            ctx.drawImage(tempImg, drawX, drawY, drawW, drawH);
-            ctx.restore();
-            const dataUrl = canvas.toDataURL('image/png');
+            const dataUrl = paintCircle(tempImg);
             $('#modal-input-icon-base64').val(dataUrl);
             clearTimeout(timer);
             done(dataUrl);
@@ -3509,14 +3656,19 @@ $(document).ready(function () {
     try { await generateModalIconBase64(); } catch (err) {}
     const formData = new FormData(this);
 
-    // Anexar todos os arquivos ativos da galeria
+    // Anexar todos os arquivos ativos da galeria (reduzidos antes de subir)
     formData.delete('animal_imagem');
+    var galleryFiles = [];
     modalSelectedFiles.forEach(item => {
       const fileObj = item.file || item;
-      if (typeof fileObj !== 'string') {
-        formData.append('animal_imagem', fileObj);
-      }
+      if (typeof fileObj !== 'string') galleryFiles.push(fileObj);
     });
+    try {
+      var smallGallery = await Promise.all(galleryFiles.map(downscalePhotoFile));
+      smallGallery.forEach(f => { if (f && typeof f !== 'string') formData.append('animal_imagem', f); });
+    } catch (err) {
+      galleryFiles.forEach(f => formData.append('animal_imagem', f));
+    }
 
     const selectedBiomas = [];
     $('#modal-biomes-tag-selector .biome-chip[data-selected="true"]').each(function() {

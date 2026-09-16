@@ -1437,34 +1437,51 @@ $(document).ready(function() {
                 canvas.height = 500;
                 const ctx = canvas.getContext('2d');
 
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(250, 250, 250, 0, Math.PI * 2, true);
-                ctx.closePath();
-                ctx.clip();
+                const paintCircle = function (source) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(250, 250, 250, 0, Math.PI * 2, true);
+                    ctx.closePath();
+                    ctx.clip();
 
-                const naturalW = iconImg.naturalWidth || 500;
-                const naturalH = iconImg.naturalHeight || 500;
-                const aspect = naturalW / naturalH;
-                let drawW = 500, drawH = 500;
+                    const naturalW = source.naturalWidth || 500;
+                    const naturalH = source.naturalHeight || 500;
+                    const aspect = naturalW / naturalH;
+                    let drawW = 500, drawH = 500;
 
-                if (aspect > 1) drawW = 500 * aspect;
-                else drawH = 500 / aspect;
+                    if (aspect > 1) drawW = 500 * aspect;
+                    else drawH = 500 / aspect;
 
-                const scaleRatio = 500 / 105;
-                drawW = drawW * (iconCropState.scale || 1.0);
-                drawH = drawH * (iconCropState.scale || 1.0);
+                    const scaleRatio = 500 / 105;
+                    drawW = drawW * (iconCropState.scale || 1.0);
+                    drawH = drawH * (iconCropState.scale || 1.0);
 
-                const drawX = (500 - drawW) / 2 + (iconCropState.currentX * scaleRatio);
-                const drawY = (500 - drawH) / 2 + (iconCropState.currentY * scaleRatio);
+                    const drawX = (500 - drawW) / 2 + (iconCropState.currentX * scaleRatio);
+                    const drawY = (500 - drawH) / 2 + (iconCropState.currentY * scaleRatio);
+
+                    ctx.drawImage(source, drawX, drawY, drawW, drawH);
+                    ctx.restore();
+                    return canvas.toDataURL('image/png');
+                };
+
+                // Atalho rápido: preview já decodificado no DOM, sem recarregar da rede.
+                try {
+                    if (iconImg.complete && iconImg.naturalWidth > 0) {
+                        const dataUrl = paintCircle(iconImg);
+                        $('#input-icon-base64').val(dataUrl);
+                        clearTimeout(timer);
+                        done(dataUrl);
+                        return;
+                    }
+                } catch (e) {
+                    // Canvas "tainted" ou preview quebrado: cai no fluxo com recarga.
+                }
 
                 const tempImg = new Image();
                 tempImg.crossOrigin = 'anonymous';
                 tempImg.onload = function() {
                     try {
-                        ctx.drawImage(tempImg, drawX, drawY, drawW, drawH);
-                        ctx.restore();
-                        const dataUrl = canvas.toDataURL('image/png');
+                        const dataUrl = paintCircle(tempImg);
                         $('#input-icon-base64').val(dataUrl);
                         clearTimeout(timer);
                         done(dataUrl);
@@ -1487,6 +1504,41 @@ $(document).ready(function() {
         });
     }
 
+    // Reduz fotos grandes antes do upload (máx. 1600px, JPEG 0.85).
+    // Nunca rejeita: em qualquer falha, usa o original.
+    function downscalePagePhotoFile(file) {
+        return new Promise(function (resolve) {
+            try {
+                if (!file || typeof file === 'string' || !(file instanceof Blob)) return resolve(file);
+                if (!file.type || file.type.indexOf('image/') !== 0) return resolve(file);
+                if (file.size <= 700 * 1024) return resolve(file);
+                var url;
+                try { url = URL.createObjectURL(file); } catch (e) { return resolve(file); }
+                var img = new Image();
+                img.onload = function () {
+                    try {
+                        var w = img.naturalWidth || img.width;
+                        var h = img.naturalHeight || img.height;
+                        try { URL.revokeObjectURL(url); } catch (e) {}
+                        if (!w || !h) return resolve(file);
+                        var scale = Math.min(1, 1600 / Math.max(w, h));
+                        if (scale >= 1) return resolve(file);
+                        var cv = document.createElement('canvas');
+                        cv.width = Math.round(w * scale);
+                        cv.height = Math.round(h * scale);
+                        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+                        var type = (file.type === 'image/png') ? 'image/png' : 'image/jpeg';
+                        if (cv.toBlob) {
+                            cv.toBlob(function (b) { resolve(b || file); }, type, 0.85);
+                        } else resolve(file);
+                    } catch (e) { resolve(file); }
+                };
+                img.onerror = function () { try { URL.revokeObjectURL(url); } catch (e) {} resolve(file); };
+                img.src = url;
+            } catch (e) { resolve(file); }
+        });
+    }
+
     // Submissão do Formulário de Cadastro / Edição
     $('#form-species-create').submit(async function(e) {
         e.preventDefault();
@@ -1494,14 +1546,19 @@ $(document).ready(function() {
         try { await generatePageIconBase64(); } catch (err) {}
         const formData = new FormData(this);
 
-        // Anexar arquivos da galeria
+        // Anexar arquivos da galeria (reduzidos antes de subir)
         formData.delete('animal_imagem');
+        const pageGalleryFiles = [];
         pageSelectedFiles.forEach(item => {
             const fileObj = item.file || item;
-            if (typeof fileObj !== 'string') {
-                formData.append('animal_imagem', fileObj);
-            }
+            if (typeof fileObj !== 'string') pageGalleryFiles.push(fileObj);
         });
+        try {
+            const smallFiles = await Promise.all(pageGalleryFiles.map(downscalePagePhotoFile));
+            smallFiles.forEach(f => { if (f && typeof f !== 'string') formData.append('animal_imagem', f); });
+        } catch (err) {
+            pageGalleryFiles.forEach(f => formData.append('animal_imagem', f));
+        }
 
         // Mapear biomas selecionados
         formData.delete('biomas_ids');

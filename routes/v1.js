@@ -250,18 +250,20 @@ router.post('/animais/', uploadFieldsSafe, async (req, res) => {
 
     // 3. Salvar imagens enviadas na tabela api_animalimagem
     if (req.files && req.files['animal_imagem'] && req.files['animal_imagem'].length > 0) {
+      const imgCreates = [];
       for (let i = 0; i < req.files['animal_imagem'].length; i++) {
         const dataUrl = fileToDataUrl(req.files['animal_imagem'][i]);
         if (!dataUrl) continue;
-        await prisma.api_animalimagem.create({
+        imgCreates.push(prisma.api_animalimagem.create({
           data: {
             animal_id: animal.id,
             imagem: dataUrl,
             legenda: b.nome_comum || '',
             ordem: i + 1
           }
-        });
+        }));
       }
+      await Promise.all(imgCreates);
     } else if (imgPath) {
       await prisma.api_animalimagem.create({
         data: {
@@ -276,16 +278,14 @@ router.post('/animais/', uploadFieldsSafe, async (req, res) => {
     // 4. Mapear biomas selecionados
     if (b.biomas_ids) {
       const biomasArr = Array.isArray(b.biomas_ids) ? b.biomas_ids : [b.biomas_ids];
-      for (const biomaId of biomasArr) {
-        if (biomaId) {
-          await prisma.api_animal_biomas.create({
-            data: {
-              animal_id: animal.id,
-              bioma_id: BigInt(biomaId)
-            }
-          });
-        }
-      }
+      await Promise.all(biomasArr.filter(Boolean).map(biomaId =>
+        prisma.api_animal_biomas.create({
+          data: {
+            animal_id: animal.id,
+            bioma_id: BigInt(biomaId)
+          }
+        })
+      ));
     }
 
     // 5. Criar Marcador(es) Geográfico(s) no PostGIS
@@ -407,18 +407,20 @@ router.patch('/animais/:id/', uploadFieldsSafe, async (req, res) => {
 
     if (req.files && req.files['animal_imagem'] && req.files['animal_imagem'].length > 0) {
       await prisma.api_animalimagem.deleteMany({ where: { animal_id: id } });
+      const imgCreates = [];
       for (let i = 0; i < req.files['animal_imagem'].length; i++) {
         const dataUrl = fileToDataUrl(req.files['animal_imagem'][i]);
         if (!dataUrl) continue;
-        await prisma.api_animalimagem.create({
+        imgCreates.push(prisma.api_animalimagem.create({
           data: {
             animal_id: id,
             imagem: dataUrl,
             legenda: animal.nome_comum || '',
             ordem: i + 1
           }
-        });
+        }));
       }
+      await Promise.all(imgCreates);
     } else if (imgPath) {
       await prisma.api_animalimagem.deleteMany({ where: { animal_id: id } });
       await prisma.api_animalimagem.create({
@@ -434,16 +436,14 @@ router.patch('/animais/:id/', uploadFieldsSafe, async (req, res) => {
     if (b.biomas_ids) {
       await prisma.api_animal_biomas.deleteMany({ where: { animal_id: id } });
       const biomasArr = Array.isArray(b.biomas_ids) ? b.biomas_ids : [b.biomas_ids];
-      for (const biomaId of biomasArr) {
-        if (biomaId) {
-          await prisma.api_animal_biomas.create({
-            data: {
-              animal_id: id,
-              bioma_id: BigInt(biomaId)
-            }
-          });
-        }
-      }
+      await Promise.all(biomasArr.filter(Boolean).map(biomaId =>
+        prisma.api_animal_biomas.create({
+          data: {
+            animal_id: id,
+            bioma_id: BigInt(biomaId)
+          }
+        })
+      ));
     }
 
     // Atualizar posição(ões) e ícone dos marcadores no PostGIS
