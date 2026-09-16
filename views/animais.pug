@@ -151,6 +151,11 @@ block content
             i.fa-solid.fa-magnifying-glass.search-icon
 
           .species-cards-scroll-area
+            #fav-section.d-none
+              #fav-section-title
+                i.fa-solid.fa-star
+                span Favoritos
+              #favGrid.species-cards-grid
             #animalCardsGrid.species-cards-grid
               //- Cards renderizados dinamicamente via JS
 
@@ -260,7 +265,7 @@ block content
             | Iniciar Importação
 
 block scripts
-  script(src="/assets/js/animais.js")
+  script(src="/assets/js/animais.js?v=5")
 
 
 

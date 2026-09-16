@@ -1857,3 +1857,161 @@ html, body, #main-layout {
   background: linear-gradient(135deg, #c0392b, #e74c3c);
   color: #fff;
 }
+
+/* ==========================================================================
+   MENU FLUTUANTE — comporta Camadas + 8 níveis sem estourar a tela
+   (só limite de altura/rolagem; nenhum estilo existente foi alterado)
+   ========================================================================== */
+#map-legend {
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+
+/* Mapas dos modais de ONG e Zona: mesmo quadro do mapa do modal de animais
+   (#modal-right-panel-map) — mesmas declarações, só novos seletores. */
+#ong-right-panel-map,
+#zona-right-panel-map {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 480px !important;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #3B3A48;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  display: block !important;
+}
+
+/* ==========================================================================
+   LABEL DO NOME DA ZONA DE PRESERVAÇÃO SOBRE O POLÍGONO
+   Visual limpo (pílula dark, sem seta). Só cores da paleta do site:
+   fundo #23222B, borda #3B3A48, texto #FFFFFF, sombra padrão dos cards.
+   O JS esconde os labels com zoom baixo (< 7) e resolve sobreposições.
+   ========================================================================== */
+.zona-label {
+  background-color: #23222B !important;
+  border: 1px solid #3B3A48 !important;
+  color: #FFFFFF !important;
+  font-weight: 700;
+  /* Tamanho dinâmico via --zona-label-fs (JS escala com o zoom). */
+  font-size: var(--zona-label-fs, 12px);
+  border-radius: 12px;
+  padding: 4px 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+  /* Nome completo em linha única, lado a lado (sem quebra nem ellipsis).
+     Aparece só no hover do polígono (tooltip não-permanente). */
+  max-width: none;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.zona-label.leaflet-tooltip-top:before,
+.zona-label.leaflet-tooltip-bottom:before,
+.zona-label.leaflet-tooltip-left:before,
+.zona-label.leaflet-tooltip-right:before {
+  display: none;
+}
+
+/* ==========================================================================
+   FAVORITOS (estrela/sininho nos cards, destaque e seção da página)
+   Mesma linguagem dos demais controles do card (pílulas dark circulares).
+   ========================================================================== */
+.species-card-favbar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 11;
+  display: flex;
+  gap: 8px;
+}
+
+.species-card-favbtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+  padding: 0;
+}
+
+.species-card-favbtn:hover {
+  transform: scale(1.12);
+  background: rgba(0, 0, 0, 0.75);
+}
+
+/* Card favoritado: destaque dourado */
+.species-card.is-fav {
+  box-shadow: 0 0 0 3px #FFAA44, 0 8px 22px rgba(0,0,0,0.35);
+}
+
+.species-card.is-fav:hover {
+  box-shadow: 0 0 0 3px #FFAA44, 0 14px 28px rgba(0,0,0,0.5);
+}
+
+/* Botões fav no cabeçalho do modal de detalhes (ao lado do título) */
+.favbar-inline {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: 12px;
+  vertical-align: middle;
+}
+
+/* Seção Favoritos (página de espécies) */
+#fav-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #FFAA44;
+  font-weight: 900;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 14px 4px 10px;
+}
+
+#fav-section-title i {
+  font-size: 1.05rem;
+}
+
+#fav-empty {
+  color: #A09FA9;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 10px 6px 16px;
+}
+
+/* Estrela sobre o marcador do mapa (favoritado) */
+.map-fav-star {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #23222B;
+  border: 1.5px solid #FFAA44;
+  color: #FFAA44;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+  z-index: 5;
+}
+
+/* Campo de e-mail do modal de notificação */
+#fav-notify-email:focus {
+  border-color: #FFAA44 !important;
+  box-shadow: 0 0 0 2px rgba(255, 170, 68, 0.25) !important;
+  outline: none;
+}

@@ -20,9 +20,9 @@ class Command(BaseCommand):
 
         # 1. Usuários
         admin, created = User.objects.get_or_create(
-            username='admin67',
+            username='admin',
             defaults={
-                'password': make_password('admin67'),
+                'password': make_password('admin'),
                 'role': 'admin',
                 'is_staff': True,
                 'is_superuser': True,

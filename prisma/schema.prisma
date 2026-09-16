@@ -330,6 +330,22 @@ model api_animalimagem {
   @@index([animal_id], map: "api_animalimagem_animal_id_77468e03")
 }
 
+/// Assinaturas anônimas de alerta de mudança de status de conservação.
+/// Um e-mail pode assinar vários animais; cada par (animal, e-mail) é único.
+/// `ativo=false` = desfavoritado ou sininho desligado (interrompe o envio).
+model api_alerta_status {
+  id         BigInt   @id @default(autoincrement())
+  animal_id  BigInt
+  email      String   @db.VarChar(254)
+  ativo      Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
+
+  @@unique([animal_id, email], map: "api_alerta_status_animal_email_uniq")
+  @@index([animal_id], map: "api_alerta_status_animal_id")
+  @@index([email], map: "api_alerta_status_email")
+}
+
 /// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
 model api_favorito {
   id         BigInt     @id @default(autoincrement())

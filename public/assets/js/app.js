@@ -118,29 +118,37 @@ $(document).ready(function () {
   /* 2. Inicialização das Camadas de Biomas e Máscara */
   var svgRenderer = L.svg({ padding: 0 });
 
-  pampasLayer = L.geoJson(null, { renderer: svgRenderer }).addTo(map);
+  pampasLayer = L.geoJson(null, { renderer: svgRenderer, interactive: false }).addTo(map);
+  // interactive:false na OPÇÃO da camada (o antigo `clickable` dentro de
+  // `style` é ignorado no Leaflet 1.x e a textura engolia cliques dos
+  // polígonos de zona/ONG abaixo dela).
   pampasPatternLayer = L.geoJson(null, {
-    style: { color: "transparent", fillColor: "url(#pampa-pattern)", fillOpacity: 0.6, clickable: false },
+    interactive: false,
+    style: { color: "transparent", fillColor: "url(#pampa-pattern)", fillOpacity: 0.6 },
     renderer: svgRenderer
   }).addTo(map);
 
-  cerradoLayer = L.geoJson(null, { renderer: svgRenderer }).addTo(map);
+  cerradoLayer = L.geoJson(null, { renderer: svgRenderer, interactive: false }).addTo(map);
   cerradoPatternLayer = L.geoJson(null, {
-    style: { color: "transparent", fillColor: "url(#cerrado-pattern)", fillOpacity: 0.6, clickable: false },
+    interactive: false,
+    style: { color: "transparent", fillColor: "url(#cerrado-pattern)", fillOpacity: 0.6 },
     renderer: svgRenderer
   }).addTo(map);
 
-  atlanticLayer = L.geoJson(null, { renderer: svgRenderer }).addTo(map);
+  atlanticLayer = L.geoJson(null, { renderer: svgRenderer, interactive: false }).addTo(map);
   atlanticPatternLayer = L.geoJson(null, {
-    style: { color: "transparent", fillColor: "url(#tree-pattern)", fillOpacity: 0.6, clickable: false },
+    interactive: false,
+    style: { color: "transparent", fillColor: "url(#tree-pattern)", fillOpacity: 0.6 },
     renderer: svgRenderer
   }).addTo(map);
 
+  // Máscara de escurecimento fora do Sul: puramente visual (`pointerEvents`
+  // não é opção do Leaflet — o correto é `interactive: false`).
   maskLayer = L.polygon(maskPaths, {
+    interactive: false,
     color: "transparent",
     fillColor: "#000000",
     fillOpacity: 0.6,
-    pointerEvents: "none",
     fillRule: 'evenodd'
   }).addTo(map);
 
@@ -202,8 +210,10 @@ $(document).ready(function () {
       forestGeometry = merged;
 
       var processState = function(data, color, code) {
+        // Contornos dos estados: puramente visuais, nunca interceptam clique.
         var layer = L.geoJson(data, {
-          style: { color: color, weight: 3, fillOpacity: 0, clickable: false }
+          interactive: false,
+          style: { color: color, weight: 3, fillOpacity: 0 }
         }).addTo(map);
         stateLayers.push(layer);
 
@@ -398,7 +408,13 @@ $(document).ready(function () {
 
   makeLegendDraggable();
 
-  $("#about-btn").click(function() { $("#aboutModal").modal("show"); return false; });
+  // Botão "Sobre": tratado em views/partials/welcome-modal.pug (overlay global
+  // WelcomeModal com localStorage "hideWelcomeScreen"). Mantido aqui apenas como
+  // fallback caso o partial não esteja presente.
+  $("#about-btn").click(function() {
+    if (typeof window.openWelcomeModal === 'function') { window.openWelcomeModal(); return false; }
+    $("#aboutModal").modal("show"); return false;
+  });
 
   // =========================================================================
   // 4. PESQUISA UNIFICADA INSTANTÂNEA DE LOCALIDADES E ANIMAIS
@@ -585,6 +601,7 @@ $(document).ready(function () {
       className: 'custom-animal-marker',
       html: `
         <div class="marker-container">
+          ${(typeof favIsFav === 'function' && favIsFav(p.animal_id || p.id)) ? '<span class="map-fav-star"><i class="fa-solid fa-star"></i></span>' : ''}
           <div class="marker-pin" style="border-color: ${borderColor};">
             <div class="marker-avatar">
               <img src="${iconUrl}" alt="${p.nome_comum || ''}" loading="lazy">
@@ -607,6 +624,7 @@ $(document).ready(function () {
     const latlng = L.latLng(coords[1], coords[0]);
     const p = feature.properties;
     const marker = L.marker(latlng, { icon: createAnimalIcon(p) });
+    marker.__feature = feature;
 
     marker.on('click', function () {
       showDetails(p.animal_id);
@@ -641,6 +659,50 @@ $(document).ready(function () {
     return marker;
   }
 
+  // Menu de botão direito para ONGs e Zonas — idêntico ao dos animais
+  // (Editar + Excluir, mesmo HTML/CSS do #admin-context-menu).
+  function showOngZonaContextMenu(latlng, kind, feature) {
+    const p = (feature && feature.properties) || {};
+    const nome = p.nome || p.nome_comum || (kind === 'ong' ? 'Instituição' : 'Área');
+    const containerPoint = map.latLngToContainerPoint(latlng);
+    const menu = $("#admin-context-menu");
+    menu.html(`
+      <div class="admin-menu-item" id="menu-edit-entity">
+        <i class="fa-solid fa-pen-to-square text-warning me-2"></i>
+        <span>Editar ${nome}</span>
+      </div>
+      <div class="admin-menu-item text-danger" id="menu-delete-entity">
+        <i class="fa-solid fa-trash me-2"></i>
+        <span>Excluir ${nome}</span>
+      </div>
+    `);
+    menu.css({ left: containerPoint.x + 'px', top: containerPoint.y + 'px' }).removeClass('d-none');
+    $('#menu-edit-entity').off('click').on('click', function () {
+      menu.addClass('d-none');
+      if (kind === 'ong') openOngModalForEdit(feature);
+      else openZonaModalForEdit(feature);
+    });
+    $('#menu-delete-entity').off('click').on('click', function () {
+      menu.addClass('d-none');
+      if (kind === 'ong') deleteOngWithConfirmation(p.id, nome);
+      else deleteZonaWithConfirmation(p.id, nome);
+    });
+  }
+
+  // Atualiza a estrela dos marcadores ao favoritar/desfavoritar (sem recarregar).
+  window.__favMarkersRefresh = function () {
+    try {
+      if (!markersCluster || typeof createAnimalIcon !== 'function') return;
+      markersCluster.getLayers().forEach(function (m) {
+        try {
+          if (m && m.__feature && typeof m.setIcon === 'function') {
+            m.setIcon(createAnimalIcon(m.__feature.properties || {}));
+          }
+        } catch (e) {}
+      });
+    } catch (e) {}
+  };
+
   /**
    * Cluster group principal — agrupa marcadores próximos automaticamente.
    */
@@ -660,6 +722,171 @@ $(document).ready(function () {
       });
     }
   }).addTo(map);
+
+  // =========================================================================
+  // CAMADAS DO MENU FLUTUANTE (usuário comum e admin).
+  // Toggles: ícones de animais, marcadores de ONGs e zonas de preservação.
+  // O estado fica em `layerVisibility` (memória): mover/zoom ou recarregar
+  // uma camada nunca reseta as demais — só add/remove no mapa.
+  // =========================================================================
+  var layerVisibility = { animais: true, ongs: true, zonas: true };
+  var ongsLayer = L.layerGroup().addTo(map);
+  var zonasLayer = L.layerGroup().addTo(map);
+  var zonaEntries = []; // { polygon, center, area, name } p/ labels dinâmicos
+  var ZONA_DEFAULT_COLOR = '#287f5e'; // mesmo verde do círculo de preservação
+  var ZONA_LABEL_MIN_ZOOM = 7; // abaixo disso os labels somem (mapa limpo)
+
+  // Ícone de ONG (idêntico ao já usado no cadastro — sem cores novas).
+  // Envolvido em .marker-container para obedecer ao slider de tamanho
+  // (--marker-scale), igual aos marcadores de animais.
+  function ongIcon() {
+    return L.divIcon({
+      className: 'custom-animal-marker',
+      html: `<div class="marker-container"><div class="marker-pin" style="border-color: #3498db; background-color: #1e3d59;"><i class="fa-solid fa-hand-holding-heart text-info" style="font-size: 18px;"></i></div></div>`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
+  }
+
+  function applyLayerVisibility() {
+    if (layerVisibility.animais) { if (!map.hasLayer(markersCluster)) map.addLayer(markersCluster); }
+    else if (map.hasLayer(markersCluster)) map.removeLayer(markersCluster);
+    if (layerVisibility.ongs) { if (!map.hasLayer(ongsLayer)) map.addLayer(ongsLayer); }
+    else if (map.hasLayer(ongsLayer)) map.removeLayer(ongsLayer);
+    if (layerVisibility.zonas) { if (!map.hasLayer(zonasLayer)) map.addLayer(zonasLayer); }
+    else if (map.hasLayer(zonasLayer)) map.removeLayer(zonasLayer);
+    refreshZonaLabels();
+  }
+
+  $(document).on('change', '#toggle-layer-animais', function() {
+    layerVisibility.animais = $(this).is(':checked');
+    applyLayerVisibility();
+  });
+  $(document).on('change', '#toggle-layer-ongs', function() {
+    layerVisibility.ongs = $(this).is(':checked');
+    applyLayerVisibility();
+  });
+  $(document).on('change', '#toggle-layer-zonas', function() {
+    layerVisibility.zonas = $(this).is(':checked');
+    applyLayerVisibility();
+  });
+
+  // Carrega ONGs persistidas (GET /api/v1/ongs/) na camada própria.
+  function loadOngs() {
+    $.getJSON('/api/v1/ongs/', function(res) {
+      ongsLayer.clearLayers();
+      window.ongFeaturesById = window.ongFeaturesById || {};
+      const fc = (res && res.data) || res;
+      (fc.features || []).forEach(function(f) {
+        const coords = f.geometry && f.geometry.coordinates;
+        if (!coords || coords.length < 2) return;
+        const p = f.properties || {};
+        if (p.id) window.ongFeaturesById[String(p.id)] = f;
+        let popup = `<b>Instituição: ${p.nome || ''}</b>`;
+        if (p.descricao) popup += `<br>${p.descricao}`;
+        const contato = [p.email, p.telefone].filter(Boolean).join(' • ');
+        if (contato) popup += `<br><small>${contato}</small>`;
+        // Botões no mesmo estilo do animal (outline + rounded-pill).
+        if (typeof isAdminModeActive === 'function' && isAdminModeActive() && p.id) {
+          const safeNome = String(p.nome || '').replace(/"/g, '&quot;');
+          popup += `<br><div class="d-flex gap-2 mt-2">`
+            + `<button type="button" class="btn btn-outline-warning btn-sm rounded-pill btn-edit-ong" data-id="${p.id}"><i class="fa-solid fa-pen-to-square me-1"></i>Editar</button>`
+            + `<button type="button" class="btn btn-outline-danger btn-sm rounded-pill btn-del-ong" data-id="${p.id}" data-nome="${safeNome}"><i class="fa-solid fa-trash me-1"></i>Excluir</button>`
+            + `</div>`;
+        }
+        const marker = L.marker([coords[1], coords[0]], { icon: ongIcon() })
+          .bindPopup(popup)
+          .addTo(ongsLayer);
+        marker.featureData = f;
+        marker.on('contextmenu', function (e) {
+          if (!isAdminModeActive()) return;
+          L.DomEvent.stopPropagation(e);
+          showOngZonaContextMenu(e.latlng, 'ong', f);
+        });
+      });
+    });
+  }
+
+  // Carrega zonas persistidas (GET /api/v1/zonas-preservacao/) com o nome
+  // como label em linha única, visível só no hover do polígono.
+  function loadZonas() {
+    $.getJSON('/api/v1/zonas-preservacao/', function(res) {
+      zonasLayer.clearLayers();
+      zonaEntries = [];
+      window.zonaFeaturesById = window.zonaFeaturesById || {};
+      const fc = (res && res.data) || res;
+      (fc.features || []).forEach(function(f) {
+        const g = f.geometry;
+        if (!g || !g.coordinates) return;
+        const p = f.properties || {};
+        if (p.id) window.zonaFeaturesById[String(p.id)] = f;
+        const color = (/^#[0-9a-fA-F]{6}$/.test(p.color || '')) ? p.color : ZONA_DEFAULT_COLOR;
+        let polys = [];
+        if (g.type === 'MultiPolygon') polys = g.coordinates;
+        else if (g.type === 'Polygon') polys = [g.coordinates];
+        polys.forEach(function(polyCoords) {
+          const latlngs = polyCoords.map(function(ring) {
+            return ring.map(function(c) { return [c[1], c[0]]; });
+          });
+          const polygon = L.polygon(latlngs, {
+            color: color,
+            fillColor: color,
+            fillOpacity: 0.25,
+            weight: 2
+          });
+          polygon.bindTooltip(p.nome || 'Zona de preservação', {
+            permanent: false,
+            direction: 'top',
+            offset: [0, -6],
+            className: 'zona-label',
+            interactive: false
+          });
+          let popup = `<b>${p.nome || ''}</b>`;
+          if (p.categoria) popup += `<br>Tipo: ${p.categoria}`;
+          if (p.descricao) popup += `<br><small>${p.descricao}</small>`;
+          // Botões no mesmo estilo do animal (outline + rounded-pill).
+          if (typeof isAdminModeActive === 'function' && isAdminModeActive() && p.id) {
+            popup += `<br><div class="d-flex gap-2 mt-2">`
+              + `<button type="button" class="btn btn-outline-warning btn-sm rounded-pill btn-edit-zona" data-id="${p.id}"><i class="fa-solid fa-pen-to-square me-1"></i>Editar</button>`
+              + `<button type="button" class="btn btn-outline-danger btn-sm rounded-pill btn-del-zona" data-id="${p.id}" data-nome="${String(p.nome || '').replace(/"/g, '&quot;')}"><i class="fa-solid fa-trash me-1"></i>Excluir</button>`
+              + `</div>`;
+          }
+          polygon.bindPopup(popup);
+          polygon.addTo(zonasLayer);
+          polygon.featureData = f;
+          polygon.on('contextmenu', function (e) {
+            if (!isAdminModeActive()) return;
+            L.DomEvent.stopPropagation(e);
+            showOngZonaContextMenu(e.latlng, 'zona', f);
+          });
+          try {
+            const b = polygon.getBounds();
+            const area = Math.abs(b.getEast() - b.getWest()) * Math.abs(b.getNorth() - b.getSouth());
+            zonaEntries.push({ polygon: polygon, center: b.getCenter(), area: area, name: p.nome || 'Zona de preservação' });
+          } catch (e) {}
+        });
+      });
+      refreshZonaLabels();
+    });
+  }
+
+  // Fonte do label escala com o zoom p/ manter legibilidade (11px → 15px).
+  // O label é hover-only (Leaflet mostra/esconde sozinho): aqui só se
+  // atualiza o tamanho da fonte; sem abrir/fechar nem anti-sobreposição.
+  function zonaLabelFontSize(z) {
+    let fs = 11 + (z - ZONA_LABEL_MIN_ZOOM) * 1.3;
+    if (!isFinite(fs)) fs = 12;
+    if (fs < 11) fs = 11;
+    if (fs > 15) fs = 15;
+    return Math.round(fs * 2) / 2;
+  }
+
+  function refreshZonaLabels() {
+    if (!map) return;
+    let z = 6;
+    try { z = map.getZoom(); } catch (e) {}
+    try { map.getContainer().style.setProperty('--zona-label-fs', zonaLabelFontSize(z) + 'px'); } catch (_) {}
+  }
 
   const SUL_BOUNDS = {
     minLat: -33.8,
@@ -1165,22 +1392,39 @@ $(document).ready(function () {
     loadMarkers();
   }
 
-  // Ao mover/zoom: carrega marcadores das novas áreas (debounced)
+  // Ao mover/zoom: carrega marcadores das novas áreas (debounced).
+  // Os toggles de camadas NÃO são tocados aqui — o estado persiste.
   let _viewportTimer = null;
   let _areaViewportTimer = null;
+  let _zonaLabelTimer = null;
   map.on('moveend zoomend', function () {
     clearTimeout(_viewportTimer);
     _viewportTimer = setTimeout(loadMarkersForViewport, 300);
     clearTimeout(_areaViewportTimer);
     _areaViewportTimer = setTimeout(refreshAreaViewport, 350);
+    clearTimeout(_zonaLabelTimer);
+    _zonaLabelTimer = setTimeout(refreshZonaLabels, 200);
   });
 
   // =========================================================================
-  // 6. MODO ADMINISTRADOR (Login, Context Menu & Modal Split-Screen)
+  // 6. MODO ADMINISTRADOR (Login, Context Menu & Modais Split-Screen)
+  // ONG e Zona usam modais fullscreen no MESMO padrão do cadastro de animais
+  // (o drawer lateral foi removido do index.pug).
   // =========================================================================
-  var draftMarker = null;
-  var draftZone = null;
   var lastClickedLatLng = null;
+
+  // Estado dos modais de ONG e Zona. `var` (e não `let`) de propósito: este
+  // bloco executa antes de updateAdminUI() chamar closeAdminDrawer().
+  var ongRightMap = null;
+  var ongRightMarker = null;
+  var zonaRightMap = null;
+  var zonaRightMarker = null;
+  var zonaPolygonLayersGroup = null;
+  var zonaDraftPolygonsList = [[]];
+  var zonaPolygonColor = '#287f5e'; // verde da preservação (já usado no mapa)
+  var zonaPolygonHistory = [];
+  var zonaPolygonRedo = [];
+  var isZonaDrawingPolygon = false;
 
   function isAdminModeActive() {
     return sessionStorage.getItem("adminMode") === "true";
@@ -1205,15 +1449,19 @@ $(document).ready(function () {
       $("#admin-btn").attr("href", "/admin/login");
       closeAdminDrawer();
     }
+    // Recarrega ONGs e zonas para mostrar/ocultar os botões de excluir
+    // dos popups conforme o modo (admin ou comum).
+    if (typeof loadOngs === 'function') loadOngs();
+    if (typeof loadZonas === 'function') loadZonas();
   }
 
-  $("#admin-btn").click(function(e) {
+  $("#admin-btn").click(async function(e) {
     if (isAdminModeActive()) {
       e.preventDefault();
-      if (confirm("Deseja sair do Modo Administrador e retornar ao modo normal?")) {
+      if (await systemConfirm("Deseja sair do Modo Administrador e retornar ao modo normal?", { title: 'Sair do modo admin', confirmText: 'Sair', danger: false })) {
         sessionStorage.removeItem("adminMode");
         updateAdminUI();
-        alert("Modo Administrador encerrado.");
+        systemAlert("Modo Administrador encerrado.", 'info');
       }
     }
   });
@@ -1239,7 +1487,7 @@ $(document).ready(function () {
       </div>
       <div class="admin-menu-item" data-action="ong">
         <i class="fa-solid fa-hand-holding-heart text-info"></i>
-        <span>Criar ONG</span>
+        <span>Criar Instituição</span>
       </div>
     `);
 
@@ -1416,44 +1664,9 @@ $(document).ready(function () {
       loadAdminSelectOptions();
     } 
     else if (action === "preservacao" || action === "ong") {
-      $("#admin-sidebar-drawer").removeClass("d-none");
-      $(".admin-form").addClass("d-none");
-
-      if (action === "preservacao") {
-        $("#drawer-title").text("Criar Área de Preservação");
-        const form = $("#form-create-preservacao");
-        form.removeClass("d-none");
-        form.find(".coord-lat, .input-lat").val(lat);
-        form.find(".coord-lng, .input-lng").val(lng);
-
-        const radius = parseInt(form.find(".input-radius").val()) || 5000;
-        draftMarker = L.marker(latlng, { draggable: true }).addTo(map);
-        draftZone = L.circle(latlng, {
-          radius: radius,
-          color: "#287f5e",
-          fillColor: "#287f5e",
-          fillOpacity: 0.4
-        }).addTo(map);
-        setupZoneDragAndResizeEvents(form, draftMarker, draftZone);
-      } 
-      else if (action === "ong") {
-        $("#drawer-title").text("Criar ONG");
-        const form = $("#form-create-ong");
-        form.removeClass("d-none");
-        form.find(".coord-lat, .input-lat").val(lat);
-        form.find(".coord-lng, .input-lng").val(lng);
-
-        draftMarker = L.marker(latlng, {
-          draggable: true,
-          icon: L.divIcon({
-            className: 'custom-animal-marker',
-            html: `<div class="marker-pin" style="border-color: #3498db;"><i class="fa-solid fa-hand-holding-heart text-info" style="font-size: 18px;"></i></div>`,
-            iconSize: [36, 36],
-            iconAnchor: [18, 18]
-          })
-        }).addTo(map);
-        setupMarkerDragEvents(form, draftMarker);
-      }
+      // Modais split-screen no padrão do cadastro de animais (sem drawer).
+      if (action === "preservacao") openZonaModal(latlng);
+      else openOngModal(latlng);
     }
   }
 
@@ -1461,18 +1674,17 @@ $(document).ready(function () {
   function initModalRightPanelMap(lat, lng) {
     setTimeout(() => {
       if (!modalRightMap) {
-        const darkTile = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_3l5t_1_889f4489a3fb5fb5051816e3', {
-          maxZoom: 19,
-          attribution: '© CARTO'
-        });
-
         modalRightMap = L.map('modal-right-panel-map', {
           center: [lat, lng],
           zoom: 7,
-          layers: [darkTile],
           zoomControl: true,
           attributionControl: false
         });
+        // Base dark: igual ao mapa original.
+        darkTileLayer().addTo(modalRightMap);
+        // Segundo invalidate tardio: garante render mesmo se o modal ainda
+        // estava animando/quase sem tamanho na criação (mapa preto).
+        setTimeout(() => { try { modalRightMap.invalidateSize(); } catch (e) {} }, 700);
 
         const svgRenderer = L.svg({ padding: 0 });
         const pampasLayerM = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "#3b7ba5", fillOpacity: 0.3 } }).addTo(modalRightMap);
@@ -1482,11 +1694,12 @@ $(document).ready(function () {
         const atlanticLayerM = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "#287f5e", fillOpacity: 0.1 } }).addTo(modalRightMap);
         const atlanticPatternM = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "url(#tree-pattern-mod)", fillOpacity: 0.6 } }).addTo(modalRightMap);
 
-        const modalMask = L.polygon(maskPaths, {
+        const modalMaskPaths = [[[-90, -180], [-90, 180], [90, 180], [90, -180], [-90, -180]]];
+        const modalMask = L.polygon(modalMaskPaths, {
+          interactive: false,
           color: "transparent",
           fillColor: "#000000",
           fillOpacity: 0.6,
-          pointerEvents: "none",
           fillRule: 'evenodd'
         }).addTo(modalRightMap);
 
@@ -1530,9 +1743,23 @@ $(document).ready(function () {
             } catch (e) {}
           }
 
-          L.geoJson(prData, { style: { color: "#1E7552", weight: 2, fillOpacity: 0, clickable: false } }).addTo(modalRightMap);
-          L.geoJson(scData, { style: { color: "#FF0000", weight: 2, fillOpacity: 0, clickable: false } }).addTo(modalRightMap);
-          L.geoJson(rsData, { style: { color: "#FFFF00", weight: 2, fillOpacity: 0, clickable: false } }).addTo(modalRightMap);
+          L.geoJson(prData, { interactive: false, style: { color: "#1E7552", weight: 2, fillOpacity: 0 } }).addTo(modalRightMap);
+          L.geoJson(scData, { interactive: false, style: { color: "#FF0000", weight: 2, fillOpacity: 0 } }).addTo(modalRightMap);
+          L.geoJson(rsData, { interactive: false, style: { color: "#FFFF00", weight: 2, fillOpacity: 0 } }).addTo(modalRightMap);
+
+          [prData, scData, rsData].forEach(d => {
+            (d.features || []).forEach(f => {
+              if (!f.geometry) return;
+              const type = f.geometry.type;
+              const coords = f.geometry.coordinates;
+              if (type === "Polygon") {
+                coords.forEach(ring => { modalMaskPaths.push(ring.map(c => [c[1], c[0]])); });
+              } else if (type === "MultiPolygon") {
+                coords.forEach(poly => { poly.forEach(ring => { modalMaskPaths.push(ring.map(c => [c[1], c[0]])); }); });
+              }
+            });
+          });
+          try { modalMask.setLatLngs(modalMaskPaths); } catch (e) {}
 
           injectModalTreePatterns();
         });
@@ -1611,11 +1838,17 @@ $(document).ready(function () {
           $("#modal-coordenadas-json-hidden").val(JSON.stringify([{ lat: parseFloat(pos.lat.toFixed(6)), lng: parseFloat(pos.lng.toFixed(6)) }]));
         });
       } else {
-        modalRightMap.invalidateSize();
-        modalRightMap.setView([lat, lng], 8);
-        if (modalRightMarker) {
-          modalRightMarker.setLatLng([lat, lng]);
-        }
+        // Modal acabou de ficar visível: adia o invalidate para depois do
+        // layout (sem isso o mapa reabre cinza/0x0).
+        setTimeout(() => {
+          try { modalRightMap.invalidateSize(); } catch (e) {}
+          try { modalRightMap.setView([lat, lng], Math.max(modalRightMap.getZoom(), 8)); } catch (e) {
+            try { modalRightMap.setView([lat, lng], 8); } catch (_) {}
+          }
+          if (modalRightMarker) {
+            modalRightMarker.setLatLng([lat, lng]);
+          }
+        }, 60);
       }
       redrawModalDraftPolygonLayers();
     }, 200);
@@ -1821,7 +2054,7 @@ $(document).ready(function () {
       modalDraftPolygonsList.push([]);
       redrawModalDraftPolygonLayers();
     } else {
-      alert('Complete pelo menos 3 pontos no polígono atual antes de iniciar uma nova área.');
+      systemAlert('Complete pelo menos 3 pontos no polígono atual antes de iniciar uma nova área.', 'warning');
     }
   });
 
@@ -1851,43 +2084,615 @@ $(document).ready(function () {
   });
 
   $(document).on('keydown', function(e) {
-    if (!$('#species-admin-modal').is(':visible')) return;
+    // Desfazer/refazer do editor de polígonos: vale para o modal de animais
+    // e para o modal de zona (cada um com sua própria pilha de histórico).
+    const animalOpen = $('#species-admin-modal').is(':visible');
+    const zonaOpen = !animalOpen && $('#zona-admin-modal').is(':visible');
+    if (!animalOpen && !zonaOpen) return;
+    const doUndo = animalOpen ? undoModalPolygonState : undoZonaPolygonState;
+    const doRedo = animalOpen ? redoModalPolygonState : redoZonaPolygonState;
     if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
       if (e.shiftKey) {
-        redoModalPolygonState();
+        doRedo();
       } else {
-        undoModalPolygonState();
+        doUndo();
       }
     } else if (e.ctrlKey && (e.key === 'y' || e.key === 'Y')) {
-      redoModalPolygonState();
+      doRedo();
     }
   });
 
-  function injectModalTreePatterns() {
-    const svg = document.querySelector('#modal-right-panel-map svg');
-    if (!svg) return;
+  // =========================================================================
+  // 6b. MODAIS DE ONG E ZONA — mesmo padrão do cadastro de animais.
+  // Mapas próprios (dark) + marcador arrastável; a Zona usa o MESMO editor
+  // de polígonos do animal (desenhar / nova área / desfazer / refazer / cor
+  // / limpar), com estado independente (prefixo zona*).
+  // =========================================================================
+
+  // Camada de contexto: marcadores de animais nos minimapas (mesmo estilo).
+  function addMarkersOverlayToMiniMap(miniMap) {
+    $.getJSON('/api/markers', function(data) {
+      if (!data || !data.features) return;
+      L.geoJSON(data, {
+        pointToLayer: function(feature, latlng) {
+          const p = feature.properties || {};
+          const statusSigla = p.nivel_sigla ? p.nivel_sigla.toLowerCase() : 'dd';
+          const borderColor = extinctionColorMap[statusSigla] || '#1a5fb4';
+          const iconSrc = p.icone || (p.imagens && p.imagens.length > 0 ? p.imagens[0].imagem : '/assets/img/logotipo.png');
+          return L.marker(latlng, {
+            icon: L.divIcon({
+              className: 'custom-animal-marker',
+              html: `
+                <div class="marker-pin" style="border-color: ${borderColor};">
+                  <div class="marker-avatar">
+                    <img src="${iconSrc}" alt="${p.nome_comum || ''}">
+                  </div>
+                  <span class="marker-name-label">${p.nome_comum || ''}</span>
+                </div>
+              `,
+              iconSize: [36, 36],
+              iconAnchor: [18, 18]
+            })
+          });
+        }
+      }).addTo(miniMap);
+    });
+  }
+
+  function darkTileLayer() {
+    return L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_3l5t_1_889f4489a3fb5fb5051816e3', {
+      subdomains: 'abcd',
+      maxZoom: 19,
+      attribution: '© CARTO'
+    });
+  }
+
+  // Injeta os patterns de textura no SVG do minimapa indicado.
+  // Cada mapa tem seu próprio <svg>, por isso o sufixo é único por mapa
+  // ('mod', 'ong', 'zona') — reutilizar o mesmo id em outro SVG não renderiza.
+  function injectTreePatternsFor(containerId, suffix) {
+    const svg = document.querySelector('#' + containerId + ' svg');
+    if (!svg) { setTimeout(function() { injectTreePatternsFor(containerId, suffix); }, 300); return; }
     const defs = svg.querySelector('defs') || svg.insertBefore(document.createElementNS('http://www.w3.org/2000/svg', 'defs'), svg.firstChild);
     const patterns = [
-      { id: 'tree-pattern-mod', img: '/svg/mataatlantica.png', size: 100, icons: [[10,10,40],[60,50,30]] },
-      { id: 'pampa-pattern-mod', img: '/svg/pampa.png', size: 80, icons: [[10,10,35],[45,40,25]] },
-      { id: 'cerrado-pattern-mod', img: '/svg/cerrado.png', size: 90, icons: [[10,10,40],[55,45,30]] }
+      { id: 'tree-pattern-' + suffix, img: '/svg/mataatlantica.png', size: 100, icons: [[10,10,40],[60,50,30]] },
+      { id: 'pampa-pattern-' + suffix, img: '/svg/pampa.png', size: 80, icons: [[10,10,35],[45,40,25]] },
+      { id: 'cerrado-pattern-' + suffix, img: '/svg/cerrado.png', size: 90, icons: [[10,10,40],[55,45,30]] }
     ];
     patterns.forEach(p => {
-      if (!document.getElementById(p.id)) {
-        const pat = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
-        pat.setAttribute('id', p.id); pat.setAttribute('patternUnits', 'userSpaceOnUse');
-        pat.setAttribute('width', p.size); pat.setAttribute('height', p.size);
-        p.icons.forEach(icon => {
-          const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
-          img.setAttributeNS('http://www.w3.org/1999/xlink', 'href', p.img);
-          img.setAttribute('x', icon[0]); img.setAttribute('y', icon[1]);
-          img.setAttribute('width', icon[2]); img.setAttribute('height', icon[2]);
-          img.setAttribute('opacity', '0.7');
-          pat.appendChild(img);
+      if (svg.querySelector('#' + CSS.escape(p.id))) return;
+      const pat = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+      pat.setAttribute('id', p.id); pat.setAttribute('patternUnits', 'userSpaceOnUse');
+      pat.setAttribute('width', p.size); pat.setAttribute('height', p.size);
+      p.icons.forEach(icon => {
+        const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+        img.setAttributeNS('http://www.w3.org/1999/xlink', 'href', p.img);
+        img.setAttribute('x', icon[0]); img.setAttribute('y', icon[1]);
+        img.setAttribute('width', icon[2]); img.setAttribute('height', icon[2]);
+        img.setAttribute('opacity', '0.7');
+        pat.appendChild(img);
+      });
+      defs.appendChild(pat);
+    });
+  }
+
+  // Base dos minimapas idêntica ao preview de animais: biomas + máscara +
+  // contornos dos estados, nas mesmas cores/opacidades do mapa principal.
+  function initMiniMapBaseLayers(miniMap, suffix) {
+    const containerId = suffix === 'ong' ? 'ong-right-panel-map'
+      : suffix === 'zona' ? 'zona-right-panel-map' : 'modal-right-panel-map';
+    const svgRenderer = L.svg({ padding: 0 });
+    const pampas = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "#3b7ba5", fillOpacity: 0.3 } }).addTo(miniMap);
+    const pampasPat = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "url(#pampa-pattern-" + suffix + ")", fillOpacity: 0.6 } }).addTo(miniMap);
+    const cerrado = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "#E6C140", fillOpacity: 0.4 } }).addTo(miniMap);
+    const cerradoPat = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "url(#cerrado-pattern-" + suffix + ")", fillOpacity: 0.6 } }).addTo(miniMap);
+    const atlantic = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "#287f5e", fillOpacity: 0.1 } }).addTo(miniMap);
+    const atlanticPat = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "url(#tree-pattern-" + suffix + ")", fillOpacity: 0.6 } }).addTo(miniMap);
+    // Cópia local da máscara: não polui o maskPaths global do mapa principal.
+    const localMask = [[[-90, -180], [-90, 180], [90, 180], [90, -180], [-90, -180]]];
+    const mask = L.polygon(localMask, {
+      interactive: false,
+      color: "transparent",
+      fillColor: "#000000",
+      fillOpacity: 0.6,
+      fillRule: 'evenodd'
+    }).addTo(miniMap);
+    const requests = [
+      $.getJSON("/data/ATLANTIC_FOREST_LAW.json"),
+      $.getJSON("/data/br_pr.json"),
+      $.getJSON("/data/br_sc.json"),
+      $.getJSON("/data/br_rs.json")
+    ];
+    $.when.apply($, requests).done(function(forestRes, prRes, scRes, rsRes) {
+      const forestData = forestRes[0] || forestRes;
+      const prData = prRes[0] || prRes;
+      const scData = scRes[0] || scRes;
+      const rsData = rsRes[0] || rsRes;
+      if (window.turf) {
+        try {
+          const simplifiedForest = turf.simplify(forestData, { tolerance: 0.005, highPrecision: false });
+          atlantic.addData(simplifiedForest);
+          atlanticPat.addData(simplifiedForest);
+          let merged = simplifiedForest.features[0];
+          for (let i = 1; i < simplifiedForest.features.length; i++) {
+            try {
+              const union = turf.union(merged, simplifiedForest.features[i]);
+              if (union) merged = union;
+            } catch(e) {}
+          }
+          const cleanForest = turf.simplify(turf.buffer(merged, 0), { tolerance: 0.003 });
+          if (rsData.features && cleanForest) {
+            const pampaDiff = turf.difference(turf.simplify(turf.buffer(rsData.features[0], 0), { tolerance: 0.003 }), cleanForest);
+            if (pampaDiff) { pampas.addData(pampaDiff); pampasPat.addData(pampaDiff); }
+          }
+          if (prData.features && cleanForest) {
+            const cerradoDiff = turf.difference(turf.simplify(turf.buffer(prData.features[0], 0), { tolerance: 0.003 }), cleanForest);
+            if (cerradoDiff) { cerrado.addData(cerradoDiff); cerradoPat.addData(cerradoDiff); }
+          }
+        } catch (e) {}
+      }
+      L.geoJson(prData, { interactive: false, style: { color: "#1E7552", weight: 2, fillOpacity: 0 } }).addTo(miniMap);
+      L.geoJson(scData, { interactive: false, style: { color: "#FF0000", weight: 2, fillOpacity: 0 } }).addTo(miniMap);
+      L.geoJson(rsData, { interactive: false, style: { color: "#FFFF00", weight: 2, fillOpacity: 0 } }).addTo(miniMap);
+      [prData, scData, rsData].forEach(d => {
+        (d.features || []).forEach(f => {
+          if (!f.geometry) return;
+          const type = f.geometry.type;
+          const coords = f.geometry.coordinates;
+          if (type === "Polygon") {
+            coords.forEach(ring => { localMask.push(ring.map(c => [c[1], c[0]])); });
+          } else if (type === "MultiPolygon") {
+            coords.forEach(poly => { poly.forEach(ring => { localMask.push(ring.map(c => [c[1], c[0]])); }); });
+          }
         });
-        defs.appendChild(pat);
+      });
+      try { mask.setLatLngs(localMask); } catch (e) {}
+      injectTreePatternsFor(containerId, suffix);
+    });
+  }
+
+  function syncOngFormCoords(lat, lng) {
+    const form = $("#form-create-ong");
+    form.find(".coord-lat").val(lat.toFixed(6));
+    form.find(".coord-lng").val(lng.toFixed(6));
+    form.find(".input-lat").val(lat.toFixed(6));
+    form.find(".input-lng").val(lng.toFixed(6));
+  }
+
+  function syncZonaFormCoords(lat, lng) {
+    const form = $("#form-create-preservacao");
+    form.find(".coord-lat").val(lat.toFixed(6));
+    form.find(".coord-lng").val(lng.toFixed(6));
+    form.find(".input-lat").val(lat.toFixed(6));
+    form.find(".input-lng").val(lng.toFixed(6));
+  }
+
+  function openOngModal(latlng) {
+    closeAdminDrawer();
+    $("#ong-edit-id").val("");
+    const lat = parseFloat(latlng.lat.toFixed(6));
+    const lng = parseFloat(latlng.lng.toFixed(6));
+    $("#ong-admin-modal").removeClass("d-none");
+    const form = $("#form-create-ong");
+    form[0].reset();
+    syncOngFormCoords(lat, lng);
+    initOngRightPanelMap(lat, lng);
+  }
+
+  // Edição de ONG: pré-preenche o modal com os dados da feature.
+  function openOngModalForEdit(feature) {
+    if (!isAdminModeActive()) return;
+    closeAdminDrawer();
+    const p = (feature && feature.properties) || {};
+    let lat = -27.59, lng = -48.54;
+    try {
+      const c = feature.geometry && feature.geometry.coordinates;
+      if (c && c.length >= 2) { lng = parseFloat(c[0]); lat = parseFloat(c[1]); }
+    } catch (e) {}
+    $("#ong-admin-modal").removeClass("d-none");
+    const form = $("#form-create-ong");
+    form[0].reset();
+    $("#ong-edit-id").val(p.id || '');
+    form.find('input[name="nome"]').val(p.nome || '');
+    form.find('input[name="foco"]').val(p.foco || '');
+    form.find('input[name="email"]').val(p.email || '');
+    form.find('input[name="telefone"]').val(p.telefone || '');
+    form.find('textarea[name="descricao"]').val(p.descricao || '');
+    syncOngFormCoords(lat, lng);
+    initOngRightPanelMap(lat, lng);
+  }
+
+  function initOngRightPanelMap(lat, lng) {
+    setTimeout(() => {
+      if (!ongRightMap) {
+        ongRightMap = L.map('ong-right-panel-map', {
+          center: [lat, lng],
+          zoom: 7,
+          zoomControl: true,
+          attributionControl: false
+        });
+        darkTileLayer().addTo(ongRightMap);
+        // Segundo invalidate tardio: garante render mesmo se o modal ainda
+        // estava animando/quase sem tamanho na criação (mapa preto).
+        setTimeout(() => { try { ongRightMap.invalidateSize(); } catch (e) {} }, 700);
+        // Base idêntica ao preview de animais: biomas + máscara + estados.
+        initMiniMapBaseLayers(ongRightMap, 'ong');
+        addMarkersOverlayToMiniMap(ongRightMap);
+        ongRightMarker = L.marker([lat, lng], { draggable: true, icon: ongIcon() }).addTo(ongRightMap);
+        ongRightMarker.on('dragend', function(e) {
+          const pos = e.target.getLatLng();
+          syncOngFormCoords(pos.lat, pos.lng);
+        });
+        ongRightMap.on('click', function(e) {
+          if (ongRightMarker) ongRightMarker.setLatLng(e.latlng);
+          syncOngFormCoords(e.latlng.lat, e.latlng.lng);
+        });
+        setupMarkerDragEvents($("#form-create-ong"), ongRightMarker, ongRightMap);
+      } else {
+        setTimeout(() => {
+          try { ongRightMap.invalidateSize(); } catch (e) {}
+          try { ongRightMap.setView([lat, lng], Math.max(ongRightMap.getZoom(), 8)); } catch (e) {
+            try { ongRightMap.setView([lat, lng], 8); } catch (_) {}
+          }
+          if (ongRightMarker) ongRightMarker.setLatLng([lat, lng]);
+        }, 60);
+      }
+    }, 200);
+  }
+
+  function openZonaModal(latlng) {
+    closeAdminDrawer();
+    $("#zona-edit-id").val("");
+    const lat = parseFloat(latlng.lat.toFixed(6));
+    const lng = parseFloat(latlng.lng.toFixed(6));
+    $("#zona-admin-modal").removeClass("d-none");
+    const form = $("#form-create-preservacao");
+    form[0].reset();
+    syncZonaFormCoords(lat, lng);
+    // Reseta o editor de polígonos (mesmo fluxo do modal de animais).
+    isZonaDrawingPolygon = false;
+    $('#zona-btn-draw-polygon-mode')
+      .removeClass('btn-success text-white')
+      .addClass('btn-info text-dark')
+      .html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
+    zonaDraftPolygonsList = [[]];
+    zonaPolygonHistory = [];
+    zonaPolygonRedo = [];
+    updateZonaUndoRedoButtonsUI();
+    initZonaRightPanelMap(lat, lng);
+  }
+
+  // Edição de Zona: pré-preenche o modal e carrega o polígono existente
+  // no editor (convertendo GeoJSON [lng,lat] para [lat,lng] do Leaflet).
+  function openZonaModalForEdit(feature) {
+    if (!isAdminModeActive()) return;
+    closeAdminDrawer();
+    const p = (feature && feature.properties) || {};
+    const g = (feature && feature.geometry) || {};
+    let lat = -27.59, lng = -48.54;
+    let rings = [];
+    try {
+      let polys = [];
+      if (g.type === 'MultiPolygon') polys = g.coordinates || [];
+      else if (g.type === 'Polygon') polys = [g.coordinates];
+      polys.forEach(function(polyCoords) {
+        (polyCoords || []).forEach(function(ring) {
+          const pts = (ring || []).map(c => [parseFloat(c[1]), parseFloat(c[0])]).filter(pt => !isNaN(pt[0]) && !isNaN(pt[1]));
+          if (pts.length >= 3) rings.push(pts);
+        });
+      });
+      if (rings.length > 0) {
+        let sLat = 0, sLng = 0, n = 0;
+        rings[0].forEach(pt => { sLat += pt[0]; sLng += pt[1]; n++; });
+        if (n > 0) { lat = sLat / n; lng = sLng / n; }
+      }
+    } catch (e) { rings = []; }
+    $("#zona-admin-modal").removeClass("d-none");
+    const form = $("#form-create-preservacao");
+    form[0].reset();
+    $("#zona-edit-id").val(p.id || '');
+    form.find('input[name="nome"]').val(p.nome || '');
+    form.find('select[name="categoria"]').val(p.categoria || 'Parque Nacional');
+    form.find('textarea[name="descricao"]').val(p.descricao || '');
+    zonaPolygonColor = (/^#[0-9a-fA-F]{6}$/.test(p.color || '')) ? p.color : '#287f5e';
+    try { $('#zona-polygon-color-picker').val(zonaPolygonColor); } catch (e) {}
+    isZonaDrawingPolygon = false;
+    $('#zona-btn-draw-polygon-mode')
+      .removeClass('btn-success text-white')
+      .addClass('btn-info text-dark')
+      .html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
+    zonaDraftPolygonsList = rings.length > 0 ? rings : [[]];
+    zonaPolygonHistory = [];
+    zonaPolygonRedo = [];
+    updateZonaUndoRedoButtonsUI();
+    syncZonaFormCoords(lat, lng);
+    initZonaRightPanelMap(lat, lng);
+    setTimeout(() => { try { redrawZonaDraftPolygonLayers(); } catch (e) {} }, 400);
+  }
+
+  function initZonaRightPanelMap(lat, lng) {
+    setTimeout(() => {
+      if (!zonaRightMap) {
+        zonaRightMap = L.map('zona-right-panel-map', {
+          center: [lat, lng],
+          zoom: 7,
+          zoomControl: true,
+          attributionControl: false
+        });
+        darkTileLayer().addTo(zonaRightMap);
+        // Segundo invalidate tardio: garante render mesmo se o modal ainda
+        // estava animando/quase sem tamanho na criação (mapa preto).
+        setTimeout(() => { try { zonaRightMap.invalidateSize(); } catch (e) {} }, 700);
+        // Base idêntica ao preview de animais: biomas + máscara + estados.
+        initMiniMapBaseLayers(zonaRightMap, 'zona');
+        addMarkersOverlayToMiniMap(zonaRightMap);
+        zonaRightMarker = L.marker([lat, lng], {
+          draggable: true,
+          icon: L.divIcon({
+            className: 'custom-animal-marker',
+            html: `
+              <div class="marker-pin" style="border-color: #FFA63A; background: #9C5B1C;">
+                <div class="marker-avatar">
+                  <i class="fa-solid fa-crosshairs" style="color: #9C5B1C; font-size: 16px;"></i>
+                </div>
+                <span class="marker-name-label" style="opacity: 1; max-width: 200px;">Posição</span>
+              </div>
+            `,
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+          })
+        }).addTo(zonaRightMap);
+        zonaRightMarker.on('dragend', function(e) {
+          const pos = e.target.getLatLng();
+          syncZonaFormCoords(pos.lat, pos.lng);
+        });
+        zonaRightMap.on('click', function(e) {
+          if (isZonaDrawingPolygon) {
+            saveZonaPolygonHistoryState();
+            const plat = parseFloat(e.latlng.lat.toFixed(6));
+            const plng = parseFloat(e.latlng.lng.toFixed(6));
+            if (zonaDraftPolygonsList.length === 0) zonaDraftPolygonsList.push([]);
+            zonaDraftPolygonsList[zonaDraftPolygonsList.length - 1].push([plat, plng]);
+            redrawZonaDraftPolygonLayers();
+          } else {
+            if (zonaRightMarker) zonaRightMarker.setLatLng(e.latlng);
+            syncZonaFormCoords(e.latlng.lat, e.latlng.lng);
+          }
+        });
+        setupMarkerDragEvents($("#form-create-preservacao"), zonaRightMarker, zonaRightMap);
+      } else {
+        setTimeout(() => {
+          try { zonaRightMap.invalidateSize(); } catch (e) {}
+          try { zonaRightMap.setView([lat, lng], Math.max(zonaRightMap.getZoom(), 8)); } catch (e) {
+            try { zonaRightMap.setView([lat, lng], 8); } catch (_) {}
+          }
+          if (zonaRightMarker) zonaRightMarker.setLatLng([lat, lng]);
+        }, 60);
+      }
+      redrawZonaDraftPolygonLayers();
+    }, 200);
+  }
+
+  // --- Editor de polígonos da Zona (espelho do editor do modal de animais) ---
+  function updateZonaUndoRedoButtonsUI() {
+    $('#zona-btn-undo-polygon').prop('disabled', zonaPolygonHistory.length === 0).toggleClass('opacity-50', zonaPolygonHistory.length === 0);
+    $('#zona-btn-redo-polygon').prop('disabled', zonaPolygonRedo.length === 0).toggleClass('opacity-50', zonaPolygonRedo.length === 0);
+  }
+
+  function saveZonaPolygonHistoryState() {
+    zonaPolygonHistory.push({
+      color: zonaPolygonColor,
+      polygons: JSON.parse(JSON.stringify(zonaDraftPolygonsList))
+    });
+    if (zonaPolygonHistory.length > 50) zonaPolygonHistory.shift();
+    zonaPolygonRedo = [];
+    updateZonaUndoRedoButtonsUI();
+  }
+
+  function undoZonaPolygonState() {
+    if (zonaPolygonHistory.length === 0) return;
+    zonaPolygonRedo.push({
+      color: zonaPolygonColor,
+      polygons: JSON.parse(JSON.stringify(zonaDraftPolygonsList))
+    });
+    const prev = zonaPolygonHistory.pop();
+    zonaPolygonColor = prev.color || '#287f5e';
+    $('#zona-polygon-color-picker').val(zonaPolygonColor);
+    zonaDraftPolygonsList = prev.polygons || [[]];
+    redrawZonaDraftPolygonLayers();
+    updateZonaUndoRedoButtonsUI();
+  }
+
+  function redoZonaPolygonState() {
+    if (zonaPolygonRedo.length === 0) return;
+    zonaPolygonHistory.push({
+      color: zonaPolygonColor,
+      polygons: JSON.parse(JSON.stringify(zonaDraftPolygonsList))
+    });
+    const next = zonaPolygonRedo.pop();
+    zonaPolygonColor = next.color || '#287f5e';
+    $('#zona-polygon-color-picker').val(zonaPolygonColor);
+    zonaDraftPolygonsList = next.polygons || [[]];
+    redrawZonaDraftPolygonLayers();
+    updateZonaUndoRedoButtonsUI();
+  }
+
+  window.editZonaPolygonRingByRef = function(ringIndex) {
+    saveZonaPolygonHistoryState();
+    if (ringIndex >= 0 && ringIndex < zonaDraftPolygonsList.length) {
+      const target = zonaDraftPolygonsList.splice(ringIndex, 1)[0];
+      zonaDraftPolygonsList.push(target);
+      redrawZonaDraftPolygonLayers();
+    }
+    if (zonaRightMap) zonaRightMap.closePopup();
+  };
+
+  window.deleteZonaPolygonRingByRef = function(ringIndex) {
+    saveZonaPolygonHistoryState();
+    if (ringIndex >= 0 && ringIndex < zonaDraftPolygonsList.length) {
+      zonaDraftPolygonsList.splice(ringIndex, 1);
+    }
+    if (zonaDraftPolygonsList.length === 0) {
+      zonaDraftPolygonsList = [[]];
+    }
+    redrawZonaDraftPolygonLayers();
+    if (zonaRightMap) zonaRightMap.closePopup();
+  };
+
+  function updateZonaPolygonHiddenInput() {
+    const validPolygons = zonaDraftPolygonsList.filter(ring => ring && ring.length >= 3);
+    const totalPoints = validPolygons.reduce((acc, ring) => acc + ring.length, 0);
+    const currentRing = zonaDraftPolygonsList[zonaDraftPolygonsList.length - 1];
+    const currentPts = (currentRing && currentRing.length > 0) ? currentRing.length : 0;
+
+    if (validPolygons.length > 0 || currentPts > 0) {
+      $('#zona-area-polygon-json-hidden').val(JSON.stringify({
+        color: zonaPolygonColor,
+        polygons: validPolygons
+      }));
+
+      let badgeText = `Área: ${validPolygons.length} área(s) (${totalPoints} pts)`;
+      if (isZonaDrawingPolygon && currentPts < 3) {
+        badgeText = `Desenhando: ${currentPts} ponto(s)... (mín 3)`;
+      } else if (isZonaDrawingPolygon) {
+        badgeText = `Desenhando: ${currentPts} pts na área atual`;
+      }
+
+      $('#zona-polygon-status-badge')
+        .text(badgeText)
+        .removeClass('bg-dark text-warning')
+        .addClass('bg-success text-white');
+    } else {
+      $('#zona-area-polygon-json-hidden').val('');
+      $('#zona-polygon-status-badge')
+        .text('Nenhuma área desenhada')
+        .removeClass('bg-success text-white')
+        .addClass('bg-dark text-warning');
+    }
+  }
+
+  function redrawZonaDraftPolygonLayers() {
+    if (!zonaRightMap) return;
+    if (!zonaPolygonLayersGroup) {
+      zonaPolygonLayersGroup = L.layerGroup().addTo(zonaRightMap);
+    } else {
+      zonaPolygonLayersGroup.clearLayers();
+    }
+
+    zonaDraftPolygonsList.forEach((ring, idx) => {
+      if (!ring || ring.length === 0) return;
+      const isCurrentActive = (idx === zonaDraftPolygonsList.length - 1);
+      let polyLayer = null;
+
+      ring.forEach((pt) => {
+        L.circleMarker(pt, {
+          radius: 5,
+          color: zonaPolygonColor,
+          fillColor: '#FFFFFF',
+          fillOpacity: 1,
+          weight: 2,
+          interactive: false
+        }).addTo(zonaPolygonLayersGroup);
+      });
+
+      if (ring.length >= 3) {
+        polyLayer = L.polygon(ring, {
+          color: zonaPolygonColor,
+          fillColor: zonaPolygonColor,
+          fillOpacity: isCurrentActive ? 0.4 : 0.25,
+          weight: isCurrentActive ? 3 : 2,
+          dashArray: isCurrentActive ? '5, 5' : null,
+          interactive: !isZonaDrawingPolygon
+        }).addTo(zonaPolygonLayersGroup);
+      } else if (ring.length > 0) {
+        polyLayer = L.polyline(ring, {
+          color: zonaPolygonColor,
+          weight: 3,
+          dashArray: '5, 5',
+          interactive: !isZonaDrawingPolygon
+        }).addTo(zonaPolygonLayersGroup);
+      }
+
+      if (polyLayer && !isZonaDrawingPolygon) {
+        const ringIndex = idx;
+        polyLayer.on('contextmenu', function(e) {
+          L.DomEvent.stopPropagation(e);
+
+          L.popup()
+            .setLatLng(e.latlng)
+            .setContent(`
+              <div style="text-align: center; padding: 4px; min-width: 140px;">
+                <strong style="color: ${zonaPolygonColor}; font-size: 13px;">Área #${ringIndex + 1} (${ring.length} pts)</strong>
+                <div class="d-flex flex-column gap-2 mt-2">
+                  <button type="button" class="btn btn-sm btn-info rounded-pill fw-bold text-dark" onclick="editZonaPolygonRingByRef(${ringIndex})">
+                    <i class="fa-solid fa-pen me-1"></i> Editar Área
+                  </button>
+                  <button type="button" class="btn btn-sm btn-danger rounded-pill fw-bold" onclick="deleteZonaPolygonRingByRef(${ringIndex})">
+                    <i class="fa-solid fa-trash me-1"></i> Excluir Área
+                  </button>
+                </div>
+              </div>
+            `)
+            .openOn(zonaRightMap);
+        });
       }
     });
+
+    updateZonaPolygonHiddenInput();
+  }
+
+  $(document).on('click', '#zona-btn-draw-polygon-mode', function() {
+    isZonaDrawingPolygon = !isZonaDrawingPolygon;
+    if (isZonaDrawingPolygon) {
+      $(this).removeClass('btn-info text-dark').addClass('btn-success text-white');
+      $(this).html('<i class="fa-solid fa-check me-1"></i> Concluir Polígono');
+      if (zonaRightMap) zonaRightMap.getContainer().style.cursor = 'crosshair';
+    } else {
+      $(this).removeClass('btn-success text-white').addClass('btn-info text-dark');
+      $(this).html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
+      if (zonaRightMap) zonaRightMap.getContainer().style.cursor = '';
+    }
+    redrawZonaDraftPolygonLayers();
+  });
+
+  $(document).on('click', '#zona-btn-new-polygon-area', function() {
+    const lastRing = zonaDraftPolygonsList[zonaDraftPolygonsList.length - 1];
+    if (lastRing && lastRing.length >= 3) {
+      saveZonaPolygonHistoryState();
+      zonaDraftPolygonsList.push([]);
+      redrawZonaDraftPolygonLayers();
+    } else {
+      systemAlert('Complete pelo menos 3 pontos no polígono atual antes de iniciar uma nova área.', 'warning');
+    }
+  });
+
+  $(document).on('click', '#zona-btn-undo-polygon', function() {
+    undoZonaPolygonState();
+  });
+
+  $(document).on('click', '#zona-btn-redo-polygon', function() {
+    redoZonaPolygonState();
+  });
+
+  $(document).on('change input', '#zona-polygon-color-picker', function() {
+    zonaPolygonColor = $(this).val();
+    saveZonaPolygonHistoryState();
+    redrawZonaDraftPolygonLayers();
+  });
+
+  $(document).on('click', '#zona-btn-clear-polygon', function() {
+    saveZonaPolygonHistoryState();
+    zonaDraftPolygonsList = [[]];
+    if (zonaPolygonLayersGroup) zonaPolygonLayersGroup.clearLayers();
+    isZonaDrawingPolygon = false;
+    $('#zona-btn-draw-polygon-mode').removeClass('btn-success text-white').addClass('btn-info text-dark')
+      .html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
+    if (zonaRightMap) zonaRightMap.getContainer().style.cursor = '';
+    updateZonaPolygonHiddenInput();
+  });
+
+  function injectModalTreePatterns() {
+    injectTreePatternsFor('modal-right-panel-map', 'mod');
   }
 
   $("#close-species-modal-btn, .btn-cancel-modal").click(function() {
@@ -2060,8 +2865,9 @@ $(document).ready(function () {
         ` : '';
 
         const card = $(`
-          <div class="species-card ${textureClass}" style="cursor: pointer; background-color: ${extinctionColor};">
+          <div class="species-card ${textureClass}" data-fav-id="${animal.id}" style="cursor: pointer; background-color: ${extinctionColor};">
             ${menuButtonHtml}
+            ${(typeof favCardButtons === 'function') ? favCardButtons(animal) : ''}
             <span class="species-card-extinction-badge" style="background-color: ${extinctionColor};">${sigla}</span>
             <div class="species-card-slideshow">
               ${slidesHtml}
@@ -2116,6 +2922,7 @@ $(document).ready(function () {
         grid.append(card);
       });
       startModalSlideshows();
+      if (typeof refreshFavUI === 'function') refreshFavUI();
     });
   }
 
@@ -2408,7 +3215,11 @@ $(document).ready(function () {
     $('#form-create-animal .select-biomas').val(selectedIds);
   });
 
-  function setupMarkerDragEvents(form, marker) {
+  // Sincroniza marcador arrastável <-> inputs de lat/lng do formulário.
+  // `targetMap` é o mapa que deve centralizar (padrão: mapa principal).
+  // Reutilizado pelos modais de animal (implícito), ONG e Zona.
+  function setupMarkerDragEvents(form, marker, targetMap) {
+    const refMap = targetMap || map;
     marker.on('drag', function(e) {
       const newPos = e.target.getLatLng();
       form.find(".coord-lat, .input-lat").val(newPos.lat.toFixed(6));
@@ -2421,52 +3232,31 @@ $(document).ready(function () {
       if (!isNaN(newLat) && !isNaN(newLng)) {
         const newLatLng = L.latLng(newLat, newLng);
         marker.setLatLng(newLatLng);
-        map.panTo(newLatLng);
+        refMap.panTo(newLatLng);
       }
     });
   }
 
-  function setupZoneDragAndResizeEvents(form, marker, zone) {
-    marker.on('drag', function(e) {
-      const newPos = e.target.getLatLng();
-      form.find(".coord-lat, .input-lat").val(newPos.lat.toFixed(6));
-      form.find(".coord-lng, .input-lng").val(newPos.lng.toFixed(6));
-      zone.setLatLng(newPos);
-    });
-
-    form.find(".input-lat, .input-lng").off("input change").on("input change", function() {
-      const newLat = parseFloat(form.find(".input-lat").val());
-      const newLng = parseFloat(form.find(".input-lng").val());
-      if (!isNaN(newLat) && !isNaN(newLng)) {
-        const newLatLng = L.latLng(newLat, newLng);
-        marker.setLatLng(newLatLng);
-        zone.setLatLng(newLatLng);
-        map.panTo(newLatLng);
-      }
-    });
-
-    form.find(".input-radius, .slider-radius").off("input change").on("input change", function() {
-      const rad = parseInt($(this).val());
-      if (!isNaN(rad)) {
-        form.find(".input-radius, .slider-radius").val(rad);
-        zone.setRadius(rad);
-      }
-    });
-  }
-
+  // Fecha os modais de cadastro (ONG e Zona). Mantém o nome original pois é
+  // chamado por updateAdminUI() e openAdminDrawer(), como antes com o drawer.
   function closeAdminDrawer() {
-    $("#admin-sidebar-drawer").addClass("d-none");
-    if (draftMarker) {
-      map.removeLayer(draftMarker);
-      draftMarker = null;
+    $("#ong-admin-modal").addClass("d-none");
+    $("#zona-admin-modal").addClass("d-none");
+    isZonaDrawingPolygon = false;
+    const zonaBtn = $('#zona-btn-draw-polygon-mode');
+    if (zonaBtn.length) {
+      zonaBtn.removeClass('btn-success text-white').addClass('btn-info text-dark')
+        .html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
     }
-    if (draftZone) {
-      map.removeLayer(draftZone);
-      draftZone = null;
+    if (zonaRightMap) {
+      try { zonaRightMap.getContainer().style.cursor = ''; } catch (e) {}
     }
   }
 
-  $("#close-drawer-btn, .btn-cancel-drawer").click(closeAdminDrawer);
+  $("#close-ong-modal-btn, .btn-cancel-ong-modal").click(function() {
+    $("#ong-admin-modal").addClass("d-none");
+  });
+  $("#close-zona-modal-btn, .btn-cancel-zona-modal").click(closeAdminDrawer);
 
   function loadAdminSelectOptions(callback) {
     const fetchNiveis = fetch('/api/v1/niveis-extincao/').then(res => res.json());
@@ -2573,59 +3363,142 @@ $(document).ready(function () {
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        alert(editId ? "Espécie atualizada com sucesso!" : "Espécie cadastrada com sucesso!");
+        systemAlert(editId ? "Espécie atualizada com sucesso!" : "Espécie cadastrada com sucesso!", 'success');
         $("#species-admin-modal").addClass("d-none");
         reloadMarkers();
       } else {
-        alert('Erro ao salvar espécie: ' + formatErrorMessage(data, 'Tente novamente.'));
+        systemAlert('Erro ao salvar espécie: ' + formatErrorMessage(data, 'Tente novamente.'), 'error');
       }
     })
     .catch(err => {
       console.error(err);
-      alert("Erro ao salvar espécie: " + (err.message || 'Falha de comunicação com o servidor.'));
+      systemAlert("Erro ao salvar espécie: " + (err.message || 'Falha de comunicação com o servidor.'), 'error');
     });
   });
 
-  // Submissão do Formulário de Área de Preservação
+  // Submissão do Formulário de Área de Preservação (POST criar / PUT editar).
+  // O polígono é OBRIGATÓRIO (igual ao desenho de área dos animais):
+  // sem ao menos 3 pontos o salvamento é bloqueado com alerta.
   $("#form-create-preservacao").submit(function(e) {
     e.preventDefault();
-    const nome = $(this).find('input[name="nome"]').val();
-    const tipo = $(this).find('select[name="tipo"]').val();
-    const raio = parseInt($(this).find('.input-radius').val());
-    const lat = parseFloat($(this).find('.input-lat').val());
-    const lng = parseFloat($(this).find('.input-lng').val());
+    const form = $(this);
+    const editId = ($("#zona-edit-id").val() || '').trim();
+    const nome = (form.find('input[name="nome"]').val() || '').trim();
+    const categoria = form.find('select[name="categoria"]').val();
+    const descricao = form.find('textarea[name="descricao"]').val();
+    let lat = parseFloat(form.find('.coord-lat').val());
+    let lng = parseFloat(form.find('.coord-lng').val());
 
-    L.circle([lat, lng], {
-      radius: raio,
-      color: '#287f5e',
-      fillColor: '#287f5e',
-      fillOpacity: 0.5,
-      weight: 2
-    }).bindPopup(`<b>${nome}</b><br>Tipo: ${tipo}<br>Raio: ${(raio/1000).toFixed(1)} km`).addTo(map);
+    // Polígono obrigatório: exige ao menos um anel válido (mín. 3 pontos).
+    let polyRings = [];
+    try {
+      const polyHidden = $('#zona-area-polygon-json-hidden').val();
+      if (polyHidden && polyHidden.trim().length > 0) {
+        const polyPayload = JSON.parse(polyHidden);
+        polyRings = ((polyPayload && polyPayload.polygons) || []).filter(r => Array.isArray(r) && r.length >= 3);
+      }
+    } catch (err) { polyRings = []; }
+    if (polyRings.length === 0) {
+      systemAlert('Desenhe a área no mapa antes de salvar (mínimo 3 pontos com a ferramenta "Desenhar Área").', 'warning');
+      return;
+    }
 
-    alert(`Área de Preservação "${nome}" criada com sucesso!`);
-    closeAdminDrawer();
+    // Como no cadastro de animais: se desenhou área mas o ponto ficou vazio,
+    // ancora o ponto no centroide da primeira área válida.
+    try {
+      const polyHidden = $('#zona-area-polygon-json-hidden').val();
+      if ((!isNaN(lat) && !isNaN(lng)) === false && polyHidden && polyHidden.trim().length > 0) {
+        const polyPayload = JSON.parse(polyHidden);
+        const polyRings = (polyPayload && polyPayload.polygons) || [];
+        for (let ri = 0; ri < polyRings.length; ri++) {
+          if (polyRings[ri] && polyRings[ri].length >= 3) {
+            const centroid = getPolygonCentroid(polyRings[ri]);
+            if (centroid) {
+              lat = centroid[0]; lng = centroid[1];
+              form.find('.coord-lat').val(lat.toFixed(6));
+              form.find('.coord-lng').val(lng.toFixed(6));
+              form.find('.input-lat').val(lat.toFixed(6));
+              form.find('.input-lng').val(lng.toFixed(6));
+            }
+            break;
+          }
+        }
+      }
+    } catch (err) {}
+
+    fetch(editId ? `/api/v1/zonas-preservacao/${editId}/` : '/api/v1/zonas-preservacao/', {
+      method: editId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nome: nome,
+        categoria: categoria,
+        descricao: descricao,
+        lat: lat,
+        lng: lng,
+        color: zonaPolygonColor,
+        area_polygon_json: $('#zona-area-polygon-json-hidden').val()
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        systemAlert(editId ? `Área de Preservação "${nome}" atualizada com sucesso!` : `Área de Preservação "${nome}" criada com sucesso!`, 'success');
+        $("#zona-edit-id").val('');
+        $("#zona-admin-modal").addClass("d-none");
+        loadZonas();
+      } else {
+        systemAlert('Erro ao salvar área: ' + formatErrorMessage(data, 'Tente novamente.'), 'error');
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      systemAlert("Erro ao salvar área: " + (err.message || 'Falha de comunicação com o servidor.'), 'error');
+    });
   });
 
-  // Submissão do Formulário de ONG
+  // Submissão do Formulário de ONG (POST criar / PUT editar).
+  // `foco` não existe no modelo api_ong: é enviado e usado no popup local,
+  // sem alterar nenhuma regra de negócio do backend.
   $("#form-create-ong").submit(function(e) {
     e.preventDefault();
-    const nome = $(this).find('input[name="nome"]').val();
-    const foco = $(this).find('input[name="foco"]').val();
-    const lat = parseFloat($(this).find('.input-lat').val());
-    const lng = parseFloat($(this).find('.input-lng').val());
+    const form = $(this);
+    const editId = ($("#ong-edit-id").val() || '').trim();
+    const nome = (form.find('input[name="nome"]').val() || '').trim();
+    const foco = form.find('input[name="foco"]').val();
+    const email = form.find('input[name="email"]').val();
+    const telefone = form.find('input[name="telefone"]').val();
+    const descricao = form.find('textarea[name="descricao"]').val();
+    const lat = parseFloat(form.find('.coord-lat').val());
+    const lng = parseFloat(form.find('.coord-lng').val());
 
-    L.marker([lat, lng], {
-      icon: L.divIcon({
-        className: 'custom-animal-marker',
-        html: `<div class="marker-pin" style="border-color: #3498db; background-color: #1e3d59;"><i class="fa-solid fa-hand-holding-heart text-info" style="font-size: 18px;"></i></div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
+    fetch(editId ? `/api/v1/ongs/${editId}/` : '/api/v1/ongs/', {
+      method: editId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nome: nome,
+        foco: foco,
+        email: email,
+        telefone: telefone,
+        descricao: descricao,
+        lat: lat,
+        lng: lng
       })
-    }).bindPopup(`<b>ONG: ${nome}</b><br>Foco: ${foco || 'Preservação Ambiental'}`).addTo(map);
-
-    alert(`ONG "${nome}" cadastrada com sucesso!`);
-    closeAdminDrawer();
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        systemAlert(editId ? `Instituição "${nome}" atualizada com sucesso!` : `Instituição "${nome}" cadastrada com sucesso!`, 'success');
+        $("#ong-edit-id").val('');
+        $("#ong-admin-modal").addClass("d-none");
+        loadOngs();
+      } else {
+        systemAlert('Erro ao salvar Instituição: ' + formatErrorMessage(data, 'Tente novamente.'), 'error');
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      systemAlert("Erro ao salvar Instituição: " + (err.message || 'Falha de comunicação com o servidor.'), 'error');
+    });
   });
 
   // Modal de Detalhes do Animal
@@ -2731,6 +3604,11 @@ $(document).ready(function () {
                   <h6 class="fst-italic text-muted small mb-1">Descrição / Hábitos</h6>
                   <p class="mb-0 small text-light" style="line-height: 1.5; text-align: justify;">${animal.habitos || 'Descrição detalhada não disponível.'}</p>
               </div>
+              <div class="d-flex justify-content-end mt-3">
+                <a class="btn btn-sm btn-outline-secondary rounded-pill px-3" href="https://salve.icmbio.gov.br/" target="_blank" rel="noopener noreferrer" title="Abrir ficha no SALVE/ICMBio">
+                  <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>Fonte
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -2759,6 +3637,7 @@ $(document).ready(function () {
     }
 
     $('#modalAnimalName').text(animal.nome_comum).css('color', statusColor);
+    if (typeof favModalButtons === 'function') $('#modalAnimalName').append(' ', favModalButtons(animal));
     $('#modalBody').html(html);
 
     if (isAdminModeActive()) {
@@ -2817,19 +3696,95 @@ $(document).ready(function () {
     window.setModalImg(next);
   };
 
-  window.deleteEntityWithConfirmation = function(entity) {
+  // Exclusão de ONG — confirmação dupla igual à de animais.
+  window.deleteOngWithConfirmation = async function(id, nome) {
+    if (typeof isAdminModeActive === 'function' && !isAdminModeActive()) return;
+    nome = nome || 'esta Instituição';
+    if (!id) return;
+    if (!await systemConfirm(`Tem certeza que deseja excluir "${nome}"?`, { title: 'Excluir Instituição' })) return;
+    if (!await systemConfirm(`CONFIRMAÇÃO FINAL DE SEGURANÇA:\n\nEsta ação é permanente e removerá "${nome}" do mapa.\n\nDeseja REALMENTE EXCLUIR?`, { title: 'Confirmação final' })) return;
+    fetch(`/api/v1/ongs/${id}/`, { method: 'DELETE' })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        systemAlert(`Instituição "${nome}" excluída com sucesso!`, 'success');
+        if (typeof loadOngs === 'function') loadOngs();
+      } else {
+        systemAlert('Erro ao excluir: ' + formatErrorMessage(data, 'Erro no servidor.'), 'error');
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      systemAlert(`Erro de conexão ao tentar excluir "${nome}": ${err.message || 'Falha de rede.'}`, 'error');
+    });
+  };
+
+  // Exclusão de área de preservação — confirmação dupla igual à de animais.
+  window.deleteZonaWithConfirmation = async function(id, nome) {
+    if (typeof isAdminModeActive === 'function' && !isAdminModeActive()) return;
+    nome = nome || 'esta área';
+    if (!id) return;
+    if (!await systemConfirm(`Tem certeza que deseja excluir "${nome}"?`, { title: 'Excluir área' })) return;
+    if (!await systemConfirm(`CONFIRMAÇÃO FINAL DE SEGURANÇA:\n\nEsta ação é permanente e removerá "${nome}" do mapa.\n\nDeseja REALMENTE EXCLUIR?`, { title: 'Confirmação final' })) return;
+    fetch(`/api/v1/zonas-preservacao/${id}/`, { method: 'DELETE' })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        systemAlert(`Área "${nome}" excluída com sucesso!`, 'success');
+        if (typeof loadZonas === 'function') loadZonas();
+      } else {
+        systemAlert('Erro ao excluir: ' + formatErrorMessage(data, 'Erro no servidor.'), 'error');
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      systemAlert(`Erro de conexão ao tentar excluir "${nome}": ${err.message || 'Falha de rede.'}`, 'error');
+    });
+  };
+
+  // Exclusão de ONG via botão do popup (somente admin).
+  $(document).on('click', '.btn-del-ong', function(e) {
+    e.stopPropagation();
+    deleteOngWithConfirmation($(this).data('id'), $(this).data('nome') || 'esta Instituição');
+  });
+
+  // Edição de ONG via botão do popup (somente admin).
+  $(document).on('click', '.btn-edit-ong', function(e) {
+    e.stopPropagation();
+    if (typeof isAdminModeActive === 'function' && !isAdminModeActive()) return;
+    const id = String($(this).data('id') || '');
+    const f = (window.ongFeaturesById || {})[id];
+    if (f) openOngModalForEdit(f);
+  });
+
+  // Exclusão de área de preservação via botão do popup (somente admin).
+  $(document).on('click', '.btn-del-zona', function(e) {
+    e.stopPropagation();
+    deleteZonaWithConfirmation($(this).data('id'), $(this).data('nome') || 'esta área');
+  });
+
+  // Edição de área via botão do popup (somente admin).
+  $(document).on('click', '.btn-edit-zona', function(e) {
+    e.stopPropagation();
+    if (typeof isAdminModeActive === 'function' && !isAdminModeActive()) return;
+    const id = String($(this).data('id') || '');
+    const f = (window.zonaFeaturesById || {})[id];
+    if (f) openZonaModalForEdit(f);
+  });
+
+  window.deleteEntityWithConfirmation = async function(entity) {
     const props = entity.properties || entity;
     const animalId = props.animal_id || props.id;
     const nome = props.nome_comum || props.nome || 'esta entidade';
 
-    if (!confirm(`Tem certeza que deseja excluir "${nome}"?`)) return;
-    if (!confirm(`⚠️ CONFIRMAÇÃO FINAL DE SEGURANÇA:\n\nEsta ação é permanente e removerá "${nome}" do mapa e do catálogo.\n\nDeseja REALMENTE EXCLUIR?`)) return;
+    if (!await systemConfirm(`Tem certeza que deseja excluir "${nome}"?`, { title: 'Excluir espécie' })) return;
+    if (!await systemConfirm(`CONFIRMAÇÃO FINAL DE SEGURANÇA:\n\nEsta ação é permanente e removerá "${nome}" do mapa e do catálogo.\n\nDeseja REALMENTE EXCLUIR?`, { title: 'Confirmação final' })) return;
 
     fetch(`/api/v1/animais/${animalId}/`, { method: 'DELETE' })
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        alert(`"${nome}" foi excluído com sucesso!`);
+        systemAlert(`"${nome}" foi excluído com sucesso!`, 'success');
         const modalEl = document.getElementById('animalModal');
         if (modalEl) {
           const bsModal = bootstrap.Modal.getInstance(modalEl);
@@ -2837,12 +3792,12 @@ $(document).ready(function () {
         }
         reloadMarkers();
       } else {
-        alert(`Erro ao excluir: ${formatErrorMessage(data, 'Erro no servidor.')}`);
+        systemAlert(`Erro ao excluir: ${formatErrorMessage(data, 'Erro no servidor.')}`, 'error');
       }
     })
     .catch(err => {
       console.error(err);
-      alert(`Erro de conexão ao tentar excluir "${nome}": ${err.message || 'Falha de rede.'}`);
+      systemAlert(`Erro de conexão ao tentar excluir "${nome}": ${err.message || 'Falha de rede.'}`, 'error');
     });
   };
 
@@ -2897,7 +3852,7 @@ $(document).ready(function () {
 
   function handleSalveFileApp(file) {
     if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') {
-      alert('Por favor, selecione um arquivo .csv válido.');
+      systemAlert('Por favor, selecione um arquivo .csv válido.', 'warning');
       return;
     }
     selectedSalveFile = file;
@@ -3209,6 +4164,8 @@ $(document).ready(function () {
 
   loadData();
   loadMarkers();
+  loadOngs();
+  loadZonas();
   setTimeout(function() { map.invalidateSize(); }, 400);
 });
 

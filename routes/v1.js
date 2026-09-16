@@ -6,6 +6,37 @@ const fs = require('fs');
 const os = require('os');
 const { PrismaClient } = require('@prisma/client');
 const prisma = require('../services/db');
+const { sendStatusChangeEmail } = require('../services/mailer');
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Dispara e-mails de alerta quando o status de conservação muda.
+// Roda em background (não bloqueia a resposta): só envia se o status
+// mudou de fato, e só para assinaturas ativas daquele animal.
+async function dispatchStatusChange(animalId, oldNivelId, newNivelId) {
+  try {
+    if (!oldNivelId || !newNivelId || String(oldNivelId) === String(newNivelId)) return;
+    const [animal, oldNivel, newNivel] = await Promise.all([
+      prisma.api_animal.findUnique({ where: { id: BigInt(animalId) }, select: { nome_comum: true } }),
+      prisma.api_nivelextincao.findUnique({ where: { id: BigInt(oldNivelId) } }),
+      prisma.api_nivelextincao.findUnique({ where: { id: BigInt(newNivelId) } })
+    ]);
+    if (!animal || !oldNivel || !newNivel) return;
+    const subs = await prisma.api_alerta_status.findMany({
+      where: { animal_id: BigInt(animalId), ativo: true },
+      select: { email: true }
+    });
+    for (const s of subs) {
+      try {
+        await sendStatusChangeEmail(s.email, { animalNome: animal.nome_comum, oldNivel, newNivel });
+      } catch (e) {
+        console.error('[alerta-status] falha ao enviar para', s.email, e.message);
+      }
+    }
+  } catch (e) {
+    console.error('[alerta-status] erro no disparo:', e.message);
+  }
+}
 
 function getMediaDir() {
   const localDir = path.join(__dirname, '..', 'public', 'media');
@@ -282,6 +313,13 @@ router.patch('/animais/:id/', uploadFields, async (req, res) => {
     const b = req.body;
     const now = new Date();
 
+    // Status atual (para detectar mudança e disparar alertas por e-mail).
+    let oldNivelId = null;
+    try {
+      const before = await prisma.api_animal.findUnique({ where: { id }, select: { nivel_extincao_id: true } });
+      if (before && before.nivel_extincao_id != null) oldNivelId = String(before.nivel_extincao_id);
+    } catch (e) {}
+
     let imgPath = null;
     if (req.files && req.files['animal_imagem'] && req.files['animal_imagem'].length > 0) {
       imgPath = `/media/${req.files['animal_imagem'][0].filename}`;
@@ -423,6 +461,11 @@ router.patch('/animais/:id/', uploadFields, async (req, res) => {
     }
 
     res.json({ success: true, data: serialize(animal) });
+
+    // Pós-resposta: se o status de conservação mudou, avisa os assinantes.
+    if (b.nivel_extincao_id) {
+      dispatchStatusChange(id, oldNivelId, String(b.nivel_extincao_id));
+    }
   } catch (err) {
     console.error('Error updating animal:', err);
     const friendlyError = formatPrismaError(err);
@@ -456,6 +499,14 @@ router.delete('/animais/:id/', async (req, res) => {
       data: { deleted_at: new Date() }
     });
 
+    // Interrompe alertas de status pendentes do animal excluído
+    try {
+      await prisma.api_alerta_status.updateMany({
+        where: { animal_id: id },
+        data: { ativo: false, updated_at: new Date() }
+      });
+    } catch (e) {}
+
     res.json({ success: true, message: 'Animal excluído com sucesso!' });
   } catch (err) {
     console.error('Error deleting animal:', err);
@@ -471,7 +522,7 @@ router.delete('/ongs/:id/', async (req, res) => {
     await prisma.api_ong.delete({
       where: { id: id }
     });
-    res.json({ success: true, message: 'ONG excluída com sucesso!' });
+    res.json({ success: true, message: 'Instituição excluída com sucesso!' });
   } catch (err) {
     console.error('Error deleting ONG:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -491,6 +542,312 @@ router.delete('/zonas-preservacao/:id/', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ============================================================================
+// ONGs e Zonas de Preservação — listagem GeoJSON + criação (Prisma + PostGIS).
+// Usados pelo mapa principal: toggles de camadas do menu flutuante, labels
+// das zonas sobre os polígonos e modais de cadastro no padrão da tela de
+// animais. Mantêm as mesmas validações dos formulários (nome obrigatório).
+// ============================================================================
+
+// Delimitador para guardar a cor de exibição da zona dentro de `descricao`
+// (o modelo api_zonapreservacao não tem coluna de cor). Mesmo padrão do
+// [[POLYGON_DATA]] usado em api_animal.obs.
+const ZONA_STYLE_DELIM = '[[ZONA_STYLE]]';
+const ZONA_DEFAULT_COLOR = '#287f5e';
+
+function splitZonaStyle(descricao) {
+  if (!descricao || typeof descricao !== 'string' || !descricao.includes(ZONA_STYLE_DELIM)) {
+    return { text: descricao || null, color: ZONA_DEFAULT_COLOR };
+  }
+  const parts = descricao.split(ZONA_STYLE_DELIM);
+  let color = ZONA_DEFAULT_COLOR;
+  try {
+    const parsed = JSON.parse((parts[1] || '').trim());
+    if (parsed && /^#[0-9a-fA-F]{6}$/.test(parsed.color || '')) color = parsed.color;
+  } catch (e) {}
+  const text = (parts[0] || '').trim();
+  return { text: text.length > 0 ? text : null, color };
+}
+
+// Constrói WKT MULTIPOLYGON a partir de anéis no formato Leaflet [[lat,lng]].
+// Só interpola números validados (parseFloat + isNaN), nunca texto cru.
+function buildMultiPolygonWKT(rings) {
+  const polys = [];
+  for (const ring of rings || []) {
+    if (!Array.isArray(ring)) continue;
+    const pts = [];
+    for (const pt of ring) {
+      if (!Array.isArray(pt)) continue;
+      const lat = parseFloat(pt[0]);
+      const lng = parseFloat(pt[1]);
+      if (isNaN(lat) || isNaN(lng)) continue;
+      pts.push([lng, lat]);
+    }
+    if (pts.length < 3) continue;
+    const f = pts[0];
+    const l = pts[pts.length - 1];
+    if (f[0] !== l[0] || f[1] !== l[1]) pts.push([f[0], f[1]]);
+    polys.push('((' + pts.map(p => p[0] + ' ' + p[1]).join(',') + '))');
+  }
+  if (polys.length === 0) return null;
+  return 'MULTIPOLYGON(' + polys.join(',') + ')';
+}
+
+// Extrai anéis válidos do payload area_polygon_json (aceita {polygons} ou array).
+function parseZonaRings(payload) {
+  let raw = payload;
+  if (typeof raw === 'string') {
+    try { raw = JSON.parse(raw); } catch (e) { return []; }
+  }
+  let rings = null;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && raw.polygons) {
+    rings = raw.polygons;
+  } else if (Array.isArray(raw)) {
+    rings = raw;
+  }
+  if (!rings) return [];
+  const norm = (Array.isArray(rings[0]) && Array.isArray(rings[0][0])) ? rings : [rings];
+  return norm.filter(r => Array.isArray(r) && r.length >= 3);
+}
+
+const normStr = (v) => (v === undefined || v === null || String(v).trim() === '') ? null : String(v);
+
+// GET /api/v1/ongs/ (lista ONGs como GeoJSON para a camada do mapa)
+router.get('/ongs/', async (req, res) => {
+  try {
+    const rows = await prisma.$queryRaw`
+      SELECT id, nome, descricao, email, telefone, site, endereco,
+             ST_AsGeoJSON(location) AS geom
+      FROM api_ong
+      WHERE deleted_at IS NULL
+      ORDER BY nome ASC
+      LIMIT 2000
+    `;
+    const features = [];
+    for (const r of rows) {
+      let geometry = null;
+      try { geometry = JSON.parse(r.geom); } catch (e) {}
+      if (!geometry) continue;
+      features.push({
+        type: 'Feature',
+        geometry,
+        properties: {
+          id: r.id.toString(),
+          nome: r.nome,
+          descricao: r.descricao,
+          email: r.email,
+          telefone: r.telefone,
+          site: r.site,
+          endereco: r.endereco
+        }
+      });
+    }
+    res.json({ success: true, data: serialize({ type: 'FeatureCollection', features }) });
+  } catch (err) {
+    console.error('Error fetching ongs:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/v1/ongs/ (cria ONG — mesmas validações do formulário: nome + ponto)
+router.post('/ongs/', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const nome = (b.nome || '').trim();
+    const lat = parseFloat(b.lat);
+    const lng = parseFloat(b.lng);
+    if (!nome) return res.status(400).json({ success: false, error: 'Nome da Instituição é obrigatório.' });
+    if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ success: false, error: 'Coordenadas inválidas.' });
+    const rows = await prisma.$queryRaw`
+      INSERT INTO api_ong (nome, descricao, email, telefone, site, endereco, location, created_at, updated_at)
+      VALUES (${nome}, ${normStr(b.descricao)}, ${normStr(b.email)}, ${normStr(b.telefone)}, ${normStr(b.site)}, ${normStr(b.endereco)},
+        ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326), NOW(), NOW())
+      RETURNING id
+    `;
+    res.status(201).json({ success: true, data: serialize({ id: rows[0].id }), message: 'Instituição cadastrada com sucesso!' });
+  } catch (err) {
+    console.error('Error creating ong:', err);
+    res.status(500).json({ success: false, error: formatPrismaError(err) });
+  }
+});
+
+// GET /api/v1/zonas-preservacao/ (lista zonas como GeoJSON para a camada do mapa)
+router.get('/zonas-preservacao/', async (req, res) => {
+  try {
+    const rows = await prisma.$queryRaw`
+      SELECT id, nome, descricao, categoria,
+             ST_AsGeoJSON(area) AS geom
+      FROM api_zonapreservacao
+      WHERE deleted_at IS NULL
+      ORDER BY nome ASC
+      LIMIT 2000
+    `;
+    const features = [];
+    for (const r of rows) {
+      let geometry = null;
+      try { geometry = JSON.parse(r.geom); } catch (e) {}
+      if (!geometry) continue;
+      const style = splitZonaStyle(r.descricao);
+      features.push({
+        type: 'Feature',
+        geometry,
+        properties: {
+          id: r.id.toString(),
+          nome: r.nome,
+          descricao: style.text,
+          categoria: r.categoria,
+          color: style.color
+        }
+      });
+    }
+    res.json({ success: true, data: serialize({ type: 'FeatureCollection', features }) });
+  } catch (err) {
+    console.error('Error fetching zonas:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/v1/zonas-preservacao/ (cria zona — polígono OBRIGATÓRIO,
+// desenhado no modal igual às áreas dos animais: mín. 3 pontos)
+router.post('/zonas-preservacao/', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const nome = (b.nome || '').trim();
+    const lat = parseFloat(b.lat);
+    const lng = parseFloat(b.lng);
+    if (!nome) return res.status(400).json({ success: false, error: 'Nome da área é obrigatório.' });
+    if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ success: false, error: 'Coordenadas inválidas.' });
+
+    const rings = parseZonaRings(b.area_polygon_json);
+    if (rings.length === 0) {
+      return res.status(400).json({ success: false, error: 'Desenhe a área no mapa antes de salvar (mínimo 3 pontos).' });
+    }
+    const wkt = buildMultiPolygonWKT(rings);
+    if (!wkt) return res.status(400).json({ success: false, error: 'Polígono inválido. Desenhe ao menos 3 pontos.' });
+
+    let descricao = normStr(b.descricao);
+    if (b.color && /^#[0-9a-fA-F]{6}$/.test(String(b.color))) {
+      const payload = ZONA_STYLE_DELIM + JSON.stringify({ color: String(b.color) });
+      descricao = (descricao ? descricao + ' ' : '') + payload;
+    }
+
+    const rows = await prisma.$queryRaw`
+      INSERT INTO api_zonapreservacao (nome, descricao, categoria, area, created_at, updated_at)
+      VALUES (${nome}, ${descricao}, ${normStr(b.categoria)}, ST_GeomFromText(${wkt}, 4326), NOW(), NOW())
+      RETURNING id
+    `;
+    res.status(201).json({ success: true, data: serialize({ id: rows[0].id }), message: 'Área de preservação criada com sucesso!' });
+  } catch (err) {
+    console.error('Error creating zona:', err);
+    res.status(500).json({ success: false, error: formatPrismaError(err) });
+  }
+});
+
+// PUT /api/v1/zonas-preservacao/:id/ (atualiza zona — polígono continua obrigatório)
+router.put('/zonas-preservacao/:id/', async (req, res) => {
+  try {
+    const id = BigInt(req.params.id);
+    const b = req.body || {};
+    const nome = (b.nome || '').trim();
+    if (!nome) return res.status(400).json({ success: false, error: 'Nome da área é obrigatório.' });
+    const rings = parseZonaRings(b.area_polygon_json);
+    if (rings.length === 0) {
+      return res.status(400).json({ success: false, error: 'Desenhe a área no mapa antes de salvar (mínimo 3 pontos).' });
+    }
+    const wkt = buildMultiPolygonWKT(rings);
+    if (!wkt) return res.status(400).json({ success: false, error: 'Polígono inválido. Desenhe ao menos 3 pontos.' });
+    let descricao = normStr(b.descricao);
+    // Remove eventual delimitador antigo e grava a cor atual (igual ao POST).
+    if (descricao && descricao.includes(ZONA_STYLE_DELIM)) {
+      descricao = splitZonaStyle(descricao).text;
+    }
+    if (b.color && /^#[0-9a-fA-F]{6}$/.test(String(b.color))) {
+      const payload = ZONA_STYLE_DELIM + JSON.stringify({ color: String(b.color) });
+      descricao = (descricao ? descricao + ' ' : '') + payload;
+    }
+    await prisma.$queryRaw`
+      UPDATE api_zonapreservacao
+      SET nome = ${nome}, descricao = ${descricao}, categoria = ${normStr(b.categoria)},
+          area = ST_GeomFromText(${wkt}, 4326), updated_at = NOW()
+      WHERE id = ${id}
+    `;
+    res.json({ success: true, message: 'Área de preservação atualizada com sucesso!' });
+  } catch (err) {
+    console.error('Error updating zona:', err);
+    res.status(500).json({ success: false, error: formatPrismaError(err) });
+  }
+});
+
+// PUT /api/v1/ongs/:id/ (atualiza ONG)
+router.put('/ongs/:id/', async (req, res) => {
+  try {
+    const id = BigInt(req.params.id);
+    const b = req.body || {};
+    const nome = (b.nome || '').trim();
+    if (!nome) return res.status(400).json({ success: false, error: 'Nome da Instituição é obrigatório.' });
+    const lat = parseFloat(b.lat);
+    const lng = parseFloat(b.lng);
+    if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ success: false, error: 'Coordenadas inválidas.' });
+    await prisma.$queryRaw`
+      UPDATE api_ong
+      SET nome = ${nome}, descricao = ${normStr(b.descricao)}, email = ${normStr(b.email)},
+          telefone = ${normStr(b.telefone)}, site = ${normStr(b.site)}, endereco = ${normStr(b.endereco)},
+          location = ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326), updated_at = NOW()
+      WHERE id = ${id}
+    `;
+    res.json({ success: true, message: 'Instituição atualizada com sucesso!' });
+  } catch (err) {
+    console.error('Error updating ONG:', err);
+    res.status(500).json({ success: false, error: formatPrismaError(err) });
+  }
+});
+
+// POST /api/v1/notificacoes/ (ativa/atualiza assinatura de alerta de status)
+// Body: { animal_id, email, ativo=true }. Por espécie e por e-mail.
+router.post('/notificacoes/', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const email = String(b.email || '').trim().toLowerCase();
+    const animalId = b.animal_id != null ? BigInt(b.animal_id) : null;
+    if (!animalId) return res.status(400).json({ success: false, error: 'Animal inválido.' });
+    if (!EMAIL_RE.test(email)) return res.status(400).json({ success: false, error: 'E-mail inválido.' });
+    const ativo = b.ativo === undefined ? true : !!b.ativo;
+    await prisma.api_alerta_status.upsert({
+      where: { animal_id_email: { animal_id: animalId, email } },
+      update: { ativo, updated_at: new Date() },
+      create: { animal_id: animalId, email, ativo }
+    });
+    res.json({ success: true, message: ativo ? 'Notificação ativada!' : 'Notificação desativada.' });
+  } catch (err) {
+    console.error('Error saving notificacao:', err);
+    res.status(500).json({ success: false, error: formatPrismaError(err) });
+  }
+});
+
+// DELETE /api/v1/notificacoes/ (desativa assinatura — ex: ao desfavoritar)
+// Body: { animal_id, email }. Interrompe o envio imediatamente.
+router.delete('/notificacoes/', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const email = String(b.email || '').trim().toLowerCase();
+    const animalId = b.animal_id != null ? BigInt(b.animal_id) : null;
+    if (!animalId || !email) return res.status(400).json({ success: false, error: 'Parâmetros inválidos.' });
+    await prisma.api_alerta_status.updateMany({
+      where: { animal_id: animalId, email },
+      data: { ativo: false, updated_at: new Date() }
+    });
+    res.json({ success: true, message: 'Notificação desativada.' });
+  } catch (err) {
+    console.error('Error deleting notificacao:', err);
+    res.status(500).json({ success: false, error: formatPrismaError(err) });
+  }
+});
+
+// Exportados para teste unitário (node -e). Não altera o comportamento do router.
+router.buildMultiPolygonWKT = buildMultiPolygonWKT;
+router.parseZonaRings = parseZonaRings;
+router.splitZonaStyle = splitZonaStyle;
 
 // POST /api/v1/animais/import-salve (Importação de Planilha do SALVE)
 const { importSalveCSV } = require('../services/salveImporter');

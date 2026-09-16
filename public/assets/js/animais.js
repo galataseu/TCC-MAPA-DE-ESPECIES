@@ -245,17 +245,58 @@ $(document).ready(function() {
         }).join('');
     }
 
-    // Renderizar os Cards Coloridos de Tamanho Fixo no Painel Direito
+    // Renderizar os Cards Coloridos de Tamanho Fixo no Painel Direito.
+    // Favoritos aparecem SÓ na seção Favoritos (acima), nunca duplicados.
     function renderSpeciesGrid(filteredAnimals) {
         const gridContainer = $('#animalCardsGrid');
+        const favGrid = $('#favGrid');
+        const favSection = $('#fav-section');
         gridContainer.empty();
+        if (favGrid.length) favGrid.empty();
 
-        if (filteredAnimals.length === 0) {
+        const isFav = (typeof favIsFav === 'function') ? favIsFav : function () { return false; };
+        const favs = (filteredAnimals || []).filter(a => isFav(a.id));
+        const rest = (filteredAnimals || []).filter(a => !isFav(a.id));
+
+        if (favSection.length) {
+            if (favs.length > 0) {
+                favSection.removeClass('d-none');
+                favs.forEach((animal) => { favGrid.append(buildSpeciesCard(animal)); });
+            } else {
+                favSection.addClass('d-none');
+            }
+        }
+        // Seção Favoritos some junto quando a busca não retorna nada
+        // (cards já nascem com estrela/sino certos via favCardButtons,
+        //  então não chama refreshFavUI aqui p/ evitar recursão).
+        if (rest.length === 0 && favs.length === 0) {
             gridContainer.html('<div class="col-12 text-center text-muted py-5"><p>Nenhuma espécie encontrada.</p></div>');
+            if (favSection.length) favSection.addClass('d-none');
             return;
         }
 
-        filteredAnimals.forEach((animal) => {
+        rest.forEach((animal) => {
+            gridContainer.append(buildSpeciesCard(animal));
+        });
+
+        startCardSlideshows();
+    }
+
+    // Re-renderiza a divisão Favoritos/Geral (ex: ao favoritar/desfavoritar).
+    window.__favSectionRefresh = function () {
+        const term = ($('#animalSearch').val() || '').toLowerCase().trim();
+        if (!term) { renderSpeciesGrid(animals); return; }
+        const filtered = animals.filter(a => {
+            const sigla = (a.api_nivelextincao ? a.api_nivelextincao.sigla : (a.nivel_sigla || '')).toLowerCase();
+            return (a.nome_comum && a.nome_comum.toLowerCase().includes(term)) ||
+                (a.nome_cientifico && a.nome_cientifico.toLowerCase().includes(term)) ||
+                (a.classe && a.classe.toLowerCase().includes(term)) ||
+                sigla.includes(term);
+        });
+        renderSpeciesGrid(filtered);
+    };
+
+    function buildSpeciesCard(animal) {
             const textureClass = getAnimalTextureClass(animal.classe);
             const formattedId = String(animal.id).padStart(4, '0');
             const dataFormatted = animal.created_at ? new Date(animal.created_at).toLocaleDateString('pt-BR') : '00/00/0000';
@@ -294,8 +335,9 @@ $(document).ready(function() {
             ` : '';
 
             const cardHtml = `
-                <div class="species-card ${textureClass}" data-id="${animal.id}" onclick="showDetails('${animal.id}')" style="cursor: pointer; background-color: ${extinctionColor};">
+                <div class="species-card ${textureClass}" data-id="${animal.id}" data-fav-id="${animal.id}" onclick="showDetails('${animal.id}')" style="cursor: pointer; background-color: ${extinctionColor};">
                     ${menuButtonHtml}
+                    ${(typeof favCardButtons === 'function') ? favCardButtons(animal) : ''}
                     <span class="species-card-extinction-badge" style="background-color: ${extinctionColor};">${sigla}</span>
                     <div class="species-card-slideshow">
                         ${slidesHtml}
@@ -314,10 +356,7 @@ $(document).ready(function() {
                     </div>
                 </div>
             `;
-            gridContainer.append(cardHtml);
-        });
-
-        startCardSlideshows();
+            return cardHtml;
     }
 
     // Menu de 3 Pontinhos no Card (Editar e Excluir)
@@ -342,29 +381,29 @@ $(document).ready(function() {
     };
 
     // Exclusão de Animal com Confirmação Dupla
-    window.deleteAnimal = function(id) {
+    window.deleteAnimal = async function(id) {
         const animal = animals.find(a => a.id == id);
         const name = animal ? animal.nome_comum : 'esta espécie';
 
-        if (!confirm(`Tem certeza que deseja excluir "${name}"?`)) return;
-        if (!confirm(`⚠️ CONFIRMAÇÃO FINAL:\n\nEsta ação excluirá permanentemente "${name}" do sistema.\n\nDeseja continuar?`)) return;
+        if (!await systemConfirm(`Tem certeza que deseja excluir "${name}"?`, { title: 'Excluir espécie' })) return;
+        if (!await systemConfirm(`CONFIRMAÇÃO FINAL:\n\nEsta ação excluirá permanentemente "${name}" do sistema.\n\nDeseja continuar?`, { title: 'Confirmação final' })) return;
 
         fetch(`/api/v1/animais/${id}/`, { method: 'DELETE' })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    alert(`"${name}" foi excluído com sucesso!`);
+                    systemAlert(`"${name}" foi excluído com sucesso!`, 'success');
                     if ($('#animal-id-hidden').val() == id) {
                         resetForm();
                     }
                     loadAnimals();
                 } else {
-                    alert('Erro ao excluir: ' + formatErrorMessage(data, 'Tente novamente.'));
+                    systemAlert('Erro ao excluir: ' + formatErrorMessage(data, 'Tente novamente.'), 'error');
                 }
             })
             .catch(err => {
                 console.error(err);
-                alert('Erro de conexão ao excluir animal: ' + (err.message || 'Falha de comunicação.'));
+                systemAlert('Erro de conexão ao excluir animal: ' + (err.message || 'Falha de comunicação.'), 'error');
             });
     };
 
@@ -678,7 +717,7 @@ $(document).ready(function() {
             draftPolygonsList.push([]);
             redrawDraftPolygonLayers();
         } else {
-            alert('Complete pelo menos 3 pontos no polígono atual antes de iniciar uma nova área.');
+            systemAlert('Complete pelo menos 3 pontos no polígono atual antes de iniciar uma nova área.', 'warning');
         }
     });
 
@@ -777,20 +816,17 @@ $(document).ready(function() {
     }
 
     window.removeDraftMarkerByRef = function(btnEl) {
-        draftLocationMarkers.forEach((item, idx) => {
-            if (item.marker && item.marker.getPopup() && item.marker.getPopup()._contentNode && item.marker.getPopup()._contentNode.contains(btnEl)) {
-                rightPanelMap.removeLayer(item.marker);
-                draftLocationMarkers.splice(idx, 1);
-            }
-        });
-        updateDraftMarkersHiddenInput();
+        if (draftLocationMarker && rightPanelMap) {
+            try { rightPanelMap.removeLayer(draftLocationMarker); } catch (_) {}
+        }
+        draftLocationMarker = null;
+        $('#coordenadas-json-hidden').val('');
     };
 
     $(document).on('click', '#btn-add-location-marker', function() {
         if (!rightPanelMap) return;
         const center = rightPanelMap.getCenter();
-        const offset = (draftLocationMarkers.length * 0.04);
-        addDraftMarker(center.lat + offset, center.lng + offset);
+        addDraftMarker(center.lat, center.lng);
     });
 
     $(document).on('click', '#btn-clear-location-markers', function() {
@@ -803,6 +839,7 @@ $(document).ready(function() {
         setTimeout(() => {
             if (!rightPanelMap) {
                 const darkTile = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_3l5t_1_889f4489a3fb5fb5051816e3', {
+                    subdomains: 'abcd',
                     maxZoom: 19,
                     attribution: '© CARTO'
                 });
@@ -816,18 +853,18 @@ $(document).ready(function() {
                 });
 
                 const svgRenderer = L.svg({ padding: 0 });
-                const pampasLayer = L.geoJson(null, { renderer: svgRenderer, style: { color: "transparent", fillColor: "#3b7ba5", fillOpacity: 0.3 } }).addTo(rightPanelMap);
-                const pampasPattern = L.geoJson(null, { renderer: svgRenderer, style: { color: "transparent", fillColor: "url(#pampa-pattern-min)", fillOpacity: 0.6 } }).addTo(rightPanelMap);
-                const cerradoLayer = L.geoJson(null, { renderer: svgRenderer, style: { color: "transparent", fillColor: "#E6C140", fillOpacity: 0.4 } }).addTo(rightPanelMap);
-                const cerradoPattern = L.geoJson(null, { renderer: svgRenderer, style: { color: "transparent", fillColor: "url(#cerrado-pattern-min)", fillOpacity: 0.6 } }).addTo(rightPanelMap);
-                const atlanticLayer = L.geoJson(null, { renderer: svgRenderer, style: { color: "transparent", fillColor: "#287f5e", fillOpacity: 0.1 } }).addTo(rightPanelMap);
-                const atlanticPattern = L.geoJson(null, { renderer: svgRenderer, style: { color: "transparent", fillColor: "url(#tree-pattern-min)", fillOpacity: 0.6 } }).addTo(rightPanelMap);
+                const pampasLayer = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "#3b7ba5", fillOpacity: 0.3 } }).addTo(rightPanelMap);
+                const pampasPattern = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "url(#pampa-pattern-min)", fillOpacity: 0.6 } }).addTo(rightPanelMap);
+                const cerradoLayer = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "#E6C140", fillOpacity: 0.4 } }).addTo(rightPanelMap);
+                const cerradoPattern = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "url(#cerrado-pattern-min)", fillOpacity: 0.6 } }).addTo(rightPanelMap);
+                const atlanticLayer = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "#287f5e", fillOpacity: 0.1 } }).addTo(rightPanelMap);
+                const atlanticPattern = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: "transparent", fillColor: "url(#tree-pattern-min)", fillOpacity: 0.6 } }).addTo(rightPanelMap);
 
                 maskLayer = L.polygon(maskPaths, {
+                    interactive: false,
                     color: "transparent",
                     fillColor: "#000000",
                     fillOpacity: 0.6,
-                    pointerEvents: "none",
                     fillRule: 'evenodd'
                 }).addTo(rightPanelMap);
 
@@ -873,9 +910,9 @@ $(document).ready(function() {
                         }
                     }
 
-                    L.geoJson(prData, { style: { color: "#1E7552", weight: 2, fillOpacity: 0, clickable: false } }).addTo(rightPanelMap);
-                    L.geoJson(scData, { style: { color: "#FF0000", weight: 2, fillOpacity: 0, clickable: false } }).addTo(rightPanelMap);
-                    L.geoJson(rsData, { style: { color: "#FFFF00", weight: 2, fillOpacity: 0, clickable: false } }).addTo(rightPanelMap);
+                    L.geoJson(prData, { interactive: false, style: { color: "#1E7552", weight: 2, fillOpacity: 0 } }).addTo(rightPanelMap);
+                    L.geoJson(scData, { interactive: false, style: { color: "#FF0000", weight: 2, fillOpacity: 0 } }).addTo(rightPanelMap);
+                    L.geoJson(rsData, { interactive: false, style: { color: "#FFFF00", weight: 2, fillOpacity: 0 } }).addTo(rightPanelMap);
 
                     [prData, scData, rsData].forEach(d => {
                         d.features.forEach(f => {
@@ -952,7 +989,7 @@ $(document).ready(function() {
                     }
                 });
 
-                if (draftLocationMarkers.length === 0) {
+                if (!draftLocationMarker) {
                     addDraftMarker(lat, lng);
                 }
             } else {
@@ -1271,16 +1308,16 @@ $(document).ready(function() {
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                alert(animalId ? 'Espécie atualizada com sucesso!' : 'Espécie salva com sucesso!');
+                systemAlert(animalId ? 'Espécie atualizada com sucesso!' : 'Espécie salva com sucesso!', 'success');
                 resetForm();
                 loadAnimals();
             } else {
-                alert('Erro ao salvar espécie: ' + formatErrorMessage(data, 'Tente novamente.'));
+                systemAlert('Erro ao salvar espécie: ' + formatErrorMessage(data, 'Tente novamente.'), 'error');
             }
         })
         .catch(err => {
             console.error('Erro na requisição:', err);
-            alert('Erro ao salvar espécie: ' + (err.message || 'Falha de comunicação com o servidor.'));
+            systemAlert('Erro ao salvar espécie: ' + (err.message || 'Falha de comunicação com o servidor.'), 'error');
         });
     });
 
@@ -1407,6 +1444,11 @@ $(document).ready(function() {
                       <h6 class="fst-italic text-muted small mb-1">Descrição / Hábitos</h6>
                       <p class="mb-0 small text-light" style="line-height: 1.5; text-align: justify;">${animal.habitos || 'Descrição detalhada não disponível.'}</p>
                   </div>
+                  <div class="d-flex justify-content-end mt-3">
+                    <a class="btn btn-sm btn-outline-secondary rounded-pill px-3" href="https://salve.icmbio.gov.br/" target="_blank" rel="noopener noreferrer" title="Abrir ficha no SALVE/ICMBio">
+                      <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>Fonte
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1414,6 +1456,7 @@ $(document).ready(function() {
         `;
 
         $('#modalAnimalName').text(animal.nome_comum).css('color', statusColor);
+        if (typeof favModalButtons === 'function') $('#modalAnimalName').append(' ', favModalButtons(animal));
         $('#modalBody').html(html);
 
         if (isAdmin) {
@@ -1523,7 +1566,7 @@ $(document).ready(function() {
 
     function handleSalveFileSelection(file) {
         if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') {
-            alert('Por favor, selecione um arquivo de planilha .csv válido.');
+            systemAlert('Por favor, selecione um arquivo de planilha .csv válido.', 'warning');
             return;
         }
 

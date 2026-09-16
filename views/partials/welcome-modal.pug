@@ -1,0 +1,1011 @@
+//- ============================================================================
+//- WelcomeModal — Tela de boas-vindas / "Sobre o projeto" (FULL-SCREEN)
+//- Componente em arquivo único: <style> + markup + <script> (sem dependências,
+//- só usa o Leaflet global p/ o preview, com fallback se indisponível).
+//- Tema: reaproveita EXATAMENTE o design system do app (dark #23222B/#1F1E26/
+//- #2B2A33/#121212, azul #1a5fb4, laranja #FFAA44, borda #3B3A48, raio 12px,
+//- fonte 'Segoe UI'/Roboto/Helvetica/Arial). Nenhuma cor ou fonte nova.
+//- Layout: coluna única centralizada — hero no topo, preview FUNCIONAL do
+//- mapa real no MEIO da página (mesmos tiles/visão do original, com pan/zoom)
+//- e seções abaixo. Preview usa os mesmos tiles dark do app (o navegador
+//- já tem em cache).
+//- Uso: incluído uma vez em layouts/main.pug. Abre sozinho no 1º acesso,
+//- respeita o cookie de sessão "hideWelcomeScreen" e reabre via #about-btn.
+//- ============================================================================
+
+//- ----------------------------------------------------------------------------
+//- 1) CSS isolado do modal (tudo prefixado com #welcome-overlay para não vazar)
+//- ----------------------------------------------------------------------------
+style.
+  #welcome-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    background-color: #23222B;
+    opacity: 0;
+    transition: opacity 0.22s ease;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  #welcome-overlay.is-open { opacity: 1; }
+  #welcome-overlay.is-closing { opacity: 0; }
+  /* Layout full-screen em coluna única centralizada */
+  #welcome-overlay .welcome-layout {
+    display: block;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  #welcome-overlay.is-open .welcome-layout { opacity: 1; transform: translateY(0); }
+  #welcome-overlay.is-closing .welcome-layout { opacity: 0; transform: translateY(12px); }
+  /* Faixa de conteúdo rolável */
+  #welcome-overlay .welcome-scroll {
+    height: 100%;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+    background-color: #23222B;
+    color: #E8E8EC;
+  }
+  #welcome-overlay .welcome-scroll:focus { outline: none; }
+  #welcome-overlay .welcome-scroll:focus-visible {
+    outline: 2px solid #1a5fb4;
+    outline-offset: -2px;
+  }
+  /* Miolo centralizado (largura confortável de leitura) */
+  #welcome-overlay .welcome-inner {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 32px 0 32px;
+  }
+  /* Preview do mapa NO MEIO da página (faixa com altura fixa) */
+  #welcome-overlay .welcome-preview {
+    position: relative;
+    height: 380px;
+    border-radius: 12px;
+    border: 1px solid #3B3A48;
+    overflow: hidden;
+    margin: 4px 0 8px 0;
+    background: #121118;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  }
+  #welcome-overlay .welcome-preview-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 30% 20%, #2B2A33 0%, #121118 70%);
+    transition: opacity 0.4s ease;
+  }
+  /* Some assim que o 1º tile carrega (nunca cobre o mapa pronto) */
+  #welcome-overlay .welcome-preview-fallback.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  #welcome-overlay .welcome-preview-fallback img {
+    height: 140px;
+    width: auto;
+    opacity: 0.9;
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.7));
+  }
+  #welcome-overlay #welcome-map-preview {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+  }
+  /* Sombra sobre o mapa p/ dar profundidade (não intercepta clique) */
+  #welcome-overlay .welcome-preview-scrim {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(to top, rgba(18, 17, 24, 0.6) 0%, rgba(18, 17, 24, 0) 28%);
+  }
+  /* Selo "prévia ao vivo" sobre o mapa */
+  #welcome-overlay .welcome-live-badge {
+    position: absolute;
+    left: 18px;
+    bottom: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid #3B3A48;
+    background-color: rgba(35, 34, 43, 0.9);
+    color: #E8E8EC;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+  #welcome-overlay .welcome-live-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background-color: #FFAA44;
+    animation: welcome-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes welcome-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.8); }
+  }
+  /* Botão X sempre visível (sobre o preview) */
+  #welcome-overlay .welcome-close-x {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 3;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid #3B3A48;
+    background-color: rgba(35, 34, 43, 0.92);
+    color: #E8E8EC;
+    font-size: 17px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  #welcome-overlay .welcome-close-x:hover,
+  #welcome-overlay .welcome-close-x:focus-visible {
+    background-color: #3B3A48;
+    color: #FFFFFF;
+    outline: 2px solid #1a5fb4;
+    outline-offset: 2px;
+  }
+  /* Hero / cabeçalho */
+  #welcome-overlay .welcome-hero { text-align: center; margin-bottom: 8px; }
+  #welcome-overlay .welcome-logo {
+    height: 112px;
+    width: auto;
+    margin-bottom: 14px;
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.7));
+  }
+  #welcome-overlay .welcome-eyebrow {
+    margin: 0 0 8px 0;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #FFAA44;
+  }
+  #welcome-overlay .welcome-title {
+    margin: 0 0 10px 0;
+    font-size: 2.4rem;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #FFFFFF;
+  }
+  #welcome-overlay .welcome-subtitle {
+    margin: 0 auto;
+    max-width: 56ch;
+    font-size: 1.1rem;
+    font-style: italic;
+    color: #A09FA9;
+  }
+  /* Sumário âncora (navegável por teclado) */
+  #welcome-overlay .welcome-toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin: 20px 0 4px 0;
+    padding: 0;
+    list-style: none;
+  }
+  #welcome-overlay .welcome-toc a {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid #3B3A48;
+    background-color: #2B2A33;
+    color: #C0BFC8;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: border-color 0.2s ease, color 0.2s ease;
+  }
+  #welcome-overlay .welcome-toc a:hover,
+  #welcome-overlay .welcome-toc a:focus-visible {
+    border-color: #1a5fb4;
+    color: #FFFFFF;
+    outline: 2px solid #1a5fb4;
+    outline-offset: 2px;
+  }
+  /* Seções bem espaçadas + hierarquia clara */
+  #welcome-overlay .welcome-section { padding: 24px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+  #welcome-overlay .welcome-section:last-of-type { border-bottom: none; }
+  #welcome-overlay .welcome-section h3 {
+    margin: 0 0 4px 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #FFAA44;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  #welcome-overlay .welcome-section .welcome-kicker {
+    margin: 0 0 12px 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #8C8B96;
+  }
+  #welcome-overlay .welcome-section p {
+    margin: 0 0 12px 0;
+    font-size: 0.95rem;
+    line-height: 1.65;
+    color: #C0BFC8;
+  }
+  #welcome-overlay .welcome-section p:last-child { margin-bottom: 0; }
+  /* Cards internos no padrão do app (borda sutil #3B3A48 + sombra) */
+  #welcome-overlay .welcome-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+  }
+  #welcome-overlay .welcome-card {
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid #3B3A48;
+    background-color: #1F1E26;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  }
+  #welcome-overlay .welcome-card i {
+    font-size: 1.3rem;
+    color: #FFAA44;
+    margin-bottom: 8px;
+  }
+  #welcome-overlay .welcome-card strong { display: block; margin-bottom: 4px; font-size: 0.9rem; color: #FFFFFF; }
+  #welcome-overlay .welcome-card span { font-size: 0.82rem; line-height: 1.5; color: #A09FA9; }
+  #welcome-overlay .welcome-list { margin: 12px 0 0 0; padding-left: 20px; color: #C0BFC8; font-size: 0.93rem; line-height: 1.7; }
+  #welcome-overlay .welcome-list li { margin-bottom: 6px; }
+  #welcome-overlay .welcome-list li::marker { color: #FFAA44; }
+  /* Chips de bioma / badges de extinção: mesmas cores da legenda do mapa */
+  #welcome-overlay .welcome-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  #welcome-overlay .welcome-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 16px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  }
+  /* Bloco final: preferência + ação (dentro do scroll, após todo o texto) */
+  #welcome-overlay .welcome-final {
+    margin: 8px 0 0 0;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #3B3A48;
+    background-color: #1F1E26;
+    text-align: center;
+  }
+  #welcome-overlay .welcome-hide-label {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    font-size: 0.88rem;
+    color: #C0BFC8;
+    cursor: pointer;
+    text-align: left;
+  }
+  #welcome-overlay .welcome-hide-label input {
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+    flex-shrink: 0;
+    accent-color: #1a5fb4;
+    cursor: pointer;
+  }
+  #welcome-overlay .welcome-close-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 34px;
+    border-radius: 20px;
+    border: none;
+    background-color: #1a5fb4;
+    color: #FFFFFF;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: filter 0.2s ease, transform 0.15s ease;
+  }
+  #welcome-overlay .welcome-close-btn:hover { filter: brightness(1.15); }
+  #welcome-overlay .welcome-close-btn:focus-visible { outline: 2px solid #FFAA44; outline-offset: 2px; }
+  #welcome-overlay .welcome-close-btn:active { transform: scale(0.98); }
+  #welcome-overlay .welcome-end-space { height: 28px; }
+  /* Indicador de "há mais conteúdo": fade + seta flutuante (na coluna) */
+  #welcome-overlay .welcome-fade {
+    position: sticky;
+    bottom: 0;
+    height: 56px;
+    margin: 0 -32px;
+    padding: 0 32px;
+    background: linear-gradient(to bottom, rgba(35, 34, 43, 0) 0%, #23222B 75%);
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  #welcome-overlay .welcome-fade.is-hidden { opacity: 0; }
+  #welcome-overlay .welcome-scroll-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    z-index: 2;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid #3B3A48;
+    background-color: #1a5fb4;
+    color: #FFFFFF;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+    animation: welcome-bounce 1.8s ease-in-out infinite;
+    transition: opacity 0.2s ease, background-color 0.2s ease;
+  }
+  #welcome-overlay .welcome-scroll-hint.is-hidden { opacity: 0; pointer-events: none; animation: none; }
+  #welcome-overlay .welcome-scroll-hint:hover { background-color: #1a5fb4; filter: brightness(1.2); }
+  #welcome-overlay .welcome-scroll-hint:focus-visible { outline: 2px solid #FFAA44; outline-offset: 2px; }
+  @keyframes welcome-bounce {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(5px); }
+  }
+  /* Responsivo: faixa do mapa mais baixa + miolo com menos respiro */
+  @media (max-width: 860px) {
+    #welcome-overlay .welcome-inner { padding: 28px 18px 0 18px; }
+    #welcome-overlay .welcome-preview { height: 260px; }
+    #welcome-overlay .welcome-live-badge { left: 12px; bottom: 10px; }
+    #welcome-overlay .welcome-fade { margin: 0 -18px; padding: 0 18px; }
+  }
+  @media (max-width: 576px) {
+    #welcome-overlay .welcome-logo { height: 88px; }
+    #welcome-overlay .welcome-title { font-size: 1.7rem; }
+    #welcome-overlay .welcome-cards { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #welcome-overlay,
+    #welcome-overlay .welcome-layout,
+    #welcome-overlay .welcome-scroll-hint,
+    #welcome-overlay .welcome-live-dot { transition: none; animation: none; }
+  }
+
+//- ----------------------------------------------------------------------------
+//- 2) Markup full-screen: conteúdo + preview ao vivo (textos mantidos)
+//- ----------------------------------------------------------------------------
+#welcome-overlay.welcome-overlay.d-none(
+  aria-hidden="true"
+  data-welcome-overlay
+)
+  .welcome-layout
+    #welcome-scroll.welcome-scroll(
+      tabindex="0"
+      role="region"
+      aria-label="Conteúdo sobre o projeto"
+    )
+      .welcome-inner
+        header.welcome-hero
+          img.welcome-logo(
+            src="/assets/img/logotipo.png"
+            alt="Logotipo do Mapa de Espécies"
+          )
+          p.welcome-eyebrow Boas-vindas
+          h2#welcome-title.welcome-title Sobre o projeto
+          p.welcome-subtitle
+            | Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do
+            | eiusmod tempor incididunt.
+
+        //- Preview do mapa NO MEIO da página (igual ao original e funcional)
+        .welcome-preview(role="region", aria-label="Prévia interativa do mapa")
+          .welcome-preview-fallback
+            img(src="/assets/img/logotipo.png", alt="")
+          #welcome-map-preview
+          .welcome-preview-scrim
+          span.welcome-live-badge
+            span.welcome-live-dot
+            | Prévia ao vivo do mapa
+
+        //- Sumário por âncoras (ajuda a navegar no texto longo)
+        nav(aria-label="Sumário")
+          ul.welcome-toc
+            li: a(href="#w-sec-sobre") Sobre o projeto
+            li: a(href="#w-sec-como") Como funciona
+            li: a(href="#w-sec-objetivos") Objetivos
+            li: a(href="#w-sec-biomas") Biomas
+            li: a(href="#w-sec-niveis") Conservação
+
+        section#w-sec-sobre.welcome-section(aria-labelledby="w-sec-sobre-t")
+          h3#w-sec-sobre-t Sobre o projeto
+          p.welcome-kicker Visão geral
+          p
+            | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+            | eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim
+            | ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut
+            | aliquip ex ea commodo consequat.
+          p
+            | Duis aute irure dolor in reprehenderit in voluptate velit esse
+            | cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat
+            | cupidatat non proident, sunt in culpa qui officia deserunt mollit
+            | anim id est laborum.
+
+        section#w-sec-como.welcome-section(aria-labelledby="w-sec-como-t")
+          h3#w-sec-como-t Como funciona
+          p.welcome-kicker Passo a passo
+          p
+            | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+            | eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim
+            | ad minim veniam, quis nostrud exercitation ullamco.
+          .welcome-cards
+            .welcome-card
+              i.fa-solid.fa-map-location-dot(aria-hidden="true")
+              strong Explore o mapa
+              span Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod.
+            .welcome-card
+              i.fa-solid.fa-magnifying-glass(aria-hidden="true")
+              strong Pesquise espécies
+              span Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod.
+            .welcome-card
+              i.fa-solid.fa-circle-info(aria-hidden="true")
+              strong Veja detalhes
+              span Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod.
+
+        section#w-sec-objetivos.welcome-section(aria-labelledby="w-sec-objetivos-t")
+          h3#w-sec-objetivos-t Objetivos
+          p.welcome-kicker O que queremos alcançar
+          p
+            | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+            | eiusmod tempor incididunt ut labore et dolore magna aliqua.
+          ul.welcome-list
+            li Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+            li Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+            li Ut enim ad minim veniam, quis nostrud exercitation ullamco.
+
+        section#w-sec-biomas.welcome-section(aria-labelledby="w-sec-biomas-t")
+          h3#w-sec-biomas-t Biomas mapeados
+          p.welcome-kicker Onde as espécies vivem
+          p
+            | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+            | eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim
+            | ad minim veniam, quis nostrud exercitation ullamco laboris.
+          .welcome-chips
+            span.welcome-chip(style="background-color: #287f5e;") Mata Atlântica
+            span.welcome-chip(style="background-color: #3b7ba5;") Pampa
+            span.welcome-chip(style="background-color: #E6C140; color: #111115;") Cerrado
+
+        section#w-sec-niveis.welcome-section(aria-labelledby="w-sec-niveis-t")
+          h3#w-sec-niveis-t Níveis de conservação
+          p.welcome-kicker Entenda as siglas
+          p
+            | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+            | eiusmod tempor incididunt ut labore et dolore magna aliqua.
+          .welcome-chips
+            span.welcome-chip(style="background-color: #FF4068;") CR
+            span.welcome-chip(style="background-color: #FF6426;") EN
+            span.welcome-chip(style="background-color: #FFA63A; color: #111115;") VU
+            span.welcome-chip(style="background-color: #217757;") NT
+            span.welcome-chip(style="background-color: #1A5FB4;") LC
+            span.welcome-chip(style="background-color: #555555;") DD
+
+        //- Bloco final exigido: checkbox de preferência + botão de fechar
+        section.welcome-section(aria-labelledby="w-sec-cta-t")
+          h3#w-sec-cta-t Pronto para começar
+          p.welcome-kicker Último passo
+          p
+            | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
+            | eiusmod tempor incididunt ut labore et dolore.
+          .welcome-final
+            label.welcome-hide-label(for="welcome-hide-checkbox")
+              input#welcome-hide-checkbox(
+                type="checkbox"
+                name="hideWelcomeScreen"
+              )
+              span Não mostrar esta tela novamente ao abrir o site
+            button#welcome-close-btn.welcome-close-btn(type="button")
+              i.fa-solid.fa-map(aria-hidden="true")
+              | Explorar o mapa
+
+        .welcome-end-space(aria-hidden="true")
+
+        //- Fade colado ao fim do scroll: indica que há mais conteúdo abaixo
+        .welcome-fade#welcome-fade(aria-hidden="true")
+
+    //- Seta flutuante: rola o conteúdo e some ao chegar no fim
+    button#welcome-scroll-hint.welcome-scroll-hint(
+      type="button"
+      aria-label="Rolar para ver mais conteúdo"
+      title="Ver mais"
+    )
+      i.fa-solid.fa-chevron-down(aria-hidden="true")
+
+    //- Botão X com aria-label (acessibilidade)
+    button#welcome-close-x.welcome-close-x(
+      type="button"
+      aria-label="Fechar tela de boas-vindas"
+      title="Fechar (Esc)"
+    )
+      i.fa-solid.fa-xmark(aria-hidden="true")
+
+//- ----------------------------------------------------------------------------
+//- 3) Lógica: auto-abertura, cookie de sessão, Esc, foco preso + preview do mapa
+//- ----------------------------------------------------------------------------
+script.
+  (function () {
+    'use strict';
+    // Chave exigida na especificação (cookie DE SESSÃO: some ao fechar o navegador).
+    var STORAGE_KEY = 'hideWelcomeScreen';
+    function welcomeGetCookie(name) {
+      try {
+        var parts = document.cookie.split(';');
+        for (var i = 0; i < parts.length; i++) {
+          var kv = parts[i].split('=');
+          if (kv[0] && kv[0].trim() === name) return decodeURIComponent((kv[1] || '').trim());
+        }
+      } catch (e) {}
+      return '';
+    }
+    function welcomeSetSessionCookie(name, value) {
+      try {
+        if (value == null) document.cookie = name + '=;path=/;SameSite=Lax;expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        else document.cookie = name + '=' + encodeURIComponent(value) + ';path=/;SameSite=Lax';
+      } catch (e) {}
+    }
+    var ANIM_MS = 230;
+    // Mesmos tiles dark do mapa principal (o navegador reaproveita o cache).
+    var PREVIEW_TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_3l5t_1_889f4489a3fb5fb5051816e3';
+    var PREVIEW_TILE_FALLBACK_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+    // Tour cinematográfico do preview (Sul do Brasil).
+    var PREVIEW_TOUR = [
+      { lat: -25.4284, lng: -49.2733 },
+      { lat: -27.5954, lng: -48.5480 },
+      { lat: -30.0346, lng: -51.2177 }
+    ];
+    var PREVIEW_TOUR_MS = 6000;
+
+    var overlay, scrollEl, closeX, closeBtn, checkbox, hint, fade, lastFocused;
+    var previewMap = null, tourTimer = null, tourIdx = 0, previewStarted = false, previewRetries = 0;
+
+    function $(id) { return document.getElementById(id); }
+
+    function isOpen() {
+      return overlay && !overlay.classList.contains('d-none');
+    }
+
+    // Seletores focáveis para o "focus trap" (acessibilidade).
+    // O preview é interativo: os botões de zoom entram na ordem de Tab.
+    function focusables() {
+      return Array.prototype.slice.call(
+        overlay.querySelectorAll(
+          'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter(function (el) { return el.offsetParent !== null; });
+    }
+
+    // --- Preview ao vivo: o MESMO mapa original (tiles, centro e zoom
+    // iniciais), totalmente funcional: arrastar, duplo-clique, botões de
+    // zoom e toque. Só o scroll do mouse fica desligado de propósito para
+    // não sequestrar a rolagem da página; o tour para no 1º toque do usuário.
+    var PREVIEW_CENTER = { lat: -27.5, lng: -51.5 };
+    var PREVIEW_ZOOM = 6;
+    var tourStoppedByUser = false;
+    function initPreview() {
+      if (previewStarted) return;
+      // Leaflet ainda carregando (CDN lento)? Tenta de novo enquanto aberto.
+      if (typeof L === 'undefined') {
+        if (isOpen() && previewRetries < 20) {
+          previewRetries++;
+          setTimeout(initPreview, 500);
+        }
+        return;
+      }
+      previewStarted = true;
+      var el = $('welcome-map-preview');
+      if (!el) return;
+      try {
+        previewMap = L.map(el, {
+          center: [PREVIEW_CENTER.lat, PREVIEW_CENTER.lng],
+          zoom: PREVIEW_ZOOM,
+          minZoom: 5,
+          zoomControl: true,
+          attributionControl: false,
+          dragging: true,
+          scrollWheelZoom: false,
+          doubleClickZoom: true,
+          boxZoom: true,
+          keyboard: false,
+          tap: true,
+          zoomAnimation: true
+        });
+        var baseTiles = L.tileLayer(PREVIEW_TILE_URL, { maxZoom: 19, subdomains: 'abcd', errorTileUrl: PREVIEW_TILE_FALLBACK_URL }).addTo(previewMap);
+        // 1º tile carregado: esconde o placeholder (nunca cobre o mapa).
+        // Se algum tile falhar, recalcula o tamanho (caso de container 0x0).
+        baseTiles.on('tileload', function () {
+          try {
+            var fb = el.parentElement && el.parentElement.querySelector('.welcome-preview-fallback');
+            if (fb) fb.classList.add('is-hidden');
+          } catch (e) {}
+        });
+        baseTiles.on('tileerror', function () {
+          try { previewMap.invalidateSize(); } catch (e) {}
+        });
+        loadPreviewZonas();
+        // 1ª interação física do usuário cancela o tour (entrega o controle).
+        previewMap.on('dragstart', stopTourForGood);
+        try {
+          el.addEventListener('mousedown', stopTourForGood);
+          el.addEventListener('touchstart', stopTourForGood, { passive: true });
+          el.addEventListener('wheel', stopTourForGood, { passive: true });
+        } catch (e) {}
+        // O container sai de display:none no meio de animação + fontes que
+        // ainda carregam: o tamanho muda depois do init e parte dos tiles
+        // fica sem renderizar (faixa cinza). Recalcula várias vezes e
+        // observa mudanças futuras de tamanho.
+        function refreshPreviewSize() {
+          try { if (previewMap) previewMap.invalidateSize(); } catch (e) {}
+        }
+        [80, 300, 700, 1400, 2500].forEach(function (ms) {
+          setTimeout(function () { try { if (isOpen()) refreshPreviewSize(); } catch (e) {} }, ms);
+        });
+        try {
+          if (typeof ResizeObserver !== 'undefined') {
+            var previewRO = new ResizeObserver(function () { refreshPreviewSize(); });
+            previewRO.observe(el);
+          }
+        } catch (e) {}
+        try {
+          if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function () { refreshPreviewSize(); }).catch(function () {});
+          }
+        } catch (e) {}
+        startTour();
+      } catch (e) { previewMap = null; }
+    }
+
+    // Zonas de preservação no preview (mesmas cores do mapa principal).
+    // Leve de propósito: só contorno + preenchimento, sem labels/máscara.
+    function loadPreviewZonas() {
+      loadPreviewBase();
+    }
+
+    // Réplica do mapa original no preview: biomas (cor + textura),
+    // máscara fora do Sul, contornos dos estados, zonas, animais e ONGs.
+    // Tudo não-interativo e com limite de marcadores (é só uma prévia).
+    var PREVIEW_STATUS_COLORS = { ex: '#403E4C', ew: '#831F34', cr: '#FF4068', en: '#ff6426', vu: '#FFA63A', nt: '#217757', lc: '#1a5fb4', dd: '#555555' };
+    function previewStatusColor(sigla) {
+      var s = String(sigla || 'dd').toLowerCase();
+      return PREVIEW_STATUS_COLORS[s] || '#555555';
+    }
+    function injectPreviewPatterns() {
+      try {
+        var svg = document.querySelector('#welcome-map-preview svg');
+        if (!svg) return;
+        var defs = svg.querySelector('defs') || svg.insertBefore(document.createElementNS('http://www.w3.org/2000/svg', 'defs'), svg.firstChild);
+        var patterns = [
+          { id: 'tree-pattern-wel', img: '/svg/mataatlantica.png', size: 100, icons: [[10,10,40],[60,50,30]] },
+          { id: 'pampa-pattern-wel', img: '/svg/pampa.png', size: 80, icons: [[10,10,35],[45,40,25]] },
+          { id: 'cerrado-pattern-wel', img: '/svg/cerrado.png', size: 90, icons: [[10,10,40],[55,45,30]] }
+        ];
+        patterns.forEach(function (p) {
+          try {
+            if (svg.querySelector('#' + p.id)) return;
+            var pat = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+            pat.setAttribute('id', p.id);
+            pat.setAttribute('patternUnits', 'userSpaceOnUse');
+            pat.setAttribute('width', p.size);
+            pat.setAttribute('height', p.size);
+            p.icons.forEach(function (icon) {
+              var img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+              img.setAttributeNS('http://www.w3.org/1999/xlink', 'href', p.img);
+              img.setAttribute('x', icon[0]);
+              img.setAttribute('y', icon[1]);
+              img.setAttribute('width', icon[2]);
+              img.setAttribute('height', icon[2]);
+              img.setAttribute('opacity', '0.7');
+              pat.appendChild(img);
+            });
+            defs.appendChild(pat);
+          } catch (e) {}
+        });
+      } catch (e) {}
+    }
+    function loadPreviewBase() {
+      if (!previewMap || typeof fetch === 'undefined') return;
+      var svgRenderer = null;
+      try { svgRenderer = L.svg({ padding: 0 }); } catch (e) { return; }
+      var pampas = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: 'transparent', fillColor: '#3b7ba5', fillOpacity: 0.3 } }).addTo(previewMap);
+      var pampasPat = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: 'transparent', fillColor: 'url(#pampa-pattern-wel)', fillOpacity: 0.6 } }).addTo(previewMap);
+      var cerrado = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: 'transparent', fillColor: '#E6C140', fillOpacity: 0.4 } }).addTo(previewMap);
+      var cerradoPat = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: 'transparent', fillColor: 'url(#cerrado-pattern-wel)', fillOpacity: 0.6 } }).addTo(previewMap);
+      var atlantic = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: 'transparent', fillColor: '#287f5e', fillOpacity: 0.1 } }).addTo(previewMap);
+      var atlanticPat = L.geoJson(null, { renderer: svgRenderer, interactive: false, style: { color: 'transparent', fillColor: 'url(#tree-pattern-wel)', fillOpacity: 0.6 } }).addTo(previewMap);
+      var localMask = [[[-90, -180], [-90, 180], [90, 180], [90, -180], [-90, -180]]];
+      var mask = null;
+      try {
+        mask = L.polygon(localMask, { interactive: false, color: 'transparent', fillColor: '#000000', fillOpacity: 0.6, fillRule: 'evenodd' }).addTo(previewMap);
+      } catch (e) {}
+      function pushMaskHoles(d) {
+        try {
+          (d.features || []).forEach(function (f) {
+            if (!f.geometry) return;
+            var type = f.geometry.type;
+            var coords = f.geometry.coordinates;
+            if (type === 'Polygon') {
+              coords.forEach(function (ring) { localMask.push(ring.map(function (c) { return [c[1], c[0]]; })); });
+            } else if (type === 'MultiPolygon') {
+              coords.forEach(function (poly) { poly.forEach(function (ring) { localMask.push(ring.map(function (c) { return [c[1], c[0]]; })); }); });
+            }
+          });
+          if (mask) mask.setLatLngs(localMask);
+        } catch (e) {}
+      }
+      function getJSON(url) {
+        return fetch(url, { headers: { 'Accept': 'application/json' } }).then(function (res) { return res.ok ? res.json() : null; }).catch(function () { return null; });
+      }
+      Promise.all([
+        getJSON('/data/ATLANTIC_FOREST_LAW.json'),
+        getJSON('/data/br_pr.json'),
+        getJSON('/data/br_sc.json'),
+        getJSON('/data/br_rs.json')
+      ]).then(function (all) {
+        if (!previewMap) return;
+        var forestData = all[0], prData = all[1], scData = all[2], rsData = all[3];
+        if (forestData && window.turf) {
+          try {
+            var simplifiedForest = turf.simplify(forestData, { tolerance: 0.005, highPrecision: false });
+            atlantic.addData(simplifiedForest);
+            atlanticPat.addData(simplifiedForest);
+            var merged = simplifiedForest.features[0];
+            for (var i = 1; i < simplifiedForest.features.length; i++) {
+              try {
+                var union = turf.union(merged, simplifiedForest.features[i]);
+                if (union) merged = union;
+              } catch (e) {}
+            }
+            var cleanForest = turf.simplify(turf.buffer(merged, 0), { tolerance: 0.003 });
+            if (rsData && rsData.features && cleanForest) {
+              var pampaDiff = turf.difference(turf.simplify(turf.buffer(rsData.features[0], 0), { tolerance: 0.003 }), cleanForest);
+              if (pampaDiff) { pampas.addData(pampaDiff); pampasPat.addData(pampaDiff); }
+            }
+            if (prData && prData.features && cleanForest) {
+              var cerradoDiff = turf.difference(turf.simplify(turf.buffer(prData.features[0], 0), { tolerance: 0.003 }), cleanForest);
+              if (cerradoDiff) { cerrado.addData(cerradoDiff); cerradoPat.addData(cerradoDiff); }
+            }
+          } catch (e) {}
+        }
+        if (prData) { try { L.geoJson(prData, { interactive: false, style: { color: '#1E7552', weight: 2, fillOpacity: 0 } }).addTo(previewMap); } catch (e) {} pushMaskHoles(prData); }
+        if (scData) { try { L.geoJson(scData, { interactive: false, style: { color: '#FF0000', weight: 2, fillOpacity: 0 } }).addTo(previewMap); } catch (e) {} pushMaskHoles(scData); }
+        if (rsData) { try { L.geoJson(rsData, { interactive: false, style: { color: '#FFFF00', weight: 2, fillOpacity: 0 } }).addTo(previewMap); } catch (e) {} pushMaskHoles(rsData); }
+        injectPreviewPatterns();
+      });
+      // Zonas de preservação (mesmas cores do mapa principal).
+      getJSON('/api/v1/zonas-preservacao/').then(function (res) {
+        if (!res || !previewMap) return;
+        var fc = (res && res.data) || res;
+        (fc.features || []).forEach(function (f) {
+          try {
+            var g = f.geometry;
+            if (!g || !g.coordinates) return;
+            var p = f.properties || {};
+            var color = (/^[#][0-9a-fA-F]{6}$/.test(p.color || '')) ? p.color : '#287f5e';
+            var polys = [];
+            if (g.type === 'MultiPolygon') polys = g.coordinates;
+            else if (g.type === 'Polygon') polys = [g.coordinates];
+            polys.forEach(function (polyCoords) {
+              var latlngs = polyCoords.map(function (ring) {
+                return ring.map(function (c) { return [c[1], c[0]]; });
+              });
+              L.polygon(latlngs, { color: color, fillColor: color, fillOpacity: 0.25, weight: 2, interactive: false }).addTo(previewMap);
+            });
+          } catch (e) {}
+        });
+      });
+      // Animais (limitado p/ leveza) e ONGs.
+      getJSON('/api/markers').then(function (data) {
+        if (!data || !data.features || !previewMap) return;
+        data.features.slice(0, 250).forEach(function (feature) {
+          try {
+            var coords = feature.geometry && feature.geometry.coordinates;
+            if (!coords || coords.length < 2) return;
+            var p = feature.properties || {};
+            var borderColor = previewStatusColor(p.nivel_sigla);
+            var iconSrc = p.icone || '/assets/img/logotipo.png';
+            L.marker([coords[1], coords[0]], {
+              interactive: false,
+              icon: L.divIcon({
+                className: 'custom-animal-marker',
+                html: '<div class="marker-pin" style="border-color: ' + borderColor + ';"><div class="marker-avatar"><img src="' + iconSrc + '" alt=""></div></div>',
+                iconSize: [36, 36],
+                iconAnchor: [18, 18]
+              })
+            }).addTo(previewMap);
+          } catch (e) {}
+        });
+      });
+      getJSON('/api/v1/ongs/').then(function (res) {
+        if (!res || !previewMap) return;
+        var fc = (res && res.data) || res;
+        (fc.features || []).forEach(function (f) {
+          try {
+            var coords = f.geometry && f.geometry.coordinates;
+            if (!coords || coords.length < 2) return;
+            L.marker([coords[1], coords[0]], {
+              interactive: false,
+              icon: L.divIcon({
+                className: 'custom-animal-marker',
+                html: '<div class="marker-pin" style="border-color: #3498db; background-color: #1e3d59;"><i class="fa-solid fa-hand-holding-heart text-info" style="font-size: 18px;"></i></div>',
+                iconSize: [36, 36],
+                iconAnchor: [18, 18]
+              })
+            }).addTo(previewMap);
+          } catch (e) {}
+        });
+      });
+    }
+
+    function stopTourForGood() {
+      tourStoppedByUser = true;
+      stopTour();
+    }
+
+    // Tour entre capitais do Sul; pausa sozinho fora da tela / com a aba
+    // oculta / em reduced-motion / após o usuário assumir o controle.
+    function startTour() {
+      stopTour();
+      if (tourStoppedByUser) return;
+      var reduceMotion = false;
+      try { reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+      if (reduceMotion || !previewMap) return;
+      tourTimer = setInterval(function () {
+        if (!isOpen() || !previewMap) return;
+        if (document.hidden) return;
+        tourIdx = (tourIdx + 1) % PREVIEW_TOUR.length;
+        try { previewMap.flyTo([PREVIEW_TOUR[tourIdx].lat, PREVIEW_TOUR[tourIdx].lng], 7, { duration: 2.5 }); } catch (e) {}
+      }, PREVIEW_TOUR_MS);
+    }
+
+    function stopTour() {
+      if (tourTimer) { clearInterval(tourTimer); tourTimer = null; }
+    }
+
+    // --- Abertura: ignora o cookie quando forçada (botão "Sobre") ---
+    function openWelcome(opts) {
+      opts = opts || {};
+      if (isOpen()) return;
+      lastFocused = document.activeElement;
+      // Reflete a preferência salva no checkbox ao abrir.
+      try { checkbox.checked = welcomeGetCookie(STORAGE_KEY) === 'true'; } catch (e) {}
+      overlay.classList.remove('d-none');
+      // Reflow para a transição fade+slide funcionar após sair do display:none.
+      void overlay.offsetWidth;
+      overlay.classList.add('is-open');
+      overlay.classList.remove('is-closing');
+      overlay.setAttribute('aria-hidden', 'false');
+      // Trava o scroll da página de fundo enquanto o modal está aberto.
+      document.documentElement.style.overflow = 'hidden';
+      scrollEl.scrollTop = 0;
+      updateScrollHint();
+      // Preview é criado uma vez, na primeira abertura (com o layout visível).
+      initPreview();
+      try { if (previewMap) previewMap.invalidateSize(); } catch (e) {}
+      // Reaberturas (botão Sobre): layout pode ainda estar animando.
+      setTimeout(function () { try { if (isOpen() && previewMap) previewMap.invalidateSize(); } catch (e) {} }, 500);
+      // Cinto e suspensórios: quando a transição de abertura terminar,
+      // mede de novo (cobre qualquer corrida de layout restante).
+      try {
+        if (!overlay.dataset.welcomeTransitionHook) {
+          overlay.dataset.welcomeTransitionHook = '1';
+          overlay.addEventListener('transitionend', function () {
+            try { if (isOpen() && previewMap) previewMap.invalidateSize(); } catch (e) {}
+          });
+        }
+      } catch (e) {}
+      // Foco inicial dentro do modal.
+      setTimeout(function () { (closeX || scrollEl).focus(); }, 60);
+    }
+
+    // --- Fechamento com animação de saída + persistência da preferência ---
+    function closeWelcome() {
+      if (!isOpen()) return;
+      try {
+        if (checkbox.checked) welcomeSetSessionCookie(STORAGE_KEY, 'true');
+        else welcomeSetSessionCookie(STORAGE_KEY, null);
+      } catch (e) {}
+      overlay.classList.remove('is-open');
+      overlay.classList.add('is-closing');
+      setTimeout(function () {
+        overlay.classList.add('d-none');
+        overlay.classList.remove('is-closing');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.documentElement.style.overflow = '';
+        // Devolve o foco para quem abriu (botão "Sobre" ou body).
+        if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
+      }, ANIM_MS);
+    }
+
+    // Mostra/esconde o fade + seta conforme a posição do scroll.
+    function updateScrollHint() {
+      if (!scrollEl) return;
+      var rest = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+      var hasMore = rest > 24;
+      hint.classList.toggle('is-hidden', !hasMore);
+      fade.classList.toggle('is-hidden', !hasMore);
+    }
+
+    function bind() {
+      overlay = document.querySelector('[data-welcome-overlay]');
+      if (!overlay) return;
+      scrollEl = $('welcome-scroll');
+      closeX = $('welcome-close-x');
+      closeBtn = $('welcome-close-btn');
+      checkbox = $('welcome-hide-checkbox');
+      hint = $('welcome-scroll-hint');
+      fade = $('welcome-fade');
+
+      closeX.addEventListener('click', closeWelcome);
+      closeBtn.addEventListener('click', closeWelcome);
+
+      // Tecla Esc fecha; Tab fica preso dentro do modal (focus trap).
+      document.addEventListener('keydown', function (e) {
+        if (!isOpen()) return;
+        if (e.key === 'Escape') { e.preventDefault(); closeWelcome(); return; }
+        if (e.key !== 'Tab') return;
+        var items = focusables();
+        if (items.length === 0) { e.preventDefault(); return; }
+        var first = items[0];
+        var last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      });
+
+      // Seta de "ver mais" rola o conteúdo suavemente.
+      hint.addEventListener('click', function () {
+        scrollEl.scrollBy({ top: Math.round(scrollEl.clientHeight * 0.7), behavior: 'smooth' });
+      });
+      scrollEl.addEventListener('scroll', updateScrollHint, { passive: true });
+      window.addEventListener('resize', function () {
+        updateScrollHint();
+        try { if (isOpen() && previewMap) previewMap.invalidateSize(); } catch (e) {}
+      });
+
+      // Botão "Sobre" do menu lateral reabre SEMPRE (ignora preferência salva).
+      // Inclui também qualquer gatilho futuro com [data-open-welcome].
+      function forceOpen(e) {
+        if (e) e.preventDefault();
+        openWelcome({ force: true });
+      }
+      var aboutBtn = document.getElementById('about-btn');
+      if (aboutBtn) aboutBtn.addEventListener('click', forceOpen);
+      document.querySelectorAll('[data-open-welcome]').forEach(function (el) {
+        el.addEventListener('click', forceOpen);
+      });
+
+      // API global opcional para reabrir via console ou outro script.
+      window.openWelcomeModal = function () { openWelcome({ force: true }); };
+      window.closeWelcomeModal = closeWelcome;
+
+      // Abertura automática: só pula se o usuário marcou "não mostrar novamente".
+      var hidden = false;
+      try { hidden = welcomeGetCookie(STORAGE_KEY) === 'true'; } catch (e) {}
+      if (!hidden) setTimeout(function () { openWelcome(); }, 350);
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+    else bind();
+  })();

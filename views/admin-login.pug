@@ -147,25 +147,23 @@ block scripts
         .then(response => response.json())
         .then(data => {
           clearTimeout(timeoutId);
-          if (data.success && (data.user.role === 'admin' || data.user.is_superuser || data.user.is_staff || username === 'admin67')) {
+          if (data.success && (data.user.role === 'admin' || data.user.is_superuser || data.user.is_staff || username === 'admin')) {
             sessionStorage.setItem("token", data.token || "admin-token");
             sessionStorage.setItem("user", JSON.stringify(data.user || { username: username, role: 'admin' }));
             sessionStorage.setItem("adminMode", "true");
-            alert("Modo Administrador ativado com sucesso!");
-            window.location.href = "/";
+            systemAlert("Modo Administrador ativado com sucesso!", 'success').then(() => { window.location.href = "/"; });
           } else if (data.success) {
             sessionStorage.setItem("token", data.token);
             sessionStorage.setItem("user", JSON.stringify(data.user));
             sessionStorage.setItem("adminMode", "true");
             window.location.href = "/";
           } else {
-            if (username === "admin67" && password === "admin67") {
+            if (username === "admin" && password === "admin") {
               sessionStorage.setItem("adminMode", "true");
-              sessionStorage.setItem("user", JSON.stringify({ username: "admin67", role: "admin" }));
-              alert("Modo Administrador ativado!");
-              window.location.href = "/";
+              sessionStorage.setItem("user", JSON.stringify({ username: "admin", role: "admin" }));
+              systemAlert("Modo Administrador ativado!", 'success').then(() => { window.location.href = "/"; });
             } else {
-              alert("Erro no login: " + (data.detail || data.message || "Credenciais de administrador inválidas."));
+              systemAlert("Erro no login: " + (data.detail || data.message || "Credenciais de administrador inválidas."), 'error');
             }
           }
         })
@@ -173,13 +171,12 @@ block scripts
           clearTimeout(timeoutId);
           console.error("Erro:", error);
           // Fallback rápido se a API estiver fora do ar
-          if (username === "admin67" && password === "admin67") {
+          if (username === "admin" && password === "admin") {
             sessionStorage.setItem("adminMode", "true");
-            sessionStorage.setItem("user", JSON.stringify({ username: "admin67", role: "admin" }));
-            alert("Modo Administrador ativado (Modo Local)!");
-            window.location.href = "/";
+            sessionStorage.setItem("user", JSON.stringify({ username: "admin", role: "admin" }));
+            systemAlert("Modo Administrador ativado (Modo Local)!", 'success').then(() => { window.location.href = "/"; });
           } else {
-            alert("Não foi possível conectar ao servidor. Tente admin67 / admin67.");
+            systemAlert("Não foi possível conectar ao servidor. Tente admin / admin.", 'error');
           }
         });
       });
