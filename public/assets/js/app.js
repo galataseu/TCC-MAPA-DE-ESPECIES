@@ -937,14 +937,25 @@ $(document).ready(function () {
   // ÁREAS DESENHADAS PELOS ADMINS.
   // Cada animal pode ter uma área de ocorrência (polígono). O comportamento
   // esperado: sempre que a câmera mostrar essa área, o animal aparece na tela.
-  // - areaPolygonsLayer desenha as áreas, mas SÓ para ADM com "Exibir Áreas"
-  //   ativado (ver renderAreaPolygons);
-  // - refreshAreaViewport() cria um "proxy" do marcador dentro do viewport
-  //   quando a área cruza a tela mas o ponto original está fora dela — isso
-  //   vale para TODOS os usuários, mesmo sem ver o polígono.
+  // ---------------------------------------------------------------------------
+  // Posicionamento do marcador por nível de zoom.
+  // - Zoom out (zona pequena na tela): coordenada REAL cadastrada, sem ajuste.
+  // - Zoom in (zona ocupa parte significativa da viewport): marcador é
+  //   "clampado" para dentro da zona.
+  // Sempre o MESMO objeto marcador (click + contextmenu intactos — nada de
+  // elemento visual "por cima"); a troca de posição é animada (tween curto)
+  // para não pular nem piscar. Histerese por animal evita liga/desliga na
+  // borda do limiar.
   // ---------------------------------------------------------------------------
   var areaPolygonsLayer = L.layerGroup().addTo(map);
-  var areaProxyByAnimal = new Map(); // animal_id (string) -> L.marker
+  var markerByAnimal = new Map();      // animal_id (string) -> L.marker (no cluster)
+  var clampActiveByAnimal = new Map(); // animal_id -> bool (estado da histerese)
+  var clampTargetByAnimal = new Map(); // animal_id -> [lat, lng] determinístico
+  var markerTweenByAnimal = new Map(); // animal_id -> rAF id (transição em curso)
+
+  var CLAMP_MIN_ZOOM = 8;   // abaixo disso, sempre a coordenada real
+  var CLAMP_ENGAGE = 0.45;  // cobertura da viewport p/ começar a clampar
+  var CLAMP_RELEASE = 0.30; // cobertura p/ soltar e voltar à coord real
 
   function getAreaRingsOf(p) {
     var raw = p && p.area_polygon;
@@ -1001,55 +1012,177 @@ $(document).ready(function () {
     });
   }
 
+  function hashSeed01(str) {
+    var h = 5381;
+    var s = String(str == null ? '' : str);
+    for (var i = 0; i < s.length; i++) {
+      h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    }
+    return ((h >>> 0) % 10000) / 10000;
+  }
+
+  function ringBboxOf(ring) {
+    var minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (var i = 0; i < ring.length; i++) {
+      var pt = ring[i];
+      if (!pt || pt.length < 2) continue;
+      var lat = parseFloat(pt[0]);
+      var lng = parseFloat(pt[1]);
+      if (isNaN(lat) || isNaN(lng)) continue;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+    if (minLat === Infinity) return null;
+    return { minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng };
+  }
+
+  // Fração da viewport ocupada pela zona (maior eixo, limitada a 1).
+  // Ex.: 0.5 = a zona cobre metade da tela numa direção. A porta de zoom
+  // (MIN_ZOOM) já garante coord real na visão regional, então aqui a
+  // sensibilidade pode ser maior para zonas pequenas.
+  function ringsCoverageOfViewport(rings, bounds) {
+    var vLat = bounds.getNorth() - bounds.getSouth();
+    var vLng = bounds.getEast() - bounds.getWest();
+    if (!(vLat > 0) || !(vLng > 0)) return 0;
+    var cov = 0;
+    rings.forEach(function (ring) {
+      var b = ringBboxOf(ring);
+      if (!b) return;
+      cov = Math.max(cov, Math.min(1, Math.max((b.maxLat - b.minLat) / vLat, (b.maxLng - b.minLng) / vLng)));
+    });
+    return cov;
+  }
+
+  // Ponto determinístico dentro dos anéis: estável entre pans/zooms e
+  // distinto por animal (seed) mesmo quando compartilham a mesma zona —
+  // inclusive se o centroide cair dentro (o deslocamento inicial já usa a
+  // direção da seed, ~2% do tamanho da zona).
+  function anchorPointInRings(rings, seedStr) {
+    if (!rings || rings.length === 0) return null;
+    var base = rings[0];
+    var bestLen = -1;
+    rings.forEach(function (r) {
+      if (r && r.length > bestLen) { bestLen = r.length; base = r; }
+    });
+    if (!base || base.length < 3) return null;
+    var inside = function (lat, lng) {
+      for (var i = 0; i < rings.length; i++) {
+        if (isPointInsidePolygon(lat, lng, rings[i])) return true;
+      }
+      return false;
+    };
+    var b = ringBboxOf(base);
+    if (!b) return [parseFloat(base[0][0]), parseFloat(base[0][1])];
+    var cLat = (b.minLat + b.maxLat) / 2;
+    var cLng = (b.minLng + b.maxLng) / 2;
+    var span = Math.max(b.maxLat - b.minLat, b.maxLng - b.minLng) || 0.01;
+    var h = hashSeed01(seedStr);
+    for (var k = 0; k <= 60; k++) {
+      var ang = (h * Math.PI * 2) + k * 2.39996; // ângulo dourado: espalha bem
+      var rad = span * (0.02 + 0.48 * Math.sqrt(k / 60));
+      var tLat = cLat + Math.sin(ang) * rad;
+      var tLng = cLng + Math.cos(ang) * rad;
+      if (inside(tLat, tLng)) return [tLat, tLng];
+    }
+    return [parseFloat(base[0][0]), parseFloat(base[0][1])];
+  }
+
+  function realLatLngOfFeature(f) {
+    if (f && f.geometry && f.geometry.coordinates && f.geometry.coordinates.length >= 2) {
+      var lng = parseFloat(f.geometry.coordinates[0]);
+      var lat = parseFloat(f.geometry.coordinates[1]);
+      if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
+    }
+    return null;
+  }
+
+  // Move o marcador com tween curto (não remove/readiciona: sem piscar).
+  function tweenMarkerTo(marker, animalId, to) {
+    try {
+      var prev = markerTweenByAnimal.get(animalId);
+      if (prev) {
+        try { cancelAnimationFrame(prev); } catch (e) {}
+        markerTweenByAnimal.delete(animalId);
+      }
+      var from = marker.getLatLng();
+      var dLat = to[0] - from.lat;
+      var dLng = to[1] - from.lng;
+      if (Math.abs(dLat) < 1e-9 && Math.abs(dLng) < 1e-9) return;
+      var dur = 380;
+      var t0 = null;
+      var step = function (ts) {
+        if (t0 === null) t0 = ts;
+        var k = Math.min(1, (ts - t0) / dur);
+        var e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+        try {
+          marker.setLatLng([from.lat + dLat * e, from.lng + dLng * e]);
+        } catch (err) {
+          markerTweenByAnimal.delete(animalId);
+          return;
+        }
+        if (k < 1) {
+          markerTweenByAnimal.set(animalId, requestAnimationFrame(step));
+        } else {
+          markerTweenByAnimal.delete(animalId);
+          try {
+            if (markersCluster && typeof markersCluster.refreshClusters === 'function') markersCluster.refreshClusters(marker);
+          } catch (err2) {}
+        }
+      };
+      markerTweenByAnimal.set(animalId, requestAnimationFrame(step));
+    } catch (e) {}
+  }
+
   function refreshAreaViewport() {
     if (!map || !rawMarkersGeoJson || !rawMarkersGeoJson.features) return;
     var bounds;
     try { bounds = map.getBounds(); } catch (e) { return; }
+    // Porta de zoom: abaixo dela, sempre a coordenada real (visão regional).
+    var zoomOk = true;
+    try { zoomOk = map.getZoom() >= CLAMP_MIN_ZOOM; } catch (e) {}
     var seen = new Set();
-    var aliveIds = new Set();
-    rawMarkersGeoJson.features.forEach(function(f) {
-      var p = f.properties;
+    rawMarkersGeoJson.features.forEach(function (f) {
+      var p = f.properties || {};
       var animalId = String(p.animal_id || p.id);
       if (seen.has(animalId)) return;
       seen.add(animalId);
+      var marker = markerByAnimal.get(animalId);
+      if (!marker) return;
+      var real = realLatLngOfFeature(f);
+      if (!real) return;
+      var target = real;
       var rings = getAreaRingsOf(p);
-      if (rings.length === 0) return;
-      aliveIds.add(animalId);
-
-      var intersects = rings.some(function(ring) { return ringBboxIntersectsBounds(ring, bounds); });
-      var ptLat = null, ptLng = null;
-      if (f.geometry && f.geometry.coordinates && f.geometry.coordinates.length >= 2) {
-        ptLng = parseFloat(f.geometry.coordinates[0]);
-        ptLat = parseFloat(f.geometry.coordinates[1]);
-      }
-      var pointVisible = (ptLat !== null && !isNaN(ptLat) && bounds.contains([ptLat, ptLng]));
-      var existing = areaProxyByAnimal.get(animalId);
-
-      if (intersects && !pointVisible) {
-        var center = bounds.getCenter();
-        var valid = null;
-        try {
-          valid = findValidPointForAnimal(p, bounds.getSouth(), bounds.getNorth(), bounds.getWest(), bounds.getEast(), center.lat, center.lng);
-        } catch (e) { valid = null; }
-        if (!valid) return;
-        if (existing) {
-          existing.setLatLng(valid);
+      if (rings.length > 0 && zoomOk) {
+        var outside = !rings.some(function (ring) { return isPointInsidePolygon(real[0], real[1], ring); });
+        if (outside) {
+          var cov = ringsCoverageOfViewport(rings, bounds);
+          var active = clampActiveByAnimal.get(animalId) === true;
+          if (active) {
+            if (cov < CLAMP_RELEASE) active = false;
+          } else if (cov >= CLAMP_ENGAGE) {
+            active = true;
+          }
+          clampActiveByAnimal.set(animalId, active);
+          if (active) {
+            var anchor = clampTargetByAnimal.get(animalId);
+            if (!anchor) {
+              anchor = anchorPointInRings(rings, animalId + '|' + (p.nome_cientifico || ''));
+              if (anchor) clampTargetByAnimal.set(animalId, anchor);
+            }
+            if (anchor) target = anchor;
+          }
         } else {
-          var proxy = L.marker(valid, { icon: createAnimalIcon(p) });
-          proxy.on('click', function() { showDetails(p.animal_id); });
-          proxy.addTo(map);
-          areaProxyByAnimal.set(animalId, proxy);
+          clampActiveByAnimal.set(animalId, false);
         }
-      } else if (existing) {
-        map.removeLayer(existing);
-        areaProxyByAnimal.delete(animalId);
+      } else {
+        clampActiveByAnimal.set(animalId, false);
       }
-    });
-    // Remove proxies de animais que não existem mais nos dados (ex.: após reload)
-    areaProxyByAnimal.forEach(function(marker, animalId) {
-      if (!aliveIds.has(animalId) && !seen.has(animalId)) {
-        map.removeLayer(marker);
-        areaProxyByAnimal.delete(animalId);
+      var cur = null;
+      try { cur = marker.getLatLng(); } catch (e) {}
+      if (cur && (Math.abs(cur.lat - target[0]) > 1e-9 || Math.abs(cur.lng - target[1]) > 1e-9)) {
+        tweenMarkerTo(marker, animalId, target);
       }
     });
   }
@@ -1148,168 +1281,6 @@ $(document).ready(function () {
     renderAreaPolygons();
   });
 
-  function isPointInsideGeometry(lat, lng, geom) {
-    if (!geom || !window.turf) return false;
-    try {
-      const pt = turf.point([lng, lat]);
-      if (geom.type === 'FeatureCollection') {
-        for (const f of geom.features) {
-          if (turf.booleanPointInPolygon(pt, f)) return true;
-        }
-        return false;
-      }
-      return turf.booleanPointInPolygon(pt, geom);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function isPointInsideAnimalBiomes(lat, lng, p) {
-    if (!p || !p.biomas || !Array.isArray(p.biomas) || p.biomas.length === 0) {
-      return true;
-    }
-
-    let hasAtlantic = false;
-    let hasPampa = false;
-    let hasCerrado = false;
-    let knownCount = 0;
-
-    p.biomas.forEach(b => {
-      let name = '';
-      let id = null;
-      if (typeof b === 'object' && b !== null) {
-        name = (b.nome || '').toLowerCase();
-        id = b.id;
-      } else if (typeof b === 'string') {
-        name = b.toLowerCase();
-      } else if (typeof b === 'number') {
-        id = b;
-      }
-
-      if (id === 1 || name.includes('atlantic') || name.includes('atlântica') || name.includes('mata')) {
-        hasAtlantic = true;
-        knownCount++;
-      }
-      if (id === 2 || name.includes('pampa')) {
-        hasPampa = true;
-        knownCount++;
-      }
-      if (id === 3 || name.includes('cerrado')) {
-        hasCerrado = true;
-        knownCount++;
-      }
-    });
-
-    if (knownCount === 0 || (hasAtlantic && hasPampa && hasCerrado)) {
-      return true;
-    }
-
-    if (!forestGeometry && !pampaGeometry && !cerradoGeometry) {
-      return true;
-    }
-
-    if (hasAtlantic && forestGeometry && isPointInsideGeometry(lat, lng, forestGeometry)) {
-      return true;
-    }
-    if (hasPampa && pampaGeometry && isPointInsideGeometry(lat, lng, pampaGeometry)) {
-      return true;
-    }
-    if (hasCerrado && cerradoGeometry && isPointInsideGeometry(lat, lng, cerradoGeometry)) {
-      return true;
-    }
-
-    return false;
-  }
-
-  function isPointValidForAnimal(lat, lng, p, validRings) {
-    // 1. Biome Restriction
-    if (!isPointInsideAnimalBiomes(lat, lng, p)) {
-      return false;
-    }
-
-    // 2. Custom Area Polygon Restriction (if defined)
-    if (validRings && validRings.length > 0) {
-      let insideAnyRing = false;
-      for (const ring of validRings) {
-        if (isPointInsidePolygon(lat, lng, ring)) {
-          insideAnyRing = true;
-          break;
-        }
-      }
-      if (!insideAnyRing) return false;
-    }
-
-    return true;
-  }
-
-  function findValidPointForAnimal(p, minLat, maxLat, minLng, maxLng, gridLat, gridLng) {
-    const rawPolygon = p.area_polygon;
-    let validRings = [];
-
-    if (rawPolygon && Array.isArray(rawPolygon) && rawPolygon.length > 0) {
-      const rings = (Array.isArray(rawPolygon[0]) && Array.isArray(rawPolygon[0][0])) ? rawPolygon : [rawPolygon];
-      validRings = rings.filter(r => r && r.length >= 3);
-    }
-
-    // 1. Test grid point
-    if (gridLat >= minLat && gridLat <= maxLat && gridLng >= minLng && gridLng <= maxLng) {
-      if (isPointValidForAnimal(gridLat, gridLng, p, validRings)) {
-        return [gridLat, gridLng];
-      }
-    }
-
-    // 2. Sample grid across current viewport
-    const steps = 12;
-    const stepLat = (maxLat - minLat) / steps;
-    const stepLng = (maxLng - minLng) / steps;
-
-    for (let r = 1; r < steps; r++) {
-      for (let c = 1; c < steps; c++) {
-        const testLat = minLat + r * stepLat;
-        const testLng = minLng + c * stepLng;
-        if (isPointValidForAnimal(testLat, testLng, p, validRings)) {
-          return [testLat, testLng];
-        }
-      }
-    }
-
-    // 3. Check vertices of custom area polygon inside viewport
-    if (validRings.length > 0) {
-      for (const ring of validRings) {
-        for (let i = 0; i < ring.length; i++) {
-          const vLat = parseFloat(ring[i][0]);
-          const vLng = parseFloat(ring[i][1]);
-          if (vLat >= minLat && vLat <= maxLat && vLng >= minLng && vLng <= maxLng) {
-            if (isPointValidForAnimal(vLat, vLng, p, validRings)) {
-              return [vLat, vLng];
-            }
-          }
-        }
-      }
-    }
-
-    // 4. Turf pointOnFeature for custom area polygon OR biome geometries inside viewport
-    if (window.turf) {
-      if (validRings.length > 0) {
-        for (const ring of validRings) {
-          const poly = areaPolygonToTurf(ring);
-          if (poly) {
-            const pof = turf.pointOnFeature(poly);
-            const pofLat = pof.geometry.coordinates[1];
-            const pofLng = pof.geometry.coordinates[0];
-            if (pofLat >= minLat && pofLat <= maxLat && pofLng >= minLng && pofLng <= maxLng) {
-              if (isPointValidForAnimal(pofLat, pofLng, p, validRings)) {
-                return [pofLat, pofLng];
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return null;
-  }
-
   /**
    * Converte bbox em chave de cache (arredondada a 1 decimal para maior hit rate).
    */
@@ -1354,7 +1325,10 @@ $(document).ready(function () {
         markersData.push(p);
 
         const marker = createMarkerFromFeature(feature);
-        if (marker) newMarkers.push(marker);
+        if (marker) {
+          markerByAnimal.set(String(id), marker);
+          newMarkers.push(marker);
+        }
       });
 
       if (newMarkers.length > 0) {
@@ -1395,7 +1369,10 @@ $(document).ready(function () {
         markersData.push(p);
 
         const marker = createMarkerFromFeature(feature);
-        if (marker) markers.push(marker);
+        if (marker) {
+          markerByAnimal.set(String(feature.properties.animal_id), marker);
+          markers.push(marker);
+        }
       });
 
       markersCluster.addLayers(markers);
@@ -1422,8 +1399,13 @@ $(document).ready(function () {
     _allFeatures.clear();
     markersData.length = 0;
     markersCluster.clearLayers();
-    areaProxyByAnimal.forEach(function(marker) { map.removeLayer(marker); });
-    areaProxyByAnimal.clear();
+    markerByAnimal.clear();
+    clampActiveByAnimal.clear();
+    clampTargetByAnimal.clear();
+    markerTweenByAnimal.forEach(function (rafId) {
+      try { cancelAnimationFrame(rafId); } catch (e) {}
+    });
+    markerTweenByAnimal.clear();
     if (typeof areaPolygonsLayer !== 'undefined' && areaPolygonsLayer) areaPolygonsLayer.clearLayers();
     loadMarkers();
   }
@@ -3548,24 +3530,23 @@ $(document).ready(function () {
     if (latVal) formData.set('lat', latVal);
     if (lngVal) formData.set('lng', lngVal);
 
-    // Se desenhou área mas não clicou no mapa, ancora o ponto no centroide
-    // da área para ponto e polígono não ficarem desconectados.
+    // Se desenhou área mas não clicou no mapa, ancora o ponto DENTRO da área
+    // para ponto e polígono não ficarem desconectados. O ponto é sorteado de
+    // forma determinística por animal (seed = nome científico): dois animais
+    // na mesma zona NÃO caem na mesma coordenada (era o centroide único).
     try {
       var polyHidden = $('#modal-area-polygon-json-hidden').val();
       var coordHidden = $('#modal-coordenadas-json-hidden').val();
       if (polyHidden && polyHidden.trim().length > 0 && (!coordHidden || coordHidden.trim().length === 0)) {
         var polyPayload = JSON.parse(polyHidden);
-        var polyRings = (polyPayload && polyPayload.polygons) || [];
-        var firstRing = null;
-        for (var ri = 0; ri < polyRings.length; ri++) {
-          if (polyRings[ri] && polyRings[ri].length >= 3) { firstRing = polyRings[ri]; break; }
-        }
-        if (firstRing) {
-          var centroid = getPolygonCentroid(firstRing);
-          if (centroid) {
-            formData.set('lat', String(centroid[0]));
-            formData.set('lng', String(centroid[1]));
-            formData.set('coordenadas_json', JSON.stringify([{ lat: centroid[0], lng: centroid[1] }]));
+        var polyRings = ((polyPayload && polyPayload.polygons) || []).filter(function (r) { return r && r.length >= 3; });
+        if (polyRings.length > 0) {
+          var seedName = formData.get('nome_cientifico') || String(Date.now());
+          var anchor = anchorPointInRings(polyRings, 'submit|' + seedName);
+          if (anchor) {
+            formData.set('lat', String(anchor[0]));
+            formData.set('lng', String(anchor[1]));
+            formData.set('coordenadas_json', JSON.stringify([{ lat: anchor[0], lng: anchor[1] }]));
           }
         }
       }
