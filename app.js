@@ -36,12 +36,12 @@ app.use('/api/v1', v1Router);
 
 // Rota para a página de animais
 app.get('/animais', function(req, res) {
-  res.render('animais', { title: 'Espécies Ameaçadas - Lista' });
+  res.render('animais', { title: 'Gralha dos Ventos' });
 });
 
 // Rota para a página de login de administração
 app.get('/admin/login', function(req, res) {
-  res.render('admin-login', { title: 'Login Administrador - Mapa de Espécies' });
+  res.render('admin-login', { title: 'Gralha dos Ventos' });
 });
 
 // catch 404 and forward to error handler

@@ -4,6 +4,10 @@ $(document).ready(function() {
     let rightPanelMarker = null;
     let maskLayer = null;
     let maskPaths = [[[-90, -180], [-90, 180], [90, 180], [90, -180], [-90, -180]]];
+    // Contornos precisos dos biomas (turf, iguais aos desenhados no mapa).
+    // Preenchido no initRightPanelMap; "Usar bioma" prefere isto ao invés
+    // dos polígonos simplificados da API.
+    let rightPanelPreciseBiomeAreas = null;
 
     // 1. Controle de Acesso por Perfil (Admin vs Usuário Comum)
     const isAdmin = sessionStorage.getItem("adminMode") === "true";
@@ -810,8 +814,45 @@ $(document).ready(function() {
     });
 
     // Usar bioma inteiro como área de ocorrência (sem desenhar manualmente).
-    // Carrega o polígono de referência do bioma como área(s) editável(eis):
-    // depois dá para editar/excluir via botão direito, desfazer (Ctrl+Z) etc.
+    // Usa os contornos PRECISOS calculados via turf (iguais aos desenhados no
+    // mapa); só cai p/ os polígonos simplificados da API se o mapa ainda não
+    // terminou de calcular. Depois dá para editar/excluir via botão direito.
+    const BIOME_AREA_META = {
+        mata_atlantica: { nome: 'Mata Atlântica', color: '#1B5E20' },
+        pampa: { nome: 'Pampa', color: '#9C7A2E' },
+        cerrado: { nome: 'Cerrado', color: '#B8912E' }
+    };
+    // GeoJSON ([lng,lat]) -> anéis [lat,lng] (só anel externo: buraco não vira área).
+    function geoJsonToLatLngRings(geo) {
+        const rings = [];
+        if (!geo) return rings;
+        const collect = (g) => {
+            if (!g) return;
+            if (g.type === 'FeatureCollection') (g.features || []).forEach(collect);
+            else if (g.type === 'Feature') collect(g.geometry);
+            else if (g.type === 'Polygon') { if (g.coordinates && g.coordinates[0]) rings.push(g.coordinates[0]); }
+            else if (g.type === 'MultiPolygon') (g.coordinates || []).forEach(p => { if (p && p[0]) rings.push(p[0]); });
+        };
+        collect(geo);
+        return rings
+            .map(ring => ring.map(c => [parseFloat(c[1]), parseFloat(c[0])]).filter(pt => !isNaN(pt[0]) && !isNaN(pt[1])))
+            .filter(ring => ring.length >= 3);
+    }
+    // A Mata da lei é nacional: recorta p/ PR+SC+RS p/ não vazar p/ fora do Sul.
+    function clipForestToSouth(cleanForest, prData, scData, rsData) {
+        try {
+            if (!window.turf || !cleanForest) return null;
+            let south = null;
+            [prData, scData, rsData].forEach(d => {
+                const f = d && d.features && d.features[0];
+                if (!f) return;
+                const simp = turf.simplify(turf.buffer(f, 0), { tolerance: 0.003 });
+                south = south ? (turf.union(south, simp) || south) : simp;
+            });
+            if (!south) return null;
+            return turf.intersect(cleanForest, south) || null;
+        } catch (e) { return null; }
+    }
     let biomasAreasCache = null;
     function fetchBiomasAreas() {
         if (biomasAreasCache) return Promise.resolve(biomasAreasCache);
@@ -842,31 +883,40 @@ $(document).ready(function() {
             $('#bioma-selector').val(selectedIds);
         }
     }
+    function applyBiomeAreaRings(key, nome, color, rings) {
+        savePolygonHistoryState();
+        if (color) {
+            polygonColor = color;
+            try { $('#polygon-color-picker').val(polygonColor); } catch (e) {}
+        }
+        draftPolygonsList = (draftPolygonsList || []).filter(r => r && r.length > 0);
+        rings.forEach(ring => {
+            draftPolygonsList.push(ring.map(pt => [parseFloat(pt[0]), parseFloat(pt[1])]));
+        });
+        selectBiomeChipByKey(key);
+        redrawDraftPolygonLayers();
+        try {
+            const bounds = L.latLngBounds([]);
+            rings.forEach(ring => ring.forEach(pt => bounds.extend(pt)));
+            if (bounds.isValid() && rightPanelMap) rightPanelMap.fitBounds(bounds.pad(0.1));
+        } catch (e) {}
+        systemAlert(`Área do bioma ${nome} aplicada (${rings.length} área(s)). Dá para ajustar ou apagar depois.`, 'success');
+    }
     $(document).on('click', '#btn-use-biome-area', function() {
         const key = $('#biome-area-selector').val() || 'mata_atlantica';
+        const meta = BIOME_AREA_META[key] || { nome: key, color: null };
+        const precise = (rightPanelPreciseBiomeAreas && rightPanelPreciseBiomeAreas[key]) || [];
+        if (precise.length > 0) {
+            applyBiomeAreaRings(key, meta.nome, meta.color, precise);
+            return;
+        }
         fetchBiomasAreas().then(list => {
             const found = list.find(b => b.key === key);
             if (!found || !found.polygons || found.polygons.length === 0) {
                 systemAlert('Bioma não encontrado. Tente novamente.', 'warning');
                 return;
             }
-            savePolygonHistoryState();
-            if (found.color) {
-                polygonColor = found.color;
-                try { $('#polygon-color-picker').val(polygonColor); } catch (e) {}
-            }
-            draftPolygonsList = (draftPolygonsList || []).filter(r => r && r.length > 0);
-            found.polygons.forEach(ring => {
-                draftPolygonsList.push(ring.map(pt => [parseFloat(pt[0]), parseFloat(pt[1])]));
-            });
-            selectBiomeChipByKey(key);
-            redrawDraftPolygonLayers();
-            try {
-                const bounds = L.latLngBounds([]);
-                found.polygons.forEach(ring => ring.forEach(pt => bounds.extend(pt)));
-                if (bounds.isValid() && rightPanelMap) rightPanelMap.fitBounds(bounds.pad(0.1));
-            } catch (e) {}
-            systemAlert(`Área do bioma ${found.nome} aplicada (${found.polygons.length} área(s)). Dá para ajustar ou apagar depois.`, 'success');
+            applyBiomeAreaRings(key, found.nome || meta.nome, found.color || meta.color, found.polygons);
         }).catch(err => {
             console.error('Erro ao carregar bioma:', err);
             systemAlert('Erro ao carregar área do bioma.', 'error');
@@ -1024,14 +1074,26 @@ $(document).ready(function() {
                             }
                             const cleanForest = turf.simplify(turf.buffer(merged, 0), { tolerance: 0.003 });
 
+                            let pampaDiff = null;
                             if (rsData.features && cleanForest) {
-                                const pampaDiff = turf.difference(turf.simplify(turf.buffer(rsData.features[0], 0), { tolerance: 0.003 }), cleanForest);
+                                pampaDiff = turf.difference(turf.simplify(turf.buffer(rsData.features[0], 0), { tolerance: 0.003 }), cleanForest);
                                 if (pampaDiff) { pampasLayer.addData(pampaDiff); pampasPattern.addData(pampaDiff); }
                             }
+                            let cerradoDiff = null;
                             if (prData.features && cleanForest) {
-                                const cerradoDiff = turf.difference(turf.simplify(turf.buffer(prData.features[0], 0), { tolerance: 0.003 }), cleanForest);
+                                cerradoDiff = turf.difference(turf.simplify(turf.buffer(prData.features[0], 0), { tolerance: 0.003 }), cleanForest);
                                 if (cerradoDiff) { cerradoLayer.addData(cerradoDiff); cerradoPattern.addData(cerradoDiff); }
                             }
+
+                            // Cache preciso p/ "Usar bioma como área": os MESMOS
+                            // contornos desenhados acima (Mata recortada p/ o Sul).
+                            try {
+                                rightPanelPreciseBiomeAreas = {
+                                    mata_atlantica: geoJsonToLatLngRings(clipForestToSouth(cleanForest, prData, scData, rsData)),
+                                    pampa: geoJsonToLatLngRings(pampaDiff),
+                                    cerrado: geoJsonToLatLngRings(cerradoDiff)
+                                };
+                            } catch (e) { rightPanelPreciseBiomeAreas = null; }
                         } catch (e) {
                             console.error("Turf error in mini map:", e);
                         }

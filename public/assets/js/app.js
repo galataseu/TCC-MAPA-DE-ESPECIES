@@ -1795,14 +1795,25 @@ $(document).ready(function () {
               }
               const cleanForest = turf.simplify(turf.buffer(merged, 0), { tolerance: 0.003 });
 
+              let pampaDiffM = null;
               if (rsData.features && cleanForest) {
-                const pampaDiff = turf.difference(turf.simplify(turf.buffer(rsData.features[0], 0), { tolerance: 0.003 }), cleanForest);
-                if (pampaDiff) { pampasLayerM.addData(pampaDiff); pampasPatternM.addData(pampaDiff); }
+                pampaDiffM = turf.difference(turf.simplify(turf.buffer(rsData.features[0], 0), { tolerance: 0.003 }), cleanForest);
+                if (pampaDiffM) { pampasLayerM.addData(pampaDiffM); pampasPatternM.addData(pampaDiffM); }
               }
+              let cerradoDiffM = null;
               if (prData.features && cleanForest) {
-                const cerradoDiff = turf.difference(turf.simplify(turf.buffer(prData.features[0], 0), { tolerance: 0.003 }), cleanForest);
-                if (cerradoDiff) { cerradoLayerM.addData(cerradoDiff); cerradoPatternM.addData(cerradoDiff); }
+                cerradoDiffM = turf.difference(turf.simplify(turf.buffer(prData.features[0], 0), { tolerance: 0.003 }), cleanForest);
+                if (cerradoDiffM) { cerradoLayerM.addData(cerradoDiffM); cerradoPatternM.addData(cerradoDiffM); }
               }
+
+              // Cache preciso p/ "Usar bioma como área" (Mata recortada p/ o Sul).
+              try {
+                modalPreciseBiomeAreas = {
+                  mata_atlantica: modalGeoJsonToLatLngRings(modalClipForestToSouth(cleanForest, prData, scData, rsData)),
+                  pampa: modalGeoJsonToLatLngRings(pampaDiffM),
+                  cerrado: modalGeoJsonToLatLngRings(cerradoDiffM)
+                };
+              } catch (e) { modalPreciseBiomeAreas = null; }
             } catch (e) {}
           }
 
@@ -1923,6 +1934,8 @@ $(document).ready(function () {
   let modalPolygonHistory = [];
   let modalPolygonRedo = [];
   let modalPolygonLayersGroup = null;
+  // Contornos precisos dos biomas (turf, iguais aos desenhados no modal).
+  let modalPreciseBiomeAreas = null;
 
   function updateModalUndoRedoButtonsUI() {
     $('#modal-btn-undo-polygon').prop('disabled', modalPolygonHistory.length === 0).toggleClass('opacity-50', modalPolygonHistory.length === 0);
@@ -2149,7 +2162,41 @@ $(document).ready(function () {
   });
 
   // Usar bioma inteiro como área de ocorrência (sem desenhar manualmente).
-  // Carrega o polígono de referência do bioma como área(s) editável(eis).
+  // Usa os contornos PRECISOS do modal (turf); API simplificada só de fallback.
+  const MODAL_BIOME_AREA_META = {
+    mata_atlantica: { nome: 'Mata Atlântica', color: '#1B5E20' },
+    pampa: { nome: 'Pampa', color: '#9C7A2E' },
+    cerrado: { nome: 'Cerrado', color: '#B8912E' }
+  };
+  function modalGeoJsonToLatLngRings(geo) {
+    const rings = [];
+    if (!geo) return rings;
+    const collect = (g) => {
+      if (!g) return;
+      if (g.type === 'FeatureCollection') (g.features || []).forEach(collect);
+      else if (g.type === 'Feature') collect(g.geometry);
+      else if (g.type === 'Polygon') { if (g.coordinates && g.coordinates[0]) rings.push(g.coordinates[0]); }
+      else if (g.type === 'MultiPolygon') (g.coordinates || []).forEach(p => { if (p && p[0]) rings.push(p[0]); });
+    };
+    collect(geo);
+    return rings
+      .map(ring => ring.map(c => [parseFloat(c[1]), parseFloat(c[0])]).filter(pt => !isNaN(pt[0]) && !isNaN(pt[1])))
+      .filter(ring => ring.length >= 3);
+  }
+  function modalClipForestToSouth(cleanForest, prData, scData, rsData) {
+    try {
+      if (!window.turf || !cleanForest) return null;
+      let south = null;
+      [prData, scData, rsData].forEach(d => {
+        const f = d && d.features && d.features[0];
+        if (!f) return;
+        const simp = turf.simplify(turf.buffer(f, 0), { tolerance: 0.003 });
+        south = south ? (turf.union(south, simp) || south) : simp;
+      });
+      if (!south) return null;
+      return turf.intersect(cleanForest, south) || null;
+    } catch (e) { return null; }
+  }
   let modalBiomasAreasCache = null;
   function fetchModalBiomasAreas() {
     if (modalBiomasAreasCache) return Promise.resolve(modalBiomasAreasCache);
@@ -2181,31 +2228,40 @@ $(document).ready(function () {
       $('.select-biomas').val(selectedIds);
     }
   }
+  function applyModalBiomeAreaRings(key, nome, color, rings) {
+    saveModalPolygonHistoryState();
+    if (color) {
+      modalPolygonColor = color;
+      try { $('#modal-polygon-color-picker').val(modalPolygonColor); } catch (e) {}
+    }
+    modalDraftPolygonsList = (modalDraftPolygonsList || []).filter(r => r && r.length > 0);
+    rings.forEach(ring => {
+      modalDraftPolygonsList.push(ring.map(pt => [parseFloat(pt[0]), parseFloat(pt[1])]));
+    });
+    selectModalBiomeChipByKey(key);
+    redrawModalDraftPolygonLayers();
+    try {
+      const bounds = L.latLngBounds([]);
+      rings.forEach(ring => ring.forEach(pt => bounds.extend(pt)));
+      if (bounds.isValid() && modalRightMap) modalRightMap.fitBounds(bounds.pad(0.1));
+    } catch (e) {}
+    systemAlert(`Área do bioma ${nome} aplicada (${rings.length} área(s)). Dá para ajustar ou apagar depois.`, 'success');
+  }
   $(document).on('click', '#modal-btn-use-biome-area', function() {
     const key = $('#modal-biome-area-selector').val() || 'mata_atlantica';
+    const meta = MODAL_BIOME_AREA_META[key] || { nome: key, color: null };
+    const precise = (modalPreciseBiomeAreas && modalPreciseBiomeAreas[key]) || [];
+    if (precise.length > 0) {
+      applyModalBiomeAreaRings(key, meta.nome, meta.color, precise);
+      return;
+    }
     fetchModalBiomasAreas().then(list => {
       const found = list.find(b => b.key === key);
       if (!found || !found.polygons || found.polygons.length === 0) {
         systemAlert('Bioma não encontrado. Tente novamente.', 'warning');
         return;
       }
-      saveModalPolygonHistoryState();
-      if (found.color) {
-        modalPolygonColor = found.color;
-        try { $('#modal-polygon-color-picker').val(modalPolygonColor); } catch (e) {}
-      }
-      modalDraftPolygonsList = (modalDraftPolygonsList || []).filter(r => r && r.length > 0);
-      found.polygons.forEach(ring => {
-        modalDraftPolygonsList.push(ring.map(pt => [parseFloat(pt[0]), parseFloat(pt[1])]));
-      });
-      selectModalBiomeChipByKey(key);
-      redrawModalDraftPolygonLayers();
-      try {
-        const bounds = L.latLngBounds([]);
-        found.polygons.forEach(ring => ring.forEach(pt => bounds.extend(pt)));
-        if (bounds.isValid() && modalRightMap) modalRightMap.fitBounds(bounds.pad(0.1));
-      } catch (e) {}
-      systemAlert(`Área do bioma ${found.nome} aplicada (${found.polygons.length} área(s)). Dá para ajustar ou apagar depois.`, 'success');
+      applyModalBiomeAreaRings(key, found.nome || meta.nome, found.color || meta.color, found.polygons);
     }).catch(err => {
       console.error('Erro ao carregar bioma:', err);
       systemAlert('Erro ao carregar área do bioma.', 'error');

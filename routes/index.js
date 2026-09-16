@@ -4,7 +4,7 @@ var path = require('path');
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
-  res.render('index', { title: 'Mapa do Sul - Mata Atlântica' });
+  res.render('index', { title: 'Gralha dos Ventos' });
 });
 
 module.exports = router;
