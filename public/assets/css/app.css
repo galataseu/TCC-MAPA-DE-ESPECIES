@@ -2546,3 +2546,40 @@ body:has(#zona-admin-modal:not(.d-none)) #floating-search {
     max-width: 280px;
   }
 }
+
+/* ==========================================================================
+   MODAL DE DETALHES — Dieta / Peso / Altura sem sobreposição no mobile.
+   Dietas longas ("Insetívoro", "Carnívoro", "Insetívoro/Carnívoro"...) quebravam
+   para fora da coluna e ficavam por cima do Peso em telas estreitas.
+   ========================================================================== */
+.animal-stats-row {
+  --bs-gutter-x: 1.5rem;
+}
+
+.animal-stat-col {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.animal-stat-value {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+@media (max-width: 420px) {
+  .animal-stats-row {
+    --bs-gutter-x: 0.5rem;
+  }
+
+  .animal-stats-row .animal-stat-col {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .animal-stats-row .animal-stat-value {
+    font-size: 0.82rem !important;
+  }
+}

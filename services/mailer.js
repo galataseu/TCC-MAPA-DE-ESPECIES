@@ -18,21 +18,49 @@ const STATUS_COLORS = {
 
 let transporter = null;
 
+function isSmtpConfigured() {
+  return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
 function getTransporter() {
   if (transporter) return transporter;
   const host = process.env.SMTP_HOST;
   if (!host) return null;
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  // Porta 465 (SMTPS) exige secure=true mesmo sem SMTP_SECURE explícito;
+  // 587 usa STARTTLS (secure=false). Sem isso o Gmail na Vercel só dá timeout.
+  const secureRaw = String(process.env.SMTP_SECURE || '').toLowerCase();
+  const secure = secureRaw === 'true' || (secureRaw === '' && port === 465);
   transporter = nodemailer.createTransport({
     host,
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+    port,
+    secure,
     auth: process.env.SMTP_USER ? {
       user: process.env.SMTP_USER,
       // Senhas de app do Gmail vêm com espaços ("xxxx xxxx..."): remove.
       pass: String(process.env.SMTP_PASS || '').replace(/\s+/g, '')
-    } : undefined
+    } : undefined,
+    // Timeouts curtos e explícitos: na serverless (Vercel) o default pendura
+    // a função até o maxDuration em vez de falhar rápido com erro útil.
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+    pool: false
   });
   return transporter;
+}
+
+// Checa a conexão SMTP sem enviar nada (usado pelo endpoint de diagnóstico).
+// Retorna { ok: true } ou { ok: false, error } — nunca vaza credenciais.
+async function verifySmtpConnection() {
+  const tx = getTransporter();
+  if (!tx) return { ok: false, error: 'SMTP não configurado (faltam SMTP_HOST/SMTP_USER/SMTP_PASS nas variáveis de ambiente).' };
+  try {
+    await tx.verify();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
 }
 
 function esc(s) {
@@ -90,18 +118,23 @@ async function sendStatusChangeEmail(to, { animalNome, oldNivel, newNivel }) {
 
   const tx = getTransporter();
   if (!tx) {
-    console.log(`[mailer] SMTP não configurado — e-mail NÃO enviado para ${to}: ${subject}`);
+    console.log(`[mailer] SMTP não configurado — e-mail NÃO enviado para ${to}: ${subject}. Configure SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/SMTP_FROM nas variáveis de ambiente da Vercel (Settings → Environment Variables).`);
     return { sent: false, reason: 'smtp-missing' };
   }
-  await tx.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
-    to,
-    subject,
-    text,
-    html
-  });
+  try {
+    await tx.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to,
+      subject,
+      text,
+      html
+    });
+  } catch (e) {
+    console.error(`[mailer] Falha ao enviar para ${to} (${animalNome}):`, e && e.message ? e.message : e);
+    throw e;
+  }
   console.log(`[mailer] Alerta de status enviado para ${to} (${animalNome})`);
   return { sent: true };
 }
 
-module.exports = { sendStatusChangeEmail, buildStatusChangeEmail, statusBadge, STATUS_COLORS };
+module.exports = { sendStatusChangeEmail, buildStatusChangeEmail, statusBadge, STATUS_COLORS, isSmtpConfigured, verifySmtpConnection, getTransporter };

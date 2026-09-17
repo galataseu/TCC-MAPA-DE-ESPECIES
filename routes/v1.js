@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const prisma = require('../services/db');
-const { sendStatusChangeEmail } = require('../services/mailer');
+const { sendStatusChangeEmail, isSmtpConfigured, verifySmtpConnection, getTransporter } = require('../services/mailer');
 const { getBiomaGeometry } = require('../utils/biomaPolygons');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -18,18 +18,33 @@ async function dispatchStatusChange(animalId, oldNivelId, newNivelId) {
       prisma.api_nivelextincao.findUnique({ where: { id: BigInt(oldNivelId) } }),
       prisma.api_nivelextincao.findUnique({ where: { id: BigInt(newNivelId) } })
     ]);
-    if (!animal || !oldNivel || !newNivel) return;
+    if (!animal || !oldNivel || !newNivel) {
+      console.error('[alerta-status] animal ou nível não encontrado, e-mail ignorado.');
+      return;
+    }
     const subs = await prisma.api_alerta_status.findMany({
       where: { animal_id: BigInt(animalId), ativo: true },
       select: { email: true }
     });
+    if (!subs || subs.length === 0) {
+      console.log(`[alerta-status] status de "${animal.nome_comum}" mudou, mas não há assinantes ativos — nenhum e-mail a enviar.`);
+      return;
+    }
+    if (!isSmtpConfigured()) {
+      console.error('[alerta-status] há ' + subs.length + ' assinante(s), mas o SMTP não está configurado. Defina SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/SMTP_FROM nas variáveis de ambiente da Vercel.');
+      return;
+    }
+    let sent = 0, failed = 0;
     for (const s of subs) {
       try {
         await sendStatusChangeEmail(s.email, { animalNome: animal.nome_comum, oldNivel, newNivel });
+        sent++;
       } catch (e) {
+        failed++;
         console.error('[alerta-status] falha ao enviar para', s.email, e.message);
       }
     }
+    console.log(`[alerta-status] "${animal.nome_comum}": ${sent} enviado(s), ${failed} falha(s), ${subs.length} assinante(s).`);
   } catch (e) {
     console.error('[alerta-status] erro no disparo:', e.message);
   }
@@ -1011,6 +1026,54 @@ router.delete('/notificacoes/', async (req, res) => {
   } catch (err) {
     console.error('Error deleting notificacao:', err);
     res.status(500).json({ success: false, error: formatPrismaError(err) });
+  }
+});
+
+// GET /api/v1/notificacoes/status (diagnóstico — sem vazar segredos)
+// Diz se o SMTP está configurado e se a conexão funciona. Use na Vercel para
+// confirmar que as Environment Variables foram aplicadas (precisa de redeploy
+// após adicioná-las). Não expõe usuário/senha.
+router.get('/notificacoes/status', async (req, res) => {
+  try {
+    const configured = isSmtpConfigured();
+    const info = {
+      smtpConfigured: configured,
+      host: process.env.SMTP_HOST ? 'definido' : 'ausente',
+      port: process.env.SMTP_PORT || '587 (padrão)',
+      from: process.env.SMTP_FROM || process.env.SMTP_USER || 'ausente'
+    };
+    if (!configured) {
+      return res.json({ success: true, data: { ...info, connection: 'não testada (SMTP incompleto)' } });
+    }
+    const check = await verifySmtpConnection();
+    res.json({ success: true, data: { ...info, connection: check.ok ? 'ok' : ('falha: ' + check.error) } });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/v1/notificacoes/test (envia um e-mail de teste)
+// Body: { email }. Facilita validar o SMTP direto na Vercel, sem depender de
+// favoritar um animal e mudar o status dele.
+router.post('/notificacoes/test', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const email = String(b.email || '').trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) return res.status(400).json({ success: false, error: 'E-mail inválido.' });
+    if (!isSmtpConfigured()) {
+      return res.status(500).json({ success: false, error: 'SMTP não configurado na hospedagem. Defina SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS e SMTP_FROM nas Environment Variables da Vercel e faça redeploy.' });
+    }
+    const tx = getTransporter();
+    await tx.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: email,
+      subject: 'Gralha dos Ventos — teste de notificações',
+      text: 'Se você recebeu este e-mail, as notificações de mudança de status estão funcionando.'
+    });
+    res.json({ success: true, message: 'E-mail de teste enviado!' });
+  } catch (err) {
+    console.error('[notificacoes/test] falha:', err.message);
+    res.status(500).json({ success: false, error: 'Falha ao enviar e-mail de teste: ' + err.message });
   }
 });
 

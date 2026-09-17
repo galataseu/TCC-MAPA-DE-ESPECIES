@@ -411,21 +411,27 @@ $(document).ready(function() {
         if (!await systemConfirm(`CONFIRMAÇÃO FINAL:\n\nEsta ação excluirá permanentemente "${name}" do sistema.\n\nDeseja continuar?`, { title: 'Confirmação final' })) return;
 
         fetch(`/api/v1/animais/${id}/`, { method: 'DELETE' })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    systemAlert(`"${name}" foi excluído com sucesso!`, 'success');
-                    if ($('#animal-id-hidden').val() == id) {
-                        resetForm();
-                    }
-                    loadAnimals();
-                } else {
-                    systemAlert('Erro ao excluir: ' + formatErrorMessage(data, 'Tente novamente.'), 'error');
+            .then(async (res) => {
+                const contentType = res.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    throw new Error(`Servidor respondeu HTTP ${res.status} sem JSON. Tente novamente.`);
                 }
+                const data = await res.json().catch(() => null);
+                if (!res.ok || !data || data.success === false) {
+                    throw new Error(formatErrorMessage(data, `Erro no servidor (HTTP ${res.status}).`));
+                }
+                return data;
+            })
+            .then(data => {
+                systemAlert(`"${name}" foi excluído com sucesso!`, 'success');
+                if ($('#animal-id-hidden').val() == id) {
+                    resetForm();
+                }
+                loadAnimals();
             })
             .catch(err => {
                 console.error(err);
-                systemAlert('Erro de conexão ao excluir animal: ' + (err.message || 'Falha de comunicação.'), 'error');
+                systemAlert('Erro ao excluir: ' + (err.message || 'Tente novamente.'), 'error');
             });
     };
 
@@ -669,9 +675,21 @@ $(document).ready(function() {
         const currentPts = (currentRing && currentRing.length > 0) ? currentRing.length : 0;
 
         if (validPolygons.length > 0 || currentPts > 0) {
+            // Arredonda p/ 5 decimais (~1 m): corta ~15% do payload sem perda
+            // visível e evita estourar o limite da serverless (Vercel ~4,5 MB)
+            // quando a área vem junto com as fotos no multipart.
+            const round5 = (v) => {
+                const n = parseFloat(v);
+                return isNaN(n) ? 0 : Math.round(n * 1e5) / 1e5;
+            };
+            const slimPolygons = validPolygons.map(ring =>
+                ring
+                    .filter(pt => Array.isArray(pt) && pt.length >= 2)
+                    .map(pt => [round5(pt[0]), round5(pt[1])])
+            ).filter(ring => ring.length >= 3);
             const payload = {
                 color: polygonColor,
-                polygons: validPolygons
+                polygons: slimPolygons
             };
             $('#area-polygon-json-hidden').val(JSON.stringify(payload));
             let badgeText = `Área: ${validPolygons.length} área(s) (${totalPoints} pts)`;
@@ -1673,16 +1691,39 @@ $(document).ready(function() {
         const method = animalId ? 'PATCH' : 'POST';
 
         fetch(url, { method: method, body: formData })
-        .then(res => res.json())
+        .then(async (res) => {
+            const contentType = res.headers.get('content-type') || '';
+            // A hospedagem serverless (Vercel) responde HTML/texto puro quando o
+            // pacote estoura o limite (~4,5 MB com área grande + fotos) ou a
+            // função atinge o timeout — e res.json() quebrava com o críptico
+            // "JSON.parse: unexpected character at line 1 column 1".
+            if (!contentType.includes('application/json')) {
+                let rawText = '';
+                try { rawText = await res.text(); } catch (e) {}
+                if (res.status === 413 || /too large|payload|content too large/i.test(rawText)) {
+                    throw new Error('Dados grandes demais para a hospedagem (limite ~4,5 MB na Vercel). Salve com menos fotos por vez ou simplifique a área de incidência (botão Limpar e redesenhe com menos pontos, ou use "Usar bioma").');
+                }
+                if (!res.ok) {
+                    throw new Error(`Servidor respondeu HTTP ${res.status} sem JSON. Se você desenhou uma área grande e anexou fotos, o pacote pode ter estourado o limite da hospedagem — tente com menos fotos ou simplifique a área.`);
+                }
+                throw new Error('Resposta inválida do servidor (esperava JSON). Tente novamente.');
+            }
+            let data = null;
+            try {
+                data = await res.json();
+            } catch (e) {
+                throw new Error(`Resposta inválida do servidor (HTTP ${res.status}). Se a área de incidência é grande, tente com menos fotos ou simplifique a área.`);
+            }
+            if (!res.ok || !data || data.success === false) {
+                throw new Error(formatErrorMessage(data, `Erro no servidor (HTTP ${res.status}). Tente novamente.`));
+            }
+            return data;
+        })
         .then(data => {
             restoreSaveBtn();
-            if (data.success) {
-                systemAlert(animalId ? 'Espécie atualizada com sucesso!' : 'Espécie salva com sucesso!', 'success');
-                resetForm();
-                loadAnimals();
-            } else {
-                systemAlert('Erro ao salvar espécie: ' + formatErrorMessage(data, 'Tente novamente.'), 'error');
-            }
+            systemAlert(animalId ? 'Espécie atualizada com sucesso!' : 'Espécie salva com sucesso!', 'success');
+            resetForm();
+            loadAnimals();
         })
         .catch(err => {
             restoreSaveBtn();
@@ -1812,18 +1853,18 @@ $(document).ready(function() {
                   </div>
                 </div>
                 <div class="bg-dark p-3 rounded-3 mt-3" style="border-top: 3px solid ${statusColor}; border-bottom: 3px solid ${statusColor};">
-                  <div class="row text-center mb-1 gy-2 text-white">
-                      <div class="col-4">
+                  <div class="row text-center mb-1 gy-2 text-white animal-stats-row">
+                      <div class="col-4 animal-stat-col">
                           <span class="mb-1 text-muted small"><i class="fas fa-utensils me-1"></i> Dieta</span>
-                          <div class="fw-bold" style="color: ${statusColor}; font-size: 0.95rem;">${animal.dieta || 'N/A'}</div>
+                          <div class="fw-bold animal-stat-value" style="color: ${statusColor}; font-size: 0.95rem;">${animal.dieta || 'N/A'}</div>
                       </div>
-                      <div class="col-4 border-start border-secondary">
+                      <div class="col-4 border-start border-secondary animal-stat-col">
                           <span class="mb-1 text-muted small"><i class="fas fa-weight-hanging me-1"></i> Peso</span>
-                          <div class="fw-bold" style="color: ${statusColor}; font-size: 0.95rem;">${animal.peso ? animal.peso + ' g' : '0 g'}</div>
+                          <div class="fw-bold animal-stat-value" style="color: ${statusColor}; font-size: 0.95rem;">${animal.peso ? animal.peso + ' g' : '0 g'}</div>
                       </div>
-                      <div class="col-4 border-start border-secondary">
+                      <div class="col-4 border-start border-secondary animal-stat-col">
                           <span class="mb-1 text-muted small"><i class="fas fa-arrows-alt-v me-1"></i> Altura</span>
-                          <div class="fw-bold" style="color: ${statusColor}; font-size: 0.95rem;">${animal.altura ? animal.altura + ' cm' : '0 cm'}</div>
+                          <div class="fw-bold animal-stat-value" style="color: ${statusColor}; font-size: 0.95rem;">${animal.altura ? animal.altura + ' cm' : '0 cm'}</div>
                       </div>
                   </div>
                   <hr style="border-color: ${statusColor}; opacity: 0.3;" class="my-2">
