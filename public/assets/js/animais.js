@@ -461,6 +461,26 @@ $(document).ready(function() {
             $('#bioma-selector').val(biomaIds);
         }
 
+        // Galeria: carrega as fotos já salvas (como itens existentes) para
+        // que novas fotos ACUMULEM em vez de apagar as anteriores no save.
+        pageSelectedFiles = [];
+        const existingImgs = animal.imagens && Array.isArray(animal.imagens) ? animal.imagens : [];
+        existingImgs.forEach(imgObj => {
+            const raw = typeof imgObj === 'string' ? imgObj : (imgObj && imgObj.imagem ? imgObj.imagem : '');
+            if (raw && typeof raw === 'string' && raw.trim() && !raw.includes('logotipo.png') && !raw.includes('falta_imagem') && !raw.includes('Falta_imagem')) {
+                const u = raw.startsWith('http') || raw.startsWith('/') || raw.startsWith('data:') ? raw : `/media/${raw}`;
+                pageSelectedFiles.push({
+                    id: 'pg_old_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+                    file: u,
+                    currentX: 0,
+                    currentY: 0,
+                    scale: 1.0
+                });
+            }
+        });
+        pageGalleryTouched = false;
+        renderPageImageGallery();
+
         // Preview da imagem
         let imgUrl = animal.imagens && animal.imagens.length > 0 ? (typeof animal.imagens[0] === 'string' ? animal.imagens[0] : animal.imagens[0].imagem) : (animal.imagem || '');
         if (imgUrl) {
@@ -1295,6 +1315,10 @@ $(document).ready(function() {
     // RECORTE E ARRASTE INTERATIVO DO ÍCONE
     // =========================================================================
     let pageSelectedFiles = []; // Cada item: { id, file, currentX, currentY, scale }
+    // true quando a galeria foi mexida (add/remove) desde que a edição foi
+    // aberta: aí o submit sincroniza (mantidas + novas). Sem toque e sem
+    // arquivo novo, o servidor preserva as fotos como estão.
+    let pageGalleryTouched = false;
     let iconCropState = {
         isDragging: false,
         startX: 0,
@@ -1325,6 +1349,7 @@ $(document).ready(function() {
                     scale: 1.0
                 });
             });
+            pageGalleryTouched = true;
             renderPageImageGallery();
             this.value = '';
         }
@@ -1399,6 +1424,7 @@ $(document).ready(function() {
                 $(window).off(`.${item.id}`);
             }
             pageSelectedFiles.splice(index, 1);
+            pageGalleryTouched = true;
             renderPageImageGallery();
         }
     });
@@ -1611,18 +1637,29 @@ $(document).ready(function() {
         try { await generatePageIconBase64(); } catch (err) {}
         const formData = new FormData(this);
 
-        // Anexar arquivos da galeria (reduzidos antes de subir)
+        // Anexar arquivos da galeria (reduzidos antes de subir). Fotos já
+        // salvas que continuam na galeria vão como `manter_imagem` para
+        // ACUMULAR com as novas no servidor.
         formData.delete('animal_imagem');
         const pageGalleryFiles = [];
+        const pageKeptGallery = [];
         pageSelectedFiles.forEach(item => {
             const fileObj = item.file || item;
-            if (typeof fileObj !== 'string') pageGalleryFiles.push(fileObj);
+            if (typeof fileObj !== 'string') {
+                pageGalleryFiles.push(fileObj);
+            } else if (fileObj && !fileObj.includes('logotipo.png') && !fileObj.includes('falta_imagem') && !fileObj.includes('Falta_imagem')) {
+                pageKeptGallery.push(fileObj);
+            }
         });
         try {
             const smallFiles = await Promise.all(pageGalleryFiles.map(downscalePagePhotoFile));
             smallFiles.forEach(f => { if (f && typeof f !== 'string') formData.append('animal_imagem', f); });
         } catch (err) {
             pageGalleryFiles.forEach(f => formData.append('animal_imagem', f));
+        }
+        if (pageGalleryFiles.length > 0 || pageGalleryTouched) {
+            formData.append('galeria_sync', '1');
+            pageKeptGallery.forEach(u => formData.append('manter_imagem', u));
         }
 
         // Mapear biomas selecionados
@@ -1659,6 +1696,11 @@ $(document).ready(function() {
         $('#animal-id-hidden').val('');
         $('#coordenadas-json-hidden').val('');
         $('#area-polygon-json-hidden').val('');
+        // Limpa a galeria: sem isso as fotos do animal anterior vazavam
+        // para o próximo cadastro.
+        pageSelectedFiles = [];
+        pageGalleryTouched = false;
+        renderPageImageGallery();
         $('#image-preview-img').addClass('d-none');
         $('#image-preview-content').removeClass('d-none');
         $('#icon-preview-img').addClass('d-none').css('transform', 'none');

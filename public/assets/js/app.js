@@ -1721,6 +1721,7 @@ $(document).ready(function () {
         }
       });
     }
+    modalGalleryTouched = false;
     renderModalImageGallery();
 
     let iconUrl = props.icone;
@@ -1828,6 +1829,7 @@ $(document).ready(function () {
       form.find(".coord-lng").val(lng);
 
       modalSelectedFiles = [];
+      modalGalleryTouched = false;
       renderModalImageGallery();
       $('#modal-icon-preview-img').attr('src', '').addClass('d-none');
       $('#modal-icon-placeholder-content').removeClass('d-none');
@@ -3306,6 +3308,10 @@ $(document).ready(function () {
   // 7. GALERIA DE IMAGENS E CROP CIRCULAR DO ÍCONE NO MODAL
   // =========================================================================
   let modalSelectedFiles = []; // Armazena objetos { id, file, currentX, currentY, scale }
+  // true quando a galeria foi mexida (add/remove) desde que a edição foi
+  // aberta: aí o submit sincroniza a galeria (mantidas + novas). Sem toque
+  // e sem arquivo novo, o servidor preserva as fotos como estão.
+  let modalGalleryTouched = false;
   let modalIconCropState = {
     isDragging: false,
     startX: 0,
@@ -3339,6 +3345,7 @@ $(document).ready(function () {
           scale: 1.0
         });
       });
+      modalGalleryTouched = true;
       renderModalImageGallery();
       this.value = ''; // Reset input para permitir re-selecionar
     }
@@ -3450,6 +3457,7 @@ $(document).ready(function () {
         $(window).off(`.${item.id}`);
       }
       modalSelectedFiles.splice(index, 1);
+      modalGalleryTouched = true;
       renderModalImageGallery();
     }
   });
@@ -3754,18 +3762,29 @@ $(document).ready(function () {
     try { await generateModalIconBase64(); } catch (err) {}
     const formData = new FormData(this);
 
-    // Anexar todos os arquivos ativos da galeria (reduzidos antes de subir)
+    // Anexar todos os arquivos ativos da galeria (reduzidos antes de subir).
+    // Fotos já salvas que continuam na galeria vão como `manter_imagem`
+    // (exceto a logotipo de fallback) para ACUMULAR com as novas no servidor.
     formData.delete('animal_imagem');
     var galleryFiles = [];
+    var keptGallery = [];
     modalSelectedFiles.forEach(item => {
       const fileObj = item.file || item;
-      if (typeof fileObj !== 'string') galleryFiles.push(fileObj);
+      if (typeof fileObj !== 'string') {
+        galleryFiles.push(fileObj);
+      } else if (fileObj && !fileObj.includes('logotipo.png') && !fileObj.includes('falta_imagem') && !fileObj.includes('Falta_imagem')) {
+        keptGallery.push(fileObj);
+      }
     });
     try {
       var smallGallery = await Promise.all(galleryFiles.map(downscalePhotoFile));
       smallGallery.forEach(f => { if (f && typeof f !== 'string') formData.append('animal_imagem', f); });
     } catch (err) {
       galleryFiles.forEach(f => formData.append('animal_imagem', f));
+    }
+    if (galleryFiles.length > 0 || modalGalleryTouched) {
+      formData.append('galeria_sync', '1');
+      keptGallery.forEach(u => formData.append('manter_imagem', u));
     }
 
     const selectedBiomas = [];

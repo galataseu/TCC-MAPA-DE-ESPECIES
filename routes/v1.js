@@ -418,16 +418,65 @@ router.patch('/animais/:id/', uploadFieldsSafe, async (req, res) => {
       data: updateData
     });
 
+    // Galeria incremental: o frontend envia `galeria_sync=1` + `manter_imagem[]`
+    // (fotos já salvas que continuam na galeria, na ordem exibida) e os
+    // arquivos novos. Reconstrói mantidas + novas — fotos adicionadas em
+    // edições diferentes ACUMULAM em vez de se apagarem. Sem a flag, vale o
+    // comportamento legado (só troca quando chegam arquivos/URL novos).
+    const uploadedDataUrls = [];
     if (req.files && req.files['animal_imagem'] && req.files['animal_imagem'].length > 0) {
-      await prisma.api_animalimagem.deleteMany({ where: { animal_id: id } });
-      const imgCreates = [];
       for (let i = 0; i < req.files['animal_imagem'].length; i++) {
         const dataUrl = fileToDataUrl(req.files['animal_imagem'][i]);
-        if (!dataUrl) continue;
+        if (dataUrl) uploadedDataUrls.push(dataUrl);
+      }
+    }
+    const gallerySync = b.galeria_sync === '1' || b.galeria_sync === 'true' || b.galeria_sync === 1 || b.galeria_sync === true;
+    if (gallerySync) {
+      let keptUrls = [];
+      if (b.manter_imagem !== undefined) {
+        const arr = Array.isArray(b.manter_imagem) ? b.manter_imagem : [b.manter_imagem];
+        keptUrls = arr
+          .filter(u => typeof u === 'string' && u.trim().length > 0)
+          .map(u => u.trim())
+          .slice(0, 10);
+      }
+      if (keptUrls.length === 0 && uploadedDataUrls.length === 0 && imgPath) {
+        keptUrls = [imgPath];
+      }
+      await prisma.api_animalimagem.deleteMany({ where: { animal_id: id } });
+      const imgCreates = [];
+      let ordem = 1;
+      for (const u of keptUrls) {
+        const myOrdem = ordem++;
+        imgCreates.push(prisma.api_animalimagem.create({
+          data: {
+            animal_id: id,
+            imagem: u,
+            legenda: animal.nome_comum || '',
+            ordem: myOrdem
+          }
+        }));
+      }
+      for (const dataUrl of uploadedDataUrls) {
+        const myOrdem = ordem++;
         imgCreates.push(prisma.api_animalimagem.create({
           data: {
             animal_id: id,
             imagem: dataUrl,
+            legenda: animal.nome_comum || '',
+            ordem: myOrdem
+          }
+        }));
+      }
+      await Promise.all(imgCreates);
+    } else if (uploadedDataUrls.length > 0) {
+      await prisma.api_animalimagem.deleteMany({ where: { animal_id: id } });
+      const imgCreates = [];
+      for (let i = 0; i < uploadedDataUrls.length; i++) {
+        imgCreates.push(prisma.api_animalimagem.create({
+          data: {
+            animal_id: id,
+            imagem: uploadedDataUrls[i],
             legenda: animal.nome_comum || '',
             ordem: i + 1
           }
