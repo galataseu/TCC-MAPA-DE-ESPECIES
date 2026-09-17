@@ -110,17 +110,15 @@ const southCitiesList = [
 
 $(document).ready(function () {
   /* Oculta a logo Gralha dos Ventos (#brand-header) e a barra de pesquisa
-     de localidades (#floating-search) nas telas de criação de animais,
-     instituições e áreas (modais fullscreen). */
+     de localidades (#floating-search) na tela de criação de animais
+     (modal fullscreen). */
   function updateCreationOverlayVisibility() {
     var animalOpen = !$("#species-admin-modal").hasClass("d-none");
-    var ongOpen = !$("#ong-admin-modal").hasClass("d-none");
-    var zonaOpen = !$("#zona-admin-modal").hasClass("d-none");
-    $("body").toggleClass("creation-open", animalOpen || ongOpen || zonaOpen);
+    $("body").toggleClass("creation-open", animalOpen);
   }
   try {
     var creationObserver = new MutationObserver(updateCreationOverlayVisibility);
-    ["#species-admin-modal", "#ong-admin-modal", "#zona-admin-modal"].forEach(function (sel) {
+    ["#species-admin-modal"].forEach(function (sel) {
       var el = document.querySelector(sel);
       if (el) creationObserver.observe(el, { attributes: true, attributeFilter: ["class"] });
     });
@@ -708,34 +706,10 @@ $(document).ready(function () {
     return marker;
   }
 
-  // Menu de botão direito para ONGs e Zonas — idêntico ao dos animais
-  // (Editar + Excluir, mesmo HTML/CSS do #admin-context-menu).
+  // Menu de botão direito de instituições/zonas oculto por solicitação.
+  // Mantido como no-op para não quebrar chamadas legadas.
   function showOngZonaContextMenu(latlng, kind, feature) {
-    const p = (feature && feature.properties) || {};
-    const nome = p.nome || p.nome_comum || (kind === 'ong' ? 'Instituição' : 'Área');
-    const containerPoint = map.latLngToContainerPoint(latlng);
-    const menu = $("#admin-context-menu");
-    menu.html(`
-      <div class="admin-menu-item" id="menu-edit-entity">
-        <i class="fa-solid fa-pen-to-square text-warning me-2"></i>
-        <span>Editar ${nome}</span>
-      </div>
-      <div class="admin-menu-item text-danger" id="menu-delete-entity">
-        <i class="fa-solid fa-trash me-2"></i>
-        <span>Excluir ${nome}</span>
-      </div>
-    `);
-    menu.css({ left: containerPoint.x + 'px', top: containerPoint.y + 'px' }).removeClass('d-none');
-    $('#menu-edit-entity').off('click').on('click', function () {
-      menu.addClass('d-none');
-      if (kind === 'ong') openOngModalForEdit(feature);
-      else openZonaModalForEdit(feature);
-    });
-    $('#menu-delete-entity').off('click').on('click', function () {
-      menu.addClass('d-none');
-      if (kind === 'ong') deleteOngWithConfirmation(p.id, nome);
-      else deleteZonaWithConfirmation(p.id, nome);
-    });
+    return;
   }
 
   // Atualiza a estrela dos marcadores ao favoritar/desfavoritar (sem recarregar).
@@ -784,9 +758,8 @@ $(document).ready(function () {
 
   // =========================================================================
   // CAMADAS DO MENU FLUTUANTE (usuário comum e admin).
-  // Toggles: ícones de animais, marcadores de ONGs e zonas de preservação.
-  // O estado fica em `layerVisibility` (memória): mover/zoom ou recarregar
-  // uma camada nunca reseta as demais — só add/remove no mapa.
+  // Camadas de instituições e zonas sempre visíveis (toggles removidos
+  // por solicitação). O estado fica em `layerVisibility` (memória).
   // =========================================================================
   var layerVisibility = { animais: true, ongs: true, zonas: true };
   var ongsLayer = L.layerGroup().addTo(map);
@@ -827,18 +800,8 @@ $(document).ready(function () {
     refreshZonaLabels();
   }
 
-  $(document).on('change', '#toggle-layer-animais', function() {
-    layerVisibility.animais = $(this).is(':checked');
-    applyLayerVisibility();
-  });
-  $(document).on('change', '#toggle-layer-ongs', function() {
-    layerVisibility.ongs = $(this).is(':checked');
-    applyLayerVisibility();
-  });
-  $(document).on('change', '#toggle-layer-zonas', function() {
-    layerVisibility.zonas = $(this).is(':checked');
-    applyLayerVisibility();
-  });
+  // Toggles de ocultar animais/instituições/zonas removidos por solicitação
+  // (camadas sempre visíveis). Mantido apenas o toggle de clustering abaixo.
 
   // Toggle de clustering de marcadores (desativado por padrão)
   $(document).on('change', '#toggle-clustering', function() {
@@ -871,23 +834,11 @@ $(document).ready(function () {
         if (p.descricao) popup += `<br>${p.descricao}`;
         const contato = [p.email, p.telefone].filter(Boolean).join(' • ');
         if (contato) popup += `<br><small>${contato}</small>`;
-        // Botões no mesmo estilo do animal (outline + rounded-pill).
-        if (typeof isAdminModeActive === 'function' && isAdminModeActive() && p.id) {
-          const safeNome = String(p.nome || '').replace(/"/g, '&quot;');
-          popup += `<br><div class="d-flex gap-2 mt-2">`
-            + `<button type="button" class="btn btn-outline-warning btn-sm rounded-pill btn-edit-ong" data-id="${p.id}"><i class="fa-solid fa-pen-to-square me-1"></i>Editar</button>`
-            + `<button type="button" class="btn btn-outline-danger btn-sm rounded-pill btn-del-ong" data-id="${p.id}" data-nome="${safeNome}"><i class="fa-solid fa-trash me-1"></i>Excluir</button>`
-            + `</div>`;
-        }
+        // Botões de editar/excluir ocultos por solicitação (popup somente leitura).
         const marker = L.marker([coords[1], coords[0]], { icon: ongIcon() })
           .bindPopup(popup)
           .addTo(ongsLayer);
         marker.featureData = f;
-        marker.on('contextmenu', function (e) {
-          if (!isAdminModeActive()) return;
-          L.DomEvent.stopPropagation(e);
-          showOngZonaContextMenu(e.latlng, 'ong', f);
-        });
       });
     });
   }
@@ -929,21 +880,10 @@ $(document).ready(function () {
           let popup = `<b>${p.nome || ''}</b>`;
           if (p.categoria) popup += `<br>Tipo: ${p.categoria}`;
           if (p.descricao) popup += `<br><small>${p.descricao}</small>`;
-          // Botões no mesmo estilo do animal (outline + rounded-pill).
-          if (typeof isAdminModeActive === 'function' && isAdminModeActive() && p.id) {
-            popup += `<br><div class="d-flex gap-2 mt-2">`
-              + `<button type="button" class="btn btn-outline-warning btn-sm rounded-pill btn-edit-zona" data-id="${p.id}"><i class="fa-solid fa-pen-to-square me-1"></i>Editar</button>`
-              + `<button type="button" class="btn btn-outline-danger btn-sm rounded-pill btn-del-zona" data-id="${p.id}" data-nome="${String(p.nome || '').replace(/"/g, '&quot;')}"><i class="fa-solid fa-trash me-1"></i>Excluir</button>`
-              + `</div>`;
-          }
+          // Botões de editar/excluir ocultos por solicitação (popup somente leitura).
           polygon.bindPopup(popup);
           polygon.addTo(zonasLayer);
           polygon.featureData = f;
-          polygon.on('contextmenu', function (e) {
-            if (!isAdminModeActive()) return;
-            L.DomEvent.stopPropagation(e);
-            showOngZonaContextMenu(e.latlng, 'zona', f);
-          });
           try {
             const b = polygon.getBounds();
             const area = Math.abs(b.getEast() - b.getWest()) * Math.abs(b.getNorth() - b.getSouth());
@@ -1694,17 +1634,9 @@ $(document).ready(function () {
     var menu = $("#admin-context-menu");
     
     menu.html(`
-      <div class="admin-menu-item" data-action="preservacao">
-        <i class="fa-solid fa-shield-halved text-success"></i>
-        <span>Criar área de preservação</span>
-      </div>
       <div class="admin-menu-item" data-action="animal">
         <i class="fa-solid fa-paw text-warning"></i>
         <span>Criar animal</span>
-      </div>
-      <div class="admin-menu-item" data-action="ong">
-        <i class="fa-solid fa-hand-holding-heart text-info"></i>
-        <span>Criar Instituição</span>
       </div>
     `);
 
@@ -1878,6 +1810,8 @@ $(document).ready(function () {
   let isModalDrawingPolygon = false;
 
   function openAdminDrawer(action, latlng) {
+    // Cadastros de instituição e área de preservação ocultos por solicitação.
+    if (action === "preservacao" || action === "ong") return;
     closeAdminDrawer();
     $("#animal-edit-id").val("");
 
@@ -1915,12 +1849,8 @@ $(document).ready(function () {
 
       initModalRightPanelMap(lat, lng);
       loadAdminSelectOptions();
-    } 
-    else if (action === "preservacao" || action === "ong") {
-      // Modais split-screen no padrão do cadastro de animais (sem drawer).
-      if (action === "preservacao") openZonaModal(latlng);
-      else openOngModal(latlng);
     }
+    // Cadastros de instituição/área ocultos: nenhuma outra ação é aberta.
   }
 
   // Minimapa 100% IDÊNTICO ao Mapa Principal no Modal Split-Screen
@@ -2521,13 +2451,11 @@ $(document).ready(function () {
   });
 
   $(document).on('keydown', function(e) {
-    // Desfazer/refazer do editor de polígonos: vale para o modal de animais
-    // e para o modal de zona (cada um com sua própria pilha de histórico).
+    // Desfazer/refazer do editor de polígonos: vale para o modal de animais.
     const animalOpen = $('#species-admin-modal').is(':visible');
-    const zonaOpen = !animalOpen && $('#zona-admin-modal').is(':visible');
-    if (!animalOpen && !zonaOpen) return;
-    const doUndo = animalOpen ? undoModalPolygonState : undoZonaPolygonState;
-    const doRedo = animalOpen ? redoModalPolygonState : redoZonaPolygonState;
+    if (!animalOpen) return;
+    const doUndo = undoModalPolygonState;
+    const doRedo = redoModalPolygonState;
     if (e.ctrlKey && (e.key === 'z' || e.key === 'Z')) {
       if (e.shiftKey) {
         doRedo();
@@ -2707,20 +2635,12 @@ $(document).ready(function () {
   }
 
   function openOngModal(latlng) {
-    closeAdminDrawer();
-    $("#ong-edit-id").val("");
-    const lat = parseFloat(latlng.lat.toFixed(6));
-    const lng = parseFloat(latlng.lng.toFixed(6));
-    $("#ong-admin-modal").removeClass("d-none");
-    const form = $("#form-create-ong");
-    form[0].reset();
-    syncOngFormCoords(lat, lng);
-    initOngRightPanelMap(lat, lng);
+    return; // Cadastro de instituição oculto por solicitação.
   }
 
   // Edição de ONG: pré-preenche o modal com os dados da feature.
   function openOngModalForEdit(feature) {
-    if (!isAdminModeActive()) return;
+    return; // Cadastro de instituição oculto por solicitação.
     closeAdminDrawer();
     const p = (feature && feature.properties) || {};
     let lat = -27.59, lng = -48.54;
@@ -2780,31 +2700,13 @@ $(document).ready(function () {
   }
 
   function openZonaModal(latlng) {
-    closeAdminDrawer();
-    $("#zona-edit-id").val("");
-    const lat = parseFloat(latlng.lat.toFixed(6));
-    const lng = parseFloat(latlng.lng.toFixed(6));
-    $("#zona-admin-modal").removeClass("d-none");
-    const form = $("#form-create-preservacao");
-    form[0].reset();
-    syncZonaFormCoords(lat, lng);
-    // Reseta o editor de polígonos (mesmo fluxo do modal de animais).
-    isZonaDrawingPolygon = false;
-    $('#zona-btn-draw-polygon-mode')
-      .removeClass('btn-success text-white')
-      .addClass('btn-info text-dark')
-      .html('<i class="fa-solid fa-draw-polygon me-1"></i> Desenhar Área');
-    zonaDraftPolygonsList = [[]];
-    zonaPolygonHistory = [];
-    zonaPolygonRedo = [];
-    updateZonaUndoRedoButtonsUI();
-    initZonaRightPanelMap(lat, lng);
+    return; // Cadastro de área de preservação oculto por solicitação.
   }
 
   // Edição de Zona: pré-preenche o modal e carrega o polígono existente
   // no editor (convertendo GeoJSON [lng,lat] para [lat,lng] do Leaflet).
   function openZonaModalForEdit(feature) {
-    if (!isAdminModeActive()) return;
+    return; // Cadastro de área de preservação oculto por solicitação.
     closeAdminDrawer();
     const p = (feature && feature.properties) || {};
     const g = (feature && feature.geometry) || {};
@@ -3910,11 +3812,10 @@ $(document).ready(function () {
     });
   });
 
-  // Submissão do Formulário de Área de Preservação (POST criar / PUT editar).
-  // O polígono é OBRIGATÓRIO (igual ao desenho de área dos animais):
-  // sem ao menos 3 pontos o salvamento é bloqueado com alerta.
+  // Submissão do Formulário de Área de Preservação — desativada (cadastro oculto).
   $("#form-create-preservacao").submit(function(e) {
     e.preventDefault();
+    return;
     const form = $(this);
     const editId = ($("#zona-edit-id").val() || '').trim();
     const nome = (form.find('input[name="nome"]').val() || '').trim();
@@ -3990,11 +3891,10 @@ $(document).ready(function () {
     });
   });
 
-  // Submissão do Formulário de ONG (POST criar / PUT editar).
-  // `foco` não existe no modelo api_ong: é enviado e usado no popup local,
-  // sem alterar nenhuma regra de negócio do backend.
+  // Submissão do Formulário de ONG — desativada (cadastro oculto).
   $("#form-create-ong").submit(function(e) {
     e.preventDefault();
+    return;
     const form = $(this);
     const editId = ($("#ong-edit-id").val() || '').trim();
     const nome = (form.find('input[name="nome"]').val() || '').trim();
@@ -4241,9 +4141,9 @@ $(document).ready(function () {
     window.setModalImg(next);
   };
 
-  // Exclusão de ONG — confirmação dupla igual à de animais.
+  // Exclusão de ONG — desativada (cadastro oculto por solicitação).
   window.deleteOngWithConfirmation = async function(id, nome) {
-    if (typeof isAdminModeActive === 'function' && !isAdminModeActive()) return;
+    return;
     nome = nome || 'esta Instituição';
     if (!id) return;
     if (!await systemConfirm(`Tem certeza que deseja excluir "${nome}"?`, { title: 'Excluir Instituição' })) return;
@@ -4264,9 +4164,9 @@ $(document).ready(function () {
     });
   };
 
-  // Exclusão de área de preservação — confirmação dupla igual à de animais.
+  // Exclusão de área de preservação — desativada (cadastro oculto por solicitação).
   window.deleteZonaWithConfirmation = async function(id, nome) {
-    if (typeof isAdminModeActive === 'function' && !isAdminModeActive()) return;
+    return;
     nome = nome || 'esta área';
     if (!id) return;
     if (!await systemConfirm(`Tem certeza que deseja excluir "${nome}"?`, { title: 'Excluir área' })) return;
@@ -4287,35 +4187,7 @@ $(document).ready(function () {
     });
   };
 
-  // Exclusão de ONG via botão do popup (somente admin).
-  $(document).on('click', '.btn-del-ong', function(e) {
-    e.stopPropagation();
-    deleteOngWithConfirmation($(this).data('id'), $(this).data('nome') || 'esta Instituição');
-  });
-
-  // Edição de ONG via botão do popup (somente admin).
-  $(document).on('click', '.btn-edit-ong', function(e) {
-    e.stopPropagation();
-    if (typeof isAdminModeActive === 'function' && !isAdminModeActive()) return;
-    const id = String($(this).data('id') || '');
-    const f = (window.ongFeaturesById || {})[id];
-    if (f) openOngModalForEdit(f);
-  });
-
-  // Exclusão de área de preservação via botão do popup (somente admin).
-  $(document).on('click', '.btn-del-zona', function(e) {
-    e.stopPropagation();
-    deleteZonaWithConfirmation($(this).data('id'), $(this).data('nome') || 'esta área');
-  });
-
-  // Edição de área via botão do popup (somente admin).
-  $(document).on('click', '.btn-edit-zona', function(e) {
-    e.stopPropagation();
-    if (typeof isAdminModeActive === 'function' && !isAdminModeActive()) return;
-    const id = String($(this).data('id') || '');
-    const f = (window.zonaFeaturesById || {})[id];
-    if (f) openZonaModalForEdit(f);
-  });
+  // Botões de popup de instituição/zona removidos (cadastro oculto por solicitação).
 
   window.deleteEntityWithConfirmation = async function(entity) {
     const props = entity.properties || entity;

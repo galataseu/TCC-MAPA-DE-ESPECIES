@@ -20,19 +20,8 @@ block content
         | Legenda
       //- Visibilidade das camadas (usuário comum e admin; o estado persiste
       //- em memória enquanto navega — ver layerVisibility em app.js)
+      //- Opções de ocultar animais, instituições e zonas removidas por solicitação.
       .legend-section-title Camadas
-      .legend-toggle
-        label
-          input#toggle-layer-animais(type="checkbox", checked)
-          |  Ícones de animais
-      .legend-toggle
-        label
-          input#toggle-layer-ongs(type="checkbox", checked)
-          |  Marcadores de Instituições
-      .legend-toggle
-        label
-          input#toggle-layer-zonas(type="checkbox", checked)
-          |  Zonas de preservação
       .legend-toggle
         label
           input#toggle-layer-ocorrencias(type="checkbox")
@@ -115,16 +104,11 @@ block content
       span Modo Administrador Ativo
 
     //- Menu de Contexto Suspenso (Clique Direito no Modo Admin)
+    //- Opções de Instituição e Área de Preservação ocultas por solicitação.
     #admin-context-menu.admin-context-menu.d-none
-      .admin-menu-item(data-action="preservacao")
-        i.fa-solid.fa-shield-halved.text-success
-        span Criar área de preservação
       .admin-menu-item(data-action="animal")
         i.fa-solid.fa-paw.text-warning
         span Criar animal
-      .admin-menu-item(data-action="ong")
-        i.fa-solid.fa-hand-holding-heart.text-info
-        span Criar Instituição
 
     //- Modal Overlay Split-Screen para Cadastro de Espécies (Criar Animal / Clique Direito)
     #species-admin-modal.species-modal-fullscreen.d-none
@@ -321,164 +305,7 @@ block content
             .species-cards-scroll-area
               #modalAnimalCardsGrid.species-cards-grid
 
-    //- Modal Overlay Split-Screen para Cadastro de Instituições.
-    //- Mesmo layout/componentes da tela de cadastro de animais
-    //- (.species-modal-fullscreen, .species-form-panel, .colored-pill-input-*).
-    //- Mesmos campos e validações do formulário anterior (nome obrigatório).
-    #ong-admin-modal.species-modal-fullscreen.d-none
-      button#close-ong-modal-btn.btn-close.btn-close-white(type="button", aria-label="Fechar cadastro de Instituição", style="position: absolute; top: 20px; right: 25px; z-index: 3100;")
-      .species-split-layout
-        //- PAINEL ESQUERDO: FORMULÁRIO CADASTRAR INSTITUIÇÃO
-        .species-form-panel
-          .d-flex.align-items-center.justify-content-between.mb-3
-            h2.species-title.mb-0 CADASTRAR INSTITUIÇÃO
-
-          form#form-create-ong(action="/api/v1/ongs/", method="POST")
-            input#ong-edit-id(type="hidden", name="ong_id")
-            input.coord-lat(type="hidden", name="lat")
-            input.coord-lng(type="hidden", name="lng")
-
-            //- Linha 1: Latitude e Longitude (sincronizadas com o marcador)
-            .row.g-3.mb-3
-              .col-md-6
-                label.species-form-label Latitude
-                input.form-control.colored-pill-input-blue.input-lat(type="number", step="any", placeholder="-25.4284", required)
-              .col-md-6
-                label.species-form-label Longitude
-                input.form-control.colored-pill-input-green.input-lng(type="number", step="any", placeholder="-49.2733", required)
-
-            //- Linha 2: Nome e Foco
-            .row.g-3.mb-3
-              .col-md-6
-                label.species-form-label Nome da Instituição
-                input.form-control.colored-pill-input-bronze(type="text", name="nome", placeholder="Ex: SOS Mata Atlântica", required)
-              .col-md-6
-                label.species-form-label Área de Foco / Atuação
-                input.form-control.colored-pill-input-crimson(type="text", name="foco", placeholder="Ex: Reforestamento, Proteção da Fauna")
-
-            //- Linha 3: E-mail e Telefone
-            .row.g-3.mb-3
-              .col-md-6
-                label.species-form-label E-mail de Contato
-                input.form-control.colored-pill-input-blue(type="email", name="email", placeholder="contato@instituicao.org.br")
-              .col-md-6
-                label.species-form-label Telefone / WhatsApp
-                input.form-control.colored-pill-input-green(type="text", name="telefone", placeholder="(41) 99999-9999")
-
-            //- Linha 4: Descrição
-            .row.g-3.mb-4
-              .col-12
-                label.species-form-label Descrição das Atividades
-                textarea.form-control.colored-pill-input-bronze(name="descricao", rows="3", placeholder="Resumo dos projetos e formas de apoio...")
-
-            //- Botões de Ação (idênticos aos do cadastro de animais)
-            .d-flex.gap-3.mt-auto
-              button.btn.btn-warning.fw-bold.rounded-pill.px-4.py-2(type="submit", style="background-color: #9C5B1C; border: none; color: #FFF;")
-                i.fa-solid.fa-check.me-2
-                | Salvar Instituição
-              button.btn.btn-outline-secondary.rounded-pill.px-4.py-2.btn-cancel-ong-modal(type="button")
-                i.fa-solid.fa-rotate-left.me-2
-                | Limpar
-
-        //- PAINEL DIREITO: MAPA DA LOCALIZAÇÃO (mesmo painel do animal)
-        .species-display-panel
-          .view-toggle-bar
-            .view-toggle-btns
-              button.toggle-btn.active(type="button")
-                i.fa-solid.fa-map-location-dot
-                | Mapa da Localização
-          .h-100.d-flex.flex-column
-            .map-location-controls.d-flex.align-items-center.gap-2.mb-2.p-2.rounded-3.flex-wrap(style="background-color: #2B2A33;")
-              i.fa-solid.fa-circle-info.text-info
-              span.small.text-light Clique no mapa ou arraste o marcador para definir a localização da Instituição.
-            .flex-grow-1(style="min-height: 0;")
-              #ong-right-panel-map.h-100(style="border-radius: 16px; overflow: hidden; border: 1px solid #3B3A48;")
-
-    //- Modal Overlay Split-Screen para Cadastro de Áreas de Preservação.
-    //- Mesmo layout/componentes da tela de animais + o MESMO editor de
-    //- polígonos (desenhar / nova área / desfazer / refazer / cor / limpar).
-    //- Mesmos campos e validações do formulário anterior (nome e tipo
-    //- obrigatórios; `name="categoria"` segue o modelo ZonaPreservacao).
-    #zona-admin-modal.species-modal-fullscreen.d-none
-      button#close-zona-modal-btn.btn-close.btn-close-white(type="button", aria-label="Fechar cadastro de área de preservação", style="position: absolute; top: 20px; right: 25px; z-index: 3100;")
-      .species-split-layout
-        //- PAINEL ESQUERDO: FORMULÁRIO CADASTRAR ÁREA DE PRESERVAÇÃO
-        .species-form-panel
-          .d-flex.align-items-center.justify-content-between.mb-3
-            h2.species-title.mb-0 CADASTRAR ÁREA DE PRESERVAÇÃO
-
-          form#form-create-preservacao(action="/api/v1/zonas-preservacao/", method="POST")
-            input#zona-edit-id(type="hidden", name="zona_id")
-            input#zona-area-polygon-json-hidden(type="hidden", name="area_polygon_json")
-            input.coord-lat(type="hidden", name="lat")
-            input.coord-lng(type="hidden", name="lng")
-
-            //- Linha 1: Latitude e Longitude (ponto de referência da área)
-            .row.g-3.mb-3
-              .col-md-6
-                label.species-form-label Latitude
-                input.form-control.colored-pill-input-blue.input-lat(type="number", step="any", placeholder="-27.5954", required)
-              .col-md-6
-                label.species-form-label Longitude
-                input.form-control.colored-pill-input-green.input-lng(type="number", step="any", placeholder="-48.5480", required)
-
-            //- Linha 2: Nome e Tipo
-            .row.g-3.mb-3
-              .col-md-6
-                label.species-form-label Nome da Área
-                input.form-control.colored-pill-input-bronze(type="text", name="nome", placeholder="Ex: Parque Nacional do Iguaçu", required)
-              .col-md-6
-                label.species-form-label Tipo de Preservação
-                select.form-select.colored-pill-input-green(name="categoria", required)
-                  option(value="Parque Nacional") Parque Nacional
-                  option(value="Reserva Biológica") Reserva Biológica
-                  option(value="Área de Proteção Ambiental") Área de Proteção Ambiental (APA)
-                  option(value="Estação Ecológica") Estação Ecológica
-                  option(value="Refúgio de Vida Silvestre") Refúgio de Vida Silvestre
-
-            //- Linha 3: Descrição
-            .row.g-3.mb-4
-              .col-12
-                label.species-form-label Descrição / Objetivos
-                textarea.form-control.colored-pill-input-bronze(name="descricao", rows="3", placeholder="Descrição dos objetivos de conservação...")
-
-            //- Botões de Ação (idênticos aos do cadastro de animais)
-            .d-flex.gap-3.mt-auto
-              button.btn.btn-warning.fw-bold.rounded-pill.px-4.py-2(type="submit", style="background-color: #9C5B1C; border: none; color: #FFF;")
-                i.fa-solid.fa-check.me-2
-                | Salvar Área de Preservação
-              button.btn.btn-outline-secondary.rounded-pill.px-4.py-2.btn-cancel-zona-modal(type="button")
-                i.fa-solid.fa-rotate-left.me-2
-                | Limpar
-
-        //- PAINEL DIREITO: MAPA + EDITOR DE POLÍGONOS (mesmos controles do animal)
-        .species-display-panel
-          .view-toggle-bar
-            .view-toggle-btns
-              button.toggle-btn.active(type="button")
-                i.fa-solid.fa-map-location-dot
-                | Mapa da Localização
-          #zona-panel-map.h-100.d-flex.flex-column
-            .map-location-controls.d-flex.align-items-center.gap-2.mb-2.p-2.rounded-3.flex-wrap(style="background-color: #2B2A33;")
-              button#zona-btn-draw-polygon-mode.btn.btn-info.btn-sm.rounded-pill.fw-bold.text-dark(type="button")
-                i.fa-solid.fa-draw-polygon.me-1
-                | Desenhar Área
-              button#zona-btn-new-polygon-area.btn.btn-outline-warning.btn-sm.rounded-pill.fw-bold(type="button", title="Criar outra área separada")
-                i.fa-solid.fa-plus.me-1
-                | Nova Área
-              button#zona-btn-undo-polygon.btn.btn-dark.btn-sm.rounded-circle(type="button", title="Desfazer (Ctrl+Z)", style="width: 32px; height: 32px; padding: 0;")
-                i.fa-solid.fa-rotate-left
-              button#zona-btn-redo-polygon.btn.btn-dark.btn-sm.rounded-circle(type="button", title="Refazer (Ctrl+Y)", style="width: 32px; height: 32px; padding: 0;")
-                i.fa-solid.fa-rotate-right
-              .d-flex.align-items-center.gap-1.ms-1(title="Escolher Cor da Área")
-                label.small.text-light.mb-0 Cor:
-                input#zona-polygon-color-picker.form-control.form-control-color.p-0.border-0.rounded-circle(type="color", value="#287f5e", style="width: 28px; height: 28px; cursor: pointer;")
-              button#zona-btn-clear-polygon.btn.btn-outline-danger.btn-sm.rounded-pill.ms-1(type="button")
-                i.fa-solid.fa-eraser.me-1
-                | Limpar
-              span#zona-polygon-status-badge.badge.bg-dark.text-warning.border.border-warning.ms-auto Nenhuma área desenhada
-            .flex-grow-1(style="min-height: 0;")
-              #zona-right-panel-map.h-100(style="border-radius: 16px; overflow: hidden; border: 1px solid #3B3A48;")
+    //- Cadastros de Instituição e Área de Preservação ocultos por solicitação.
 
   //- Modal de Importação de Planilha SALVE (ICMBio)
   #modalImportSalve.modal.fade(tabindex="-1", aria-hidden="true")
