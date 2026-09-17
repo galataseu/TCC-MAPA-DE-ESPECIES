@@ -337,6 +337,166 @@ style.
     color: #FFFFFF;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
   }
+
+  /* Bandeiras dos estados */
+  #welcome-overlay .welcome-flags {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin: 16px 0 4px 0;
+    flex-wrap: wrap;
+  }
+  #welcome-overlay .welcome-flag-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  #welcome-overlay .welcome-flag-img {
+    height: 38px;
+    width: auto;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.15);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    object-fit: cover;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  #welcome-overlay .welcome-flag-img:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.7);
+  }
+  #welcome-overlay .welcome-flag-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #8C8B96;
+  }
+
+  /* Cards de estatísticas */
+  #welcome-overlay .welcome-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  #welcome-overlay .welcome-stat-card {
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid #3B3A48;
+    background-color: #1F1E26;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  #welcome-overlay .welcome-stat-card.is-total {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, #1a2f5a 0%, #1F1E26 100%);
+    border-color: #1a5fb4;
+  }
+  #welcome-overlay .welcome-stat-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    background-color: rgba(255,255,255,0.06);
+  }
+  #welcome-overlay .welcome-stat-card.is-total .welcome-stat-icon {
+    background-color: rgba(26, 95, 180, 0.25);
+    color: #5b9ef4;
+  }
+  #welcome-overlay .welcome-stat-body { min-width: 0; }
+  #welcome-overlay .welcome-stat-number {
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: #FFFFFF;
+    line-height: 1;
+    margin-bottom: 2px;
+  }
+  #welcome-overlay .welcome-stat-card.is-total .welcome-stat-number { font-size: 2rem; color: #5b9ef4; }
+  #welcome-overlay .welcome-stat-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #8C8B96;
+  }
+  #welcome-overlay .welcome-stat-card.is-total .welcome-stat-label { color: #A09FA9; }
+  #welcome-overlay .welcome-stat-nivel-badge {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    font-size: 0.68rem;
+    font-weight: 900;
+    color: #fff;
+    text-align: center;
+    line-height: 28px;
+    flex-shrink: 0;
+  }
+  @media (max-width: 576px) {
+    #welcome-overlay .welcome-stats-grid { grid-template-columns: 1fr; }
+    #welcome-overlay .welcome-stat-card.is-total { grid-column: auto; }
+  }
+
+  /* Níveis de conservação expandidos (card com descrição) */
+  #welcome-overlay .welcome-nivel-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 16px;
+  }
+  #welcome-overlay .welcome-nivel-card {
+    border-radius: 10px;
+    border: 1px solid #3B3A48;
+    background-color: #1F1E26;
+    overflow: hidden;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  #welcome-overlay .welcome-nivel-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+  }
+  #welcome-overlay .welcome-nivel-card-header {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #welcome-overlay .welcome-nivel-badge {
+    font-size: 0.78rem;
+    font-weight: 900;
+    padding: 3px 9px;
+    border-radius: 6px;
+    color: #fff;
+    letter-spacing: 0.5px;
+  }
+  #welcome-overlay .welcome-nivel-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #welcome-overlay .welcome-nivel-desc {
+    padding: 0 12px 10px 12px;
+    font-size: 0.76rem;
+    line-height: 1.5;
+    color: #A09FA9;
+  }
+  @media (max-width: 768px) {
+    #welcome-overlay .welcome-nivel-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 480px) {
+    #welcome-overlay .welcome-nivel-grid { grid-template-columns: 1fr; }
+  }
   /* Bloco final: preferência + ação (dentro do scroll, após todo o texto) */
   #welcome-overlay .welcome-final {
     margin: 8px 0 0 0;
@@ -478,8 +638,30 @@ style.
           p.welcome-eyebrow Boas-vindas
           h2#welcome-title.welcome-title Sobre o projeto
           p.welcome-subtitle
-            | Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do
-            | eiusmod tempor incididunt.
+            | Um mapa interativo sobre as espécies ameaçadas da região sul do Brasil.
+          //- Bandeiras dos estados cobertos pelo mapa
+          .welcome-flags(aria-label="Estados cobertos: Paraná, Santa Catarina e Rio Grande do Sul")
+            .welcome-flag-item
+              img.welcome-flag-img(
+                src="/assets/img/bandeira/Bandeira_do_Paraná.svg.png"
+                alt="Bandeira do Paraná"
+                title="Paraná"
+              )
+              span.welcome-flag-label PR
+            .welcome-flag-item
+              img.welcome-flag-img(
+                src="/assets/img/bandeira/Bandeira_de_Santa_Catarina.png"
+                alt="Bandeira de Santa Catarina"
+                title="Santa Catarina"
+              )
+              span.welcome-flag-label SC
+            .welcome-flag-item
+              img.welcome-flag-img(
+                src="/assets/img/bandeira/bandeira_rio_grande_do_sul.png"
+                alt="Bandeira do Rio Grande do Sul"
+                title="Rio Grande do Sul"
+              )
+              span.welcome-flag-label RS
 
         //- Preview do mapa NO MEIO da página (igual ao original e funcional)
         .welcome-preview(role="region", aria-label="Prévia interativa do mapa")
@@ -504,55 +686,65 @@ style.
           h3#w-sec-sobre-t Sobre o projeto
           p.welcome-kicker Visão geral
           p
-            | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
-            | eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim
-            | ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut
-            | aliquip ex ea commodo consequat.
+            | Este sistema é um projeto de alunos do IFC Campus Sombrio para o desenvolvimeto
+            | de um Trabalho de Conclusão de Curso do curso de Informática para a Internet.
           p
-            | Duis aute irure dolor in reprehenderit in voluptate velit esse
-            | cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat
-            | cupidatat non proident, sunt in culpa qui officia deserunt mollit
-            | anim id est laborum.
+            | O sistema é um mapa interativo dos estados de Santa Catarina, Rio Grande do Sul e Paraná, onde por meio de 
+            | informações governamentais públicas destacam-se os biomas da região e mostra com marcadores os seus animais em
+            | diferentes níveis de ameaça de extinção e conservação.
+          p 
+            | A ideia surge apartir da atual crise climática que vem se desenvolvendo há décadas, na qual por 
+            | meio de ações humanas a biodiversidade do planeta se encontra em ameaçadas cada vez mais catastróficas
+            | e o Brasil e sua região Sul também estão dentro disso, sendo o bioma predominante do Sul, a Mata Atlântica,
+            | um dos mais degradados do mundo.
+            | Assim, este trabalho possui cunho conscientizador e educacional sobre as espécies ameaçadas da nossa região.
+            
 
         section#w-sec-como.welcome-section(aria-labelledby="w-sec-como-t")
           h3#w-sec-como-t Como funciona
-          p.welcome-kicker Passo a passo
+          p.welcome-kicker Origem dos Dados
           p
-            | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
-            | eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim
-            | ad minim veniam, quis nostrud exercitation ullamco.
+            | Os cadastros no sistema de baseiam predominantemente em dados públicos governamentais do 
+            | Instituto Chico Mendes de Conservação da Biodiversidade (ICMBio) presentes em sua plataforma SALVE,
+            | que são complementados com informações de enciclopédias digitais e artigos científicos.
+          //- Cards de estatísticas dinâmicas
+          .welcome-stats-grid#welcome-stats-grid(aria-label="Estatísticas de espécies cadastradas")
+            .welcome-stat-card.is-total
+              .welcome-stat-icon
+                i.fa-solid.fa-paw(aria-hidden="true")
+              .welcome-stat-body
+                div.welcome-stat-number#welcome-stat-total —
+                div.welcome-stat-label Espécies cadastradas no sistema
+          //- Cards por nível serão injetados via JS
           .welcome-cards
             .welcome-card
               i.fa-solid.fa-map-location-dot(aria-hidden="true")
               strong Explore o mapa
-              span Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod.
+              span Navegue pelo mapa visualizando as áreas dos biomas estilizados e as diferentes espécies da região!
             .welcome-card
               i.fa-solid.fa-magnifying-glass(aria-hidden="true")
-              strong Pesquise espécies
-              span Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod.
+              strong Pesquise espécies e lugares
+              span Faça uma consulta entre suas espécies e localizações favoritas!
             .welcome-card
               i.fa-solid.fa-circle-info(aria-hidden="true")
               strong Veja detalhes
-              span Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod.
+              span Clique nos marcadores e veja o card de cada animal, com imagens, informações e descrições!
 
         section#w-sec-objetivos.welcome-section(aria-labelledby="w-sec-objetivos-t")
           h3#w-sec-objetivos-t Objetivos
           p.welcome-kicker O que queremos alcançar
           p
-            | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
-            | eiusmod tempor incididunt ut labore et dolore magna aliqua.
+            | Como uma ferramenta educacional, pretendemos:
           ul.welcome-list
-            li Lorem ipsum dolor sit amet, consectetur adipiscing elit.
-            li Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-            li Ut enim ad minim veniam, quis nostrud exercitation ullamco.
+            li Conscientizar pessoas sobre seus arredores e fauna local.
+            li Compartilhar a presença de espécies nos arredores do público
+            li Divulgar ações de conservação animal.
 
         section#w-sec-biomas.welcome-section(aria-labelledby="w-sec-biomas-t")
           h3#w-sec-biomas-t Biomas mapeados
           p.welcome-kicker Onde as espécies vivem
           p
-            | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
-            | eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim
-            | ad minim veniam, quis nostrud exercitation ullamco laboris.
+            | Os biomas presentes na região Sul.
           .welcome-chips
             span.welcome-chip(style="background-color: #287f5e;") Mata Atlântica
             span.welcome-chip(style="background-color: #3b7ba5;") Pampa
@@ -562,26 +754,61 @@ style.
           h3#w-sec-niveis-t Níveis de conservação
           p.welcome-kicker Entenda as siglas
           p
-            | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
-            | eiusmod tempor incididunt ut labore et dolore magna aliqua.
-          .welcome-chips
-            span.welcome-chip(style="background-color: #403E4C;") EX
-            span.welcome-chip(style="background-color: #831F34;") EW
-            span.welcome-chip(style="background-color: #B0214F;") RE
-            span.welcome-chip(style="background-color: #FF4068;") CR
-            span.welcome-chip(style="background-color: #FF6426;") EN
-            span.welcome-chip(style="background-color: #FFA63A; color: #111115;") VU
-            span.welcome-chip(style="background-color: #217757;") NT
-            span.welcome-chip(style="background-color: #1A5FB4;") LC
-            span.welcome-chip(style="background-color: #555555;") DD
+            | Categorização regional de ameaça criada pela IUCN e utilizada pelo ICMBio no Brasil.
+            | Cada sigla representa o grau de risco de extinção de uma espécie.
+          .welcome-nivel-grid
+            .welcome-nivel-card
+              .welcome-nivel-card-header
+                span.welcome-nivel-badge(style="background-color: #403E4C;") EX
+                span.welcome-nivel-name Extinta
+              p.welcome-nivel-desc Espécie não é mais encontrada em nenhum lugar do mundo. A extinção é considerada definitiva.
+            .welcome-nivel-card
+              .welcome-nivel-card-header
+                span.welcome-nivel-badge(style="background-color: #831F34;") EW
+                span.welcome-nivel-name Extinta na Natureza
+              p.welcome-nivel-desc Sobrevive apenas em cativeiro ou em populações artificiais, fora de seu habitat natural.
+            .welcome-nivel-card
+              .welcome-nivel-card-header
+                span.welcome-nivel-badge(style="background-color: #B0214F;") RE
+                span.welcome-nivel-name Regionalmente Extinta
+              p.welcome-nivel-desc Espécie extinta na região avaliada (Brasil/Sul), mas que pode existir em outros países.
+            .welcome-nivel-card
+              .welcome-nivel-card-header
+                span.welcome-nivel-badge(style="background-color: #FF4068;") CR
+                span.welcome-nivel-name Criticamente em Perigo
+              p.welcome-nivel-desc Enfrenta risco extremamente alto de extinção na natureza. Necessita de ação urgente.
+            .welcome-nivel-card
+              .welcome-nivel-card-header
+                span.welcome-nivel-badge(style="background-color: #FF6426;") EN
+                span.welcome-nivel-name Em Perigo
+              p.welcome-nivel-desc Em risco muito alto de extinção. Sofre reduções populacionais significativas.
+            .welcome-nivel-card
+              .welcome-nivel-card-header
+                span.welcome-nivel-badge(style="background-color: #FFA63A;") VU
+                span.welcome-nivel-name Vulnerável
+              p.welcome-nivel-desc Em risco alto de extinção. Tendência de declínio populacional se não houver intervenção.
+            .welcome-nivel-card
+              .welcome-nivel-card-header
+                span.welcome-nivel-badge(style="background-color: #217757;") NT
+                span.welcome-nivel-name Quase Ameaçada
+              p.welcome-nivel-desc Próxima de qualificar-se como Vulnerável. Requer monitoramento contínuo.
+            .welcome-nivel-card
+              .welcome-nivel-card-header
+                span.welcome-nivel-badge(style="background-color: #1A5FB4;") LC
+                span.welcome-nivel-name Menos Preocupante
+              p.welcome-nivel-desc Espécie avaliada e não considerada ameaçada. Populações estáveis ou em recuperação.
+            .welcome-nivel-card
+              .welcome-nivel-card-header
+                span.welcome-nivel-badge(style="background-color: #555555;") DD
+                span.welcome-nivel-name Dados Insuficientes
+              p.welcome-nivel-desc Não há dados adequados para avaliar o risco de extinção. Mais pesquisas são necessárias.
 
         //- Bloco final exigido: checkbox de preferência + botão de fechar
         section.welcome-section(aria-labelledby="w-sec-cta-t")
           h3#w-sec-cta-t Pronto para começar
           p.welcome-kicker Último passo
           p
-            | Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
-            | eiusmod tempor incididunt ut labore et dolore.
+            | Explore o mapa e as espécies!
           .welcome-final
             label.welcome-hide-label(for="welcome-hide-checkbox")
               input#welcome-hide-checkbox(
@@ -959,6 +1186,50 @@ script.
       if (tourTimer) { clearInterval(tourTimer); tourTimer = null; }
     }
 
+    // --- Estatísticas da tela de boas-vindas ---
+    var STATS_NIVEL_COLORS = {
+      ex: '#403E4C', ew: '#831F34', re: '#B0214F', cr: '#FF4068',
+      en: '#FF6426', vu: '#FFA63A', nt: '#217757', lc: '#1A5FB4', dd: '#555555'
+    };
+    var statsLoaded = false;
+    function loadWelcomeStats() {
+      if (statsLoaded || typeof fetch === 'undefined') return;
+      var grid = $('welcome-stats-grid');
+      if (!grid) return;
+      fetch('/api/v1/stats/', { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (res) {
+          if (!res || !res.success || !res.data) return;
+          statsLoaded = true;
+          var data = res.data;
+          // Atualiza o card total
+          var totalEl = $('welcome-stat-total');
+          if (totalEl) totalEl.textContent = data.total != null ? data.total : '—';
+          // Injeta um card para cada nível que tenha ao menos 1 animal
+          if (Array.isArray(data.by_nivel)) {
+            var fragment = document.createDocumentFragment();
+            data.by_nivel.forEach(function (nivel) {
+              if (!nivel.count) return;
+              var sigla = String(nivel.sigla || '').toLowerCase();
+              var color = STATS_NIVEL_COLORS[sigla] || '#555555';
+              var card = document.createElement('div');
+              card.className = 'welcome-stat-card';
+              card.innerHTML =
+                '<div class="welcome-stat-nivel-badge" style="background-color:' + color + ';">' +
+                  (nivel.sigla || '?') +
+                '</div>' +
+                '<div class="welcome-stat-body">' +
+                  '<div class="welcome-stat-number">' + nivel.count + '</div>' +
+                  '<div class="welcome-stat-label">' + (nivel.nome || nivel.sigla) + '</div>' +
+                '</div>';
+              fragment.appendChild(card);
+            });
+            grid.appendChild(fragment);
+          }
+        })
+        .catch(function () {});
+    }
+
     // --- Abertura: ignora o cookie quando forçada (botão "Sobre") ---
     function openWelcome(opts) {
       opts = opts || {};
@@ -979,6 +1250,7 @@ script.
       updateScrollHint();
       // Preview é criado uma vez, na primeira abertura (com o layout visível).
       initPreview();
+      loadWelcomeStats();
       try { if (previewMap) previewMap.invalidateSize(); } catch (e) {}
       // Reaberturas (botão Sobre): layout pode ainda estar animando.
       setTimeout(function () { try { if (isOpen() && previewMap) previewMap.invalidateSize(); } catch (e) {} }, 500);

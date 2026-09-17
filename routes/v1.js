@@ -1091,4 +1091,46 @@ router.post('/animais/import-salve', uploadCSV.single('csv_file'), async (req, r
   }
 });
 
+// GET /api/v1/stats/
+// Retorna estatísticas agregadas: total de animais e contagem por nível de extinção.
+// Usado pelos cards de resumo da tela de boas-vindas.
+router.get('/stats/', async (req, res) => {
+  try {
+    const [totalResult, byNivel] = await Promise.all([
+      prisma.api_animal.count({ where: { deleted_at: null } }),
+      prisma.api_animal.groupBy({
+        by: ['nivel_extincao_id'],
+        where: { deleted_at: null },
+        _count: { id: true }
+      })
+    ]);
+
+    // Busca todos os níveis para completar com 0 os que não têm animais
+    const niveis = await prisma.api_nivelextincao.findMany({ orderBy: { id: 'asc' } });
+    const countMap = {};
+    for (const row of byNivel) {
+      countMap[String(row.nivel_extincao_id)] = row._count.id;
+    }
+
+    const byNivelFormatted = niveis.map(n => ({
+      id: String(n.id),
+      sigla: n.sigla,
+      nome: n.nome,
+      count: countMap[String(n.id)] || 0
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        total: totalResult,
+        by_nivel: byNivelFormatted
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching stats:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
+
