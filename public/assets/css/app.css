@@ -2125,3 +2125,424 @@ body:has(#zona-admin-modal:not(.d-none)) #floating-search {
   font-size: 12px;
   top: 12px;
 }
+
+/* ==========================================================================
+   RESPONSIVO — celular, tablet e telas variadas + navbar inferior no mobile
+   Breakpoints: ≤1100px (telas médias), ≤768px (celular/tablet retrato),
+   ≤420px (celulares pequenos) e landscape baixo.
+   ========================================================================== */
+:root {
+  --bottom-nav-h: calc(62px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Usa a altura dinâmica da viewport quando suportado (barra de endereço
+   do navegador mobile não quebra o layout). */
+@supports (height: 100dvh) {
+  html, body, #main-layout {
+    height: 100dvh;
+  }
+}
+
+/* Botão de recolher a legenda (só aparece no mobile) */
+#legend-collapse-btn {
+  display: none;
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #FFAA44;
+  font-size: 14px;
+  line-height: 1;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+#legend-collapse-btn i {
+  transition: transform 0.25s ease;
+  pointer-events: none;
+}
+
+#legend-collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ---------- Telas médias / tablet paisagem (≤1100px) ---------- */
+@media (max-width: 1100px) {
+  #floating-search {
+    width: 380px;
+    min-width: 0;
+  }
+
+  .brand-logo {
+    height: 140px;
+  }
+
+  #brand-header {
+    left: 76px;
+  }
+
+  .species-form-panel {
+    padding: 24px;
+  }
+
+  .species-display-panel {
+    padding: 20px;
+  }
+
+  .species-title {
+    font-size: 1.5rem;
+  }
+}
+
+/* ---------- Celular / tablet retrato (≤768px): navbar embaixo ---------- */
+@media (max-width: 768px) {
+  #main-layout {
+    flex-direction: column;
+  }
+
+  /* Navbar fixa na base da tela */
+  #vertical-nav {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: var(--bottom-nav-h);
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: space-evenly;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+    border-right: none;
+    border-top: 2px solid #1a5fb4;
+    background-color: rgba(18, 18, 18, 0.97);
+    backdrop-filter: blur(10px);
+    z-index: 3200;
+  }
+
+  #vertical-nav .nav-section-top,
+  #vertical-nav .nav-section-middle,
+  #vertical-nav .nav-section-bottom {
+    display: contents;
+    padding: 0;
+  }
+
+  #vertical-nav .nav {
+    display: contents !important;
+  }
+
+  #vertical-nav .nav > li {
+    margin: 0;
+    width: auto;
+  }
+
+  #vertical-nav .nav > li > a {
+    flex-direction: column;
+    gap: 3px;
+    width: 64px;
+    height: 100%;
+    min-height: 48px;
+    font-size: 20px;
+  }
+
+  /* Rótulos sempre visíveis abaixo do ícone (sem pílula de hover) */
+  #vertical-nav .nav-label,
+  #vertical-nav .nav > li:hover .nav-label {
+    position: static;
+    transform: none;
+    opacity: 1;
+    visibility: visible;
+    background: none;
+    box-shadow: none;
+    border-radius: 0;
+    height: auto;
+    min-width: 0;
+    padding: 0;
+    font-size: 10px;
+    letter-spacing: 0.4px;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  /* Conteúdo do mapa reserva espaço para a navbar */
+  #container {
+    height: auto;
+    padding-bottom: var(--bottom-nav-h);
+  }
+
+  /* Busca ocupa a largura toda no topo */
+  #floating-search {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  #floating-search .form-control {
+    height: 44px;
+    font-size: 14px;
+  }
+
+  .search-dropdown-menu {
+    max-height: 45vh;
+  }
+
+  /* Logo menor, abaixo da barra de busca */
+  #brand-header {
+    top: 62px;
+    left: 8px;
+  }
+
+  .brand-logo {
+    height: 96px;
+  }
+
+  /* Badge do modo admin abaixo da busca */
+  #admin-mode-badge {
+    top: 64px;
+    font-size: 0.78rem;
+    padding: 6px 14px;
+    max-width: calc(100vw - 24px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Legenda compacta acima da navbar */
+  #map-legend {
+    left: 10px;
+    right: auto;
+    bottom: calc(var(--bottom-nav-h) + 10px);
+    min-width: 0;
+    max-width: min(80vw, 250px);
+    max-height: min(36vh, 330px);
+    padding: 10px 12px;
+  }
+
+  .legend-header {
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  .legend-header .legend-grip {
+    display: none;
+  }
+
+  #legend-collapse-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Estado recolhido: só o cabeçalho fica visível */
+  #map-legend.legend-collapsed > :not(.legend-header) {
+    display: none;
+  }
+
+  #map-legend.legend-collapsed #legend-collapse-btn i {
+    transform: rotate(180deg);
+  }
+
+  .legend-item {
+    font-size: 12px;
+  }
+
+  .legend-text {
+    font-size: 0.75rem;
+  }
+
+  /* Alvos de toque maiores nos controles do mapa */
+  .leaflet-control-zoom a,
+  .leaflet-control-locate a {
+    width: 44px !important;
+    height: 44px !important;
+    line-height: 44px !important;
+    font-size: 18px;
+  }
+
+  .leaflet-bottom.leaflet-right {
+    bottom: 12px !important;
+    right: 10px !important;
+  }
+
+  .leaflet-popup-content {
+    max-width: 72vw;
+  }
+
+  /* Modais de cadastro: empilha formulário e mapa */
+  .species-modal-fullscreen {
+    left: 0;
+    overflow-y: auto;
+  }
+
+  .species-split-layout {
+    flex-direction: column;
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .species-form-panel {
+    flex: none;
+    width: 100%;
+    border-right: none;
+    border-bottom: 2px solid #18171E;
+    padding: 20px 16px;
+    overflow: visible;
+  }
+
+  .species-display-panel {
+    flex: none;
+    width: 100%;
+    min-height: 68vh;
+    overflow: visible;
+    padding: 16px;
+  }
+
+  .species-title {
+    font-size: 1.3rem;
+  }
+
+  .species-cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+  }
+
+  #right-panel-map-container,
+  #modal-right-panel-map,
+  #ong-right-panel-map,
+  #zona-right-panel-map {
+    min-height: 320px !important;
+  }
+
+  .view-toggle-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Drawer admin e menus em tela cheia */
+  .admin-sidebar-drawer {
+    width: 100%;
+  }
+
+  .admin-context-menu {
+    min-width: 0;
+    max-width: calc(100vw - 24px);
+  }
+
+  .modal-dialog {
+    margin: 12px;
+  }
+
+  /* Tela de boas-vindas fica acima da navbar inferior */
+  #welcome-overlay.welcome-overlay {
+    bottom: var(--bottom-nav-h);
+  }
+
+  #welcome-overlay.welcome-overlay .welcome-layout {
+    height: 100%;
+  }
+
+  #welcome-overlay.welcome-overlay .welcome-inner {
+    width: 94%;
+    padding: 24px 16px 0 16px;
+  }
+
+  #welcome-overlay.welcome-overlay .welcome-preview {
+    height: 240px;
+  }
+}
+
+/* ---------- Celulares pequenos (≤420px) ---------- */
+@media (max-width: 420px) {
+  #brand-header {
+    top: 60px;
+  }
+
+  .brand-logo {
+    height: 80px;
+  }
+
+  #floating-search .form-control {
+    font-size: 13px;
+  }
+
+  #vertical-nav .nav > li > a {
+    width: 56px;
+    font-size: 18px;
+  }
+
+  #vertical-nav .nav-label,
+  #vertical-nav .nav > li:hover .nav-label {
+    font-size: 9px;
+  }
+
+  #map-legend {
+    max-width: calc(100vw - 20px);
+    padding: 8px 10px;
+  }
+
+  .species-form-panel,
+  .species-display-panel {
+    padding: 14px 12px;
+  }
+
+  .species-cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toggle-btn {
+    padding: 6px 12px;
+    font-size: 0.78rem;
+  }
+
+  .admin-menu-item {
+    font-size: 0.82rem;
+    padding: 9px 12px;
+  }
+
+  #welcome-overlay.welcome-overlay .welcome-preview {
+    height: 200px;
+  }
+}
+
+/* ---------- Landscape baixo (celular deitado) ---------- */
+@media (max-height: 540px) and (orientation: landscape) {
+  #vertical-nav {
+    padding-top: 4px;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+  }
+
+  #vertical-nav .nav > li > a {
+    min-height: 42px;
+  }
+
+  .brand-logo {
+    height: 72px;
+  }
+
+  #brand-header {
+    top: 56px;
+  }
+
+  #map-legend {
+    max-height: 52vh;
+  }
+
+  #floating-search .form-control {
+    height: 40px;
+  }
+}
+
+/* ---------- Telas grandes (≥1400px) ---------- */
+@media (min-width: 1400px) {
+  #floating-search {
+    width: 540px;
+  }
+
+  #map-legend {
+    max-width: 280px;
+  }
+}

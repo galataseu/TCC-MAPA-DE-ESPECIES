@@ -438,6 +438,32 @@ $(document).ready(function () {
 
   makeLegendDraggable();
 
+  // Legenda colapsável no celular (botão no cabeçalho, visível só no mobile).
+  // Começa recolhida em telas pequenas para liberar espaço do mapa.
+  (function initLegendCollapse() {
+    var legend = document.getElementById('map-legend');
+    var btn = document.getElementById('legend-collapse-btn');
+    if (!legend || !btn) return;
+    var MOBILE_MAX = 768;
+    var wasMobile = window.innerWidth <= MOBILE_MAX;
+    function applyForViewport(force) {
+      var isMobile = window.innerWidth <= MOBILE_MAX;
+      if (!force && isMobile === wasMobile) return;
+      wasMobile = isMobile;
+      legend.classList.toggle('legend-collapsed', isMobile);
+    }
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      legend.classList.toggle('legend-collapsed');
+    });
+    applyForViewport(true);
+    var rsTimer = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(rsTimer);
+      rsTimer = setTimeout(function () { applyForViewport(false); }, 150);
+    });
+  })();
+
   // Botão "Sobre": tratado em views/partials/welcome-modal.pug (overlay global
   // WelcomeModal com localStorage "hideWelcomeScreen"). Mantido aqui apenas como
   // fallback caso o partial não esteja presente.

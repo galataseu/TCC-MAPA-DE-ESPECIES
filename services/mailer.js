@@ -50,11 +50,16 @@ function statusBadge(nivel) {
 }
 
 /**
- * Monta e envia (ou registra) o e-mail de mudança de status.
+ * Monta o conteúdo do e-mail de mudança de status (função pura, testável).
  * Conteúdo propositalmente restrito: só a mudança de status da espécie.
  */
-async function sendStatusChangeEmail(to, { animalNome, oldNivel, newNivel }) {
-  const subject = `Status de conservação atualizado: ${animalNome} agora é ${newNivel.nome}`;
+function buildStatusChangeEmail({ animalNome, oldNivel, newNivel }) {
+  const safeAnimal = String(animalNome == null || animalNome === '' ? 'esta espécie' : animalNome);
+  const oldSigla = String((oldNivel && oldNivel.sigla) || '??').toUpperCase();
+  const oldNome = (oldNivel && oldNivel.nome) || oldSigla;
+  const newSigla = String((newNivel && newNivel.sigla) || '??').toUpperCase();
+  const newNome = (newNivel && newNivel.nome) || newSigla;
+  const subject = `Status de conservação atualizado: ${safeAnimal} agora é ${newNome}`;
   const html = `
   <div style="margin:0;padding:0;background-color:#121118;font-family:Arial,Helvetica,sans-serif;">
     <div style="max-width:560px;margin:0 auto;padding:28px 20px;">
@@ -65,15 +70,23 @@ async function sendStatusChangeEmail(to, { animalNome, oldNivel, newNivel }) {
       <div style="background-color:#23222B;border:1px solid #3B3A48;border-radius:16px;padding:28px 24px;text-align:center;">
         <div style="font-size:40px;margin-bottom:10px;">🔔</div>
         <h2 style="color:#FFFFFF;margin:0 0 6px;font-size:20px;">Status de conservação atualizado</h2>
-        <p style="color:#D1D1D8;font-size:15px;margin:0 0 18px;">A espécie <strong style="color:#FFFFFF;">${esc(animalNome)}</strong> teve seu status alterado:</p>
-        <div style="margin:6px 0;">${statusBadge(oldNivel)}</div>
+        <p style="color:#D1D1D8;font-size:15px;margin:0 0 18px;">A espécie <strong style="color:#FFFFFF;">${esc(safeAnimal)}</strong> teve seu status alterado:</p>
+        <div style="margin:6px 0;">${statusBadge({ sigla: oldSigla, nome: oldNome })}</div>
         <div style="color:#FFAA44;font-size:20px;font-weight:bold;margin:4px 0;">↓</div>
-        <div style="margin:6px 0 4px;">${statusBadge(newNivel)}</div>
+        <div style="margin:6px 0 4px;">${statusBadge({ sigla: newSigla, nome: newNome })}</div>
       </div>
       <p style="color:#77767F;font-size:11px;text-align:center;margin-top:16px;">Você recebeu este e-mail porque ativou o sininho de notificações para esta espécie. Desfavorite-a no site para interromper os avisos.</p>
     </div>
   </div>`;
-  const text = `Status de conservação atualizado: ${animalNome} mudou de ${oldNivel.sigla} (${oldNivel.nome}) para ${newNivel.sigla} (${newNivel.nome}).`;
+  const text = `Status de conservação atualizado: ${safeAnimal} mudou de ${oldSigla} (${oldNome}) para ${newSigla} (${newNome}).`;
+  return { subject, text, html };
+}
+
+/**
+ * Monta e envia (ou registra) o e-mail de mudança de status.
+ */
+async function sendStatusChangeEmail(to, { animalNome, oldNivel, newNivel }) {
+  const { subject, text, html } = buildStatusChangeEmail({ animalNome, oldNivel, newNivel });
 
   const tx = getTransporter();
   if (!tx) {
@@ -91,4 +104,4 @@ async function sendStatusChangeEmail(to, { animalNome, oldNivel, newNivel }) {
   return { sent: true };
 }
 
-module.exports = { sendStatusChangeEmail, STATUS_COLORS };
+module.exports = { sendStatusChangeEmail, buildStatusChangeEmail, statusBadge, STATUS_COLORS };

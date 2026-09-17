@@ -627,12 +627,15 @@ router.patch('/animais/:id/', uploadFieldsSafe, async (req, res) => {
       }
     }
 
-    res.json({ success: true, data: serialize(animal) });
-
-    // Pós-resposta: se o status de conservação mudou, avisa os assinantes.
+    // Se o status de conservação mudou, avisa os assinantes ANTES de
+    // responder: em serverless (Vercel) o código após res.json() pode ser
+    // congelado antes de executar e o e-mail nunca é enviado.
+    // dispatchStatusChange tem try/catch interno e nunca quebra a resposta.
     if (b.nivel_extincao_id) {
-      dispatchStatusChange(id, oldNivelId, String(b.nivel_extincao_id));
+      await dispatchStatusChange(id, oldNivelId, String(b.nivel_extincao_id));
     }
+
+    res.json({ success: true, data: serialize(animal) });
   } catch (err) {
     console.error('Error updating animal:', err);
     const friendlyError = formatPrismaError(err);
@@ -1015,6 +1018,7 @@ router.delete('/notificacoes/', async (req, res) => {
 router.buildMultiPolygonWKT = buildMultiPolygonWKT;
 router.parseZonaRings = parseZonaRings;
 router.splitZonaStyle = splitZonaStyle;
+router.dispatchStatusChange = dispatchStatusChange;
 
 // POST /api/v1/animais/import-salve (Importação de Planilha do SALVE)
 const { importSalveCSV } = require('../services/salveImporter');
