@@ -483,20 +483,33 @@ $(document).ready(function () {
     clearTimeout(remoteSearchDebounceTimer);
     if (query.length >= 3) {
       remoteSearchDebounceTimer = setTimeout(() => {
-        fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=-27.5&lon=-51.5&limit=4`)
+        // Restrito ao bounding box da Região Sul (PR, SC, RS)
+        fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=-27.5&lon=-51.5&bbox=-57.65,-33.75,-48.00,-22.50&limit=8`)
           .then(res => res.json())
           .then(geoData => {
             if (geoData && geoData.features) {
               geoData.features.forEach(f => {
                 const p = f.properties;
-                if (p && p.name && (p.countrycode === 'BR' || p.country === 'Brazil')) {
-                  const state = p.state || p.country || '';
-                  const fullName = state ? `${p.name}, ${state}` : p.name;
+                const coords = f.geometry && f.geometry.coordinates;
+                if (!p || !p.name || !coords || coords.length < 2) return;
+                const lng = coords[0];
+                const lat = coords[1];
+                const stateStr = (p.state || p.county || '').toLowerCase();
+
+                // Garante que o resultado esteja estritamente na Região Sul (PR, SC, RS)
+                const isSouthState = stateStr.includes('paraná') || stateStr.includes('parana') ||
+                                     stateStr.includes('santa catarina') || stateStr.includes('rio grande do sul') ||
+                                     stateStr.includes('pr') || stateStr.includes('sc') || stateStr.includes('rs');
+                const inSouthBbox = (lat >= -33.75 && lat <= -22.50 && lng >= -57.65 && lng <= -48.00);
+
+                if ((p.countrycode === 'BR' || p.country === 'Brazil') && (isSouthState || inSouthBbox)) {
+                  const state = p.state || 'Sul';
+                  const fullName = `${p.name}, ${state}`;
                   if (!matchedCities.some(c => c.name.toLowerCase() === fullName.toLowerCase())) {
                     matchedCities.push({
                       name: fullName,
-                      lat: f.geometry.coordinates[1],
-                      lng: f.geometry.coordinates[0]
+                      lat: lat,
+                      lng: lng
                     });
                   }
                 }
@@ -505,7 +518,7 @@ $(document).ready(function () {
             }
           })
           .catch(() => {});
-      }, 350);
+      }, 300);
     }
   });
 
@@ -741,23 +754,33 @@ $(document).ready(function () {
 
   /**
    * Cluster group principal — agrupa marcadores próximos automaticamente.
+   * Pode ser desativado via #toggle-clustering (desativado por padrão).
    */
-  var markersCluster = L.markerClusterGroup({
-    chunkedLoading: true,       // carrega em chunks sem bloquear a UI
-    chunkInterval: 100,         // ms entre chunks
-    chunkDelay: 50,
-    maxClusterRadius: 60,       // raio de agrupamento em pixels
-    showCoverageOnHover: false,
-    iconCreateFunction: function (cluster) {
-      const count = cluster.getChildCount();
-      let cls = count < 10 ? 'small' : count < 50 ? 'medium' : 'large';
-      return L.divIcon({
-        html: `<div class="cluster-inner cluster-${cls}"><span>${count}</span></div>`,
-        className: 'marker-cluster',
-        iconSize: L.point(40, 40)
-      });
-    }
-  }).addTo(map);
+  var clusteringEnabled = false; // desativado por padrão
+  var individualMarkersLayer = L.layerGroup(); // camada alternativa sem cluster
+
+  function buildClusterGroup() {
+    return L.markerClusterGroup({
+      chunkedLoading: true,
+      chunkInterval: 100,
+      chunkDelay: 50,
+      maxClusterRadius: 60,
+      showCoverageOnHover: false,
+      iconCreateFunction: function (cluster) {
+        const count = cluster.getChildCount();
+        let cls = count < 10 ? 'small' : count < 50 ? 'medium' : 'large';
+        return L.divIcon({
+          html: `<div class="cluster-inner cluster-${cls}"><span>${count}</span></div>`,
+          className: 'marker-cluster',
+          iconSize: L.point(40, 40)
+        });
+      }
+    });
+  }
+  var markersCluster = buildClusterGroup(); // não adiciona ao mapa ainda
+  // Inicia sem cluster: a camada individual recebe os marcadores
+  if (clusteringEnabled) markersCluster.addTo(map);
+  else individualMarkersLayer.addTo(map);
 
   // =========================================================================
   // CAMADAS DO MENU FLUTUANTE (usuário comum e admin).
@@ -785,8 +808,18 @@ $(document).ready(function () {
   }
 
   function applyLayerVisibility() {
-    if (layerVisibility.animais) { if (!map.hasLayer(markersCluster)) map.addLayer(markersCluster); }
-    else if (map.hasLayer(markersCluster)) map.removeLayer(markersCluster);
+    if (layerVisibility.animais) {
+      if (clusteringEnabled) {
+        if (map.hasLayer(individualMarkersLayer)) map.removeLayer(individualMarkersLayer);
+        if (!map.hasLayer(markersCluster)) map.addLayer(markersCluster);
+      } else {
+        if (map.hasLayer(markersCluster)) map.removeLayer(markersCluster);
+        if (!map.hasLayer(individualMarkersLayer)) map.addLayer(individualMarkersLayer);
+      }
+    } else {
+      if (map.hasLayer(markersCluster)) map.removeLayer(markersCluster);
+      if (map.hasLayer(individualMarkersLayer)) map.removeLayer(individualMarkersLayer);
+    }
     if (layerVisibility.ongs) { if (!map.hasLayer(ongsLayer)) map.addLayer(ongsLayer); }
     else if (map.hasLayer(ongsLayer)) map.removeLayer(ongsLayer);
     if (layerVisibility.zonas) { if (!map.hasLayer(zonasLayer)) map.addLayer(zonasLayer); }
@@ -804,6 +837,22 @@ $(document).ready(function () {
   });
   $(document).on('change', '#toggle-layer-zonas', function() {
     layerVisibility.zonas = $(this).is(':checked');
+    applyLayerVisibility();
+  });
+
+  // Toggle de clustering de marcadores (desativado por padrão)
+  $(document).on('change', '#toggle-clustering', function() {
+    clusteringEnabled = $(this).is(':checked');
+    // Migra todos os marcadores entre cluster e camada individual
+    var allMarkers = [];
+    markerByAnimal.forEach(function(m) { allMarkers.push(m); });
+    markersCluster.clearLayers();
+    individualMarkersLayer.clearLayers();
+    if (clusteringEnabled) {
+      markersCluster.addLayers(allMarkers);
+    } else {
+      allMarkers.forEach(function(m) { individualMarkersLayer.addLayer(m); });
+    }
     applyLayerVisibility();
   });
 
@@ -951,10 +1000,35 @@ $(document).ready(function () {
   var markerByAnimal = new Map();      // animal_id (string) -> L.marker (no cluster)
 
   function getAreaRingsOf(p) {
-    var raw = p && p.area_polygon;
+    if (!p) return [];
+    var raw = p.area_polygon || p.area_polygon_json || p.area_polygon_data;
+    if (!raw && p.obs && typeof p.obs === 'string' && p.obs.includes('[[POLYGON_DATA]]')) {
+      try {
+        var parts = p.obs.split('[[POLYGON_DATA]]');
+        if (parts.length > 1) raw = JSON.parse(parts[1].trim());
+      } catch (e) {}
+    }
+    if (!raw && p.habitos && typeof p.habitos === 'string' && p.habitos.includes('[[POLYGON_DATA]]')) {
+      try {
+        var partsH = p.habitos.split('[[POLYGON_DATA]]');
+        if (partsH.length > 1) raw = JSON.parse(partsH[1].trim());
+      } catch (e) {}
+    }
+    if (!raw) return [];
+    if (typeof raw === 'string') {
+      try { raw = JSON.parse(raw); } catch (e) {}
+    }
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      if (raw.polygons && Array.isArray(raw.polygons)) {
+        raw = raw.polygons;
+      } else if (raw.area_polygon && Array.isArray(raw.area_polygon)) {
+        raw = raw.area_polygon;
+      }
+    }
     if (!raw || !Array.isArray(raw) || raw.length === 0) return [];
-    var rings = (Array.isArray(raw[0]) && Array.isArray(raw[0][0])) ? raw : [raw];
-    return rings.filter(function(r) { return r && r.length >= 3; });
+    var isSingleRing = Array.isArray(raw[0]) && (typeof raw[0][0] === 'number' || typeof raw[0][0] === 'string');
+    var rings = isSingleRing ? [raw] : raw;
+    return rings.filter(function(r) { return Array.isArray(r) && r.length >= 3; });
   }
 
   function ringBboxIntersectsBounds(ring, bounds) {
@@ -977,27 +1051,43 @@ $(document).ready(function () {
     return true;
   }
 
+  /**
+   * Verifica se dois bounding boxes se sobrepõem.
+   */
+  function bboxOverlap(a, b) {
+    if (!a || !b) return false;
+    return !(a.maxLat < b.minLat || a.minLat > b.maxLat ||
+             a.maxLng < b.minLng || a.minLng > b.maxLng);
+  }
+
+  /**
+   * Renderiza as áreas de ocorrência de cada animal com a cor selecionada, sem tooltips.
+   */
   function renderAreaPolygons() {
     areaPolygonsLayer.clearLayers();
-    // Zonas visíveis apenas para ADM com "Exibir Áreas" ativado.
-    // (Os proxies dos marcadores continuam funcionando para todos.)
-    if (typeof isAdminModeActive !== 'function' || !isAdminModeActive()) return;
-    if (!$("#toggle-debug-areas").is(":checked")) return;
-    if (!rawMarkersGeoJson || !rawMarkersGeoJson.features) return;
+    debugPolygonsLayer.clearLayers();
+    const isVisible = $("#toggle-layer-ocorrencias").is(":checked");
+    const featuresList = (rawMarkersGeoJson && rawMarkersGeoJson.features && rawMarkersGeoJson.features.length > 0)
+      ? rawMarkersGeoJson.features
+      : (typeof _allFeatures !== 'undefined' && _allFeatures.size > 0 ? Array.from(_allFeatures.values()) : []);
+
+    if (!isVisible || featuresList.length === 0) return;
+
     var rendered = new Set();
-    rawMarkersGeoJson.features.forEach(function(f) {
+    featuresList.forEach(function(f) {
       var p = f.properties;
       var animalId = String(p.animal_id || p.id);
       if (rendered.has(animalId)) return;
       rendered.add(animalId);
       var rings = getAreaRingsOf(p);
       if (rings.length === 0) return;
-      var stroke = p.area_polygon_color || '#FFAA44';
+      var color = p.area_polygon_color || '#FFAA44';
       rings.forEach(function(ring) {
+        if (!ring || ring.length < 3) return;
         L.polygon(ring, {
-          color: stroke,
-          fillColor: stroke,
-          fillOpacity: 0.15,
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.18,
           weight: 2,
           interactive: false
         }).addTo(areaPolygonsLayer);
@@ -1371,55 +1461,24 @@ $(document).ready(function () {
     return inside;
   }
 
-  function getPolygonCentroid(polygonCoords) {
-    if (!polygonCoords || !Array.isArray(polygonCoords) || polygonCoords.length === 0) return null;
-    let sumLat = 0, sumLng = 0;
-    polygonCoords.forEach(pt => {
-      sumLat += parseFloat(pt[0]);
-      sumLng += parseFloat(pt[1]);
-    });
-    return [sumLat / polygonCoords.length, sumLng / polygonCoords.length];
-  }
-
-  function renderDebugPolygons() {
-    debugPolygonsLayer.clearLayers();
-    if (!$("#toggle-debug-areas").is(":checked") || !rawMarkersGeoJson || !rawMarkersGeoJson.features) {
-      return;
-    }
-
-    const renderedAnimals = new Set();
-    rawMarkersGeoJson.features.forEach(f => {
-      const p = f.properties;
-      const animalId = p.animal_id || p.id;
-      if (renderedAnimals.has(animalId)) return;
-      renderedAnimals.add(animalId);
-
-      if (p.area_polygon && Array.isArray(p.area_polygon) && p.area_polygon.length > 0) {
-        const rings = (Array.isArray(p.area_polygon[0]) && Array.isArray(p.area_polygon[0][0])) ? p.area_polygon : [p.area_polygon];
-        const strokeColor = p.area_polygon_color || '#FFAA44';
-
-        rings.forEach(ring => {
-          if (!ring || ring.length < 3) return;
-          const poly = L.polygon(ring, {
-            color: strokeColor,
-            fillColor: strokeColor,
-            fillOpacity: 0.3,
-            weight: 3,
-            dashArray: '6, 6'
-          }).addTo(debugPolygonsLayer);
-
-          poly.bindTooltip(`
-            <div style="font-weight: 800; color: ${strokeColor}; background: #1B1A22; padding: 4px 8px; border-radius: 6px; border: 1px solid ${strokeColor};">
-              <i class="fa-solid fa-draw-polygon me-1"></i> Área de Ocorrência: ${p.nome_comum}
-            </div>
-          `, { sticky: true });
-        });
+  function calculateCenterOfPolygon(ring) {
+    if (!ring || !Array.isArray(ring) || ring.length === 0) return [0, 0];
+    let sumLat = 0, sumLng = 0, count = 0;
+    for (let i = 0; i < ring.length; i++) {
+      const pt = ring[i];
+      if (!pt || pt.length < 2) continue;
+      const lat = parseFloat(pt[0]);
+      const lng = parseFloat(pt[1]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        sumLat += lat;
+        sumLng += lng;
+        count++;
       }
-    });
+    }
+    return count > 0 ? [sumLat / count, sumLng / count] : [0, 0];
   }
 
-  $(document).on("change", "#toggle-debug-areas", function() {
-    renderDebugPolygons();
+  $(document).on("change", "#toggle-layer-ocorrencias", function() {
     renderAreaPolygons();
   });
 
@@ -1474,15 +1533,19 @@ $(document).ready(function () {
       });
 
       if (newMarkers.length > 0) {
-        markersCluster.addLayers(newMarkers); // batch add — muito mais rápido
+        if (clusteringEnabled) {
+          markersCluster.addLayers(newMarkers);
+        } else {
+          newMarkers.forEach(function(m) { individualMarkersLayer.addLayer(m); });
+          if (!map.hasLayer(individualMarkersLayer) && layerVisibility.animais) map.addLayer(individualMarkersLayer);
+        }
       }
 
-      // Atualiza rawMarkersGeoJson para renderDebugPolygons
+      // Atualiza rawMarkersGeoJson para renderAreaPolygons
       rawMarkersGeoJson = {
         type: 'FeatureCollection',
         features: Array.from(_allFeatures.values())
       };
-      renderDebugPolygons();
       renderAreaPolygons();
       refreshAreaViewport();
     }).always(function () {
@@ -1517,12 +1580,16 @@ $(document).ready(function () {
         }
       });
 
-      markersCluster.addLayers(markers);
+      if (clusteringEnabled) {
+        markersCluster.addLayers(markers);
+      } else {
+        markers.forEach(function(m) { individualMarkersLayer.addLayer(m); });
+        if (!map.hasLayer(individualMarkersLayer) && layerVisibility.animais) map.addLayer(individualMarkersLayer);
+      }
       rawMarkersGeoJson = {
         type: 'FeatureCollection',
         features: Array.from(_allFeatures.values())
       };
-      renderDebugPolygons();
       renderAreaPolygons();
       refreshAreaViewport();
     }).always(function () {
@@ -1541,8 +1608,10 @@ $(document).ready(function () {
     _allFeatures.clear();
     markersData.length = 0;
     markersCluster.clearLayers();
+    individualMarkersLayer.clearLayers();
     markerByAnimal.clear();
     if (typeof areaPolygonsLayer !== 'undefined' && areaPolygonsLayer) areaPolygonsLayer.clearLayers();
+    if (typeof debugPolygonsLayer !== 'undefined' && debugPolygonsLayer) debugPolygonsLayer.clearLayers();
     loadMarkers();
   }
 
@@ -1587,17 +1656,11 @@ $(document).ready(function () {
   function updateAdminUI() {
     if (isAdminModeActive()) {
       $("#admin-mode-badge").removeClass("d-none");
-      $("#admin-debug-toggle-container").removeClass("d-none");
-      $("#toggle-debug-areas").prop("checked", true);
-      renderDebugPolygons();
       renderAreaPolygons();
       $("#admin-btn").addClass("admin-active").attr("title", "Clique para encerrar o Modo Administrador");
       $("#admin-btn").attr("href", "#");
     } else {
       $("#admin-mode-badge").addClass("d-none");
-      $("#admin-debug-toggle-container").addClass("d-none");
-      $("#toggle-debug-areas").prop("checked", false);
-      renderDebugPolygons();
       renderAreaPolygons();
       $("#admin-btn").removeClass("admin-active").attr("title", "Acesso Administrador");
       $("#admin-btn").attr("href", "/admin/login");
@@ -3184,6 +3247,9 @@ $(document).ready(function () {
       } else if (bId === '3' || nameLower.includes('cerrado')) {
         cssClass = 'biome-chip-cerrado';
         bName = 'Cerrado';
+      } else if (bId === '4' || nameLower.includes('oceano') || nameLower.includes('atlantico')) {
+        cssClass = 'biome-chip-oceano-atlantico';
+        bName = 'Oceano Atlântico';
       }
 
       return `<span class="mini-biome-chip ${cssClass}">${bName || 'Bioma'}</span>`;
@@ -4073,10 +4139,15 @@ $(document).ready(function () {
                   <h6 class="fst-italic text-muted small mb-1">Descrição / Curiosidade</h6>
                   <p class="mb-0 small text-light" style="line-height: 1.5; text-align: justify;">${animal.habitos || animal.obs || 'Descrição detalhada não disponível.'}</p>
               </div>
-              <div class="d-flex justify-content-end mt-3">
-                <a class="btn btn-sm btn-outline-secondary rounded-pill px-3" href="https://salve.icmbio.gov.br/" target="_blank" rel="noopener noreferrer" title="Abrir ficha no SALVE/ICMBio">
-                  <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>Fonte
+              <div class="d-flex justify-content-end mt-3 gap-2 align-items-center flex-wrap">
+                <a class="btn btn-sm btn-outline-warning rounded-pill px-3" href="https://salve.icmbio.gov.br/" target="_blank" rel="noopener noreferrer" title="Abrir ficha oficial no SALVE/ICMBio">
+                  <i class="fa-solid fa-arrow-up-right-from-square me-1"></i>Fonte Oficial: SALVE (ICMBio)
                 </a>
+                ${animal.fonte && animal.fonte.trim() !== '' && animal.fonte !== 'https://salve.icmbio.gov.br/' ? `
+                  <a class="btn btn-sm btn-outline-info rounded-pill px-3" href="${animal.fonte}" target="_blank" rel="noopener noreferrer" title="Abrir fonte adicional">
+                    <i class="fa-solid fa-link me-1"></i>Fonte Adicional
+                  </a>
+                ` : ''}
               </div>
             </div>
           </div>

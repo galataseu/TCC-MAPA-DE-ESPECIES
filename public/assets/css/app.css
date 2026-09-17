@@ -1244,6 +1244,7 @@ html, body, #main-layout {
 .biome-chip-mata-atlantica { background-color: #287F5E !important; }
 .biome-chip-pampa { background-color: #3B7BA5 !important; }
 .biome-chip-cerrado { background-color: #E6C140 !important; color: #111111 !important; }
+.biome-chip-oceano-atlantico { background-color: #1a5fb4 !important; }
 
 /* Mini Mapa da Localização (Painel Direito) */
 #right-panel-map-container,

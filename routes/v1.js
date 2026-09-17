@@ -92,6 +92,46 @@ function formatPrismaError(err) {
   return err.message || 'Erro ao processar a requisição no banco de dados.';
 }
 
+async function ensureValidBiomaId(rawId) {
+  if (!rawId) return null;
+  const numId = BigInt(rawId);
+  try {
+    const found = await prisma.api_bioma.findUnique({ where: { id: numId } });
+    if (found) return found.id;
+  } catch (e) {}
+
+  const nameMap = { '1': 'Mata Atlântica', '2': 'Pampa', '3': 'Cerrado', '4': 'Oceano Atlântico' };
+  const targetName = nameMap[String(rawId)] || 'Oceano Atlântico';
+
+  try {
+    let byName = await prisma.api_bioma.findFirst({ where: { nome: targetName } });
+    if (!byName) {
+      try {
+        byName = await prisma.api_bioma.create({
+          data: {
+            id: numId,
+            nome: targetName,
+            tipo: targetName === 'Oceano Atlântico' ? 'Marinho/Costeiro' : 'Bioma',
+            caract: targetName === 'Oceano Atlântico' ? 'Ecossistema marinho e costeiro' : ''
+          }
+        });
+      } catch (err) {
+        byName = await prisma.api_bioma.create({
+          data: {
+            nome: targetName,
+            tipo: targetName === 'Oceano Atlântico' ? 'Marinho/Costeiro' : 'Bioma',
+            caract: targetName === 'Oceano Atlântico' ? 'Ecossistema marinho e costeiro' : ''
+          }
+        });
+      }
+    }
+    return byName.id;
+  } catch (err) {
+    const firstBioma = await prisma.api_bioma.findFirst();
+    return firstBioma ? firstBioma.id : null;
+  }
+}
+
 // Converte arquivo enviado (memória) em data URL pronta p/ guardar no banco.
 // Retorna null se não for imagem.
 function fileToDataUrl(file) {
@@ -147,7 +187,8 @@ router.get('/biomas-areas/', async (req, res) => {
     const defs = [
       { key: 'mata_atlantica', nome: 'Mata Atlântica', query: 'mata atlantica' },
       { key: 'pampa', nome: 'Pampa', query: 'pampa' },
-      { key: 'cerrado', nome: 'Cerrado', query: 'cerrado' }
+      { key: 'cerrado', nome: 'Cerrado', query: 'cerrado' },
+      { key: 'oceano_atlantico', nome: 'Oceano Atlântico', query: 'oceano atlantico' }
     ];
     const data = defs.map(d => {
       const geo = getBiomaGeometry(d.query);
@@ -290,11 +331,12 @@ router.post('/animais/', uploadFieldsSafe, async (req, res) => {
     // 4. Mapear biomas selecionados
     if (b.biomas_ids) {
       const biomasArr = Array.isArray(b.biomas_ids) ? b.biomas_ids : [b.biomas_ids];
-      await Promise.all(biomasArr.filter(Boolean).map(biomaId =>
+      const validIds = (await Promise.all(biomasArr.filter(Boolean).map(ensureValidBiomaId))).filter(Boolean);
+      await Promise.all(validIds.map(bId =>
         prisma.api_animal_biomas.create({
           data: {
             animal_id: animal.id,
-            bioma_id: BigInt(biomaId)
+            bioma_id: bId
           }
         })
       ));
@@ -498,11 +540,12 @@ router.patch('/animais/:id/', uploadFieldsSafe, async (req, res) => {
     if (b.biomas_ids) {
       await prisma.api_animal_biomas.deleteMany({ where: { animal_id: id } });
       const biomasArr = Array.isArray(b.biomas_ids) ? b.biomas_ids : [b.biomas_ids];
-      await Promise.all(biomasArr.filter(Boolean).map(biomaId =>
+      const validIds = (await Promise.all(biomasArr.filter(Boolean).map(ensureValidBiomaId))).filter(Boolean);
+      await Promise.all(validIds.map(bId =>
         prisma.api_animal_biomas.create({
           data: {
             animal_id: id,
-            bioma_id: BigInt(biomaId)
+            bioma_id: bId
           }
         })
       ));

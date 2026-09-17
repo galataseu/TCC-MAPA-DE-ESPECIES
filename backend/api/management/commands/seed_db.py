@@ -104,6 +104,12 @@ class Command(BaseCommand):
         )
         cerrado.estados.add(pr)
 
+        oceano_atlantico, _ = Bioma.objects.get_or_create(
+            nome='Oceano Atlântico',
+            defaults={'tipo': 'Marinho/Costeiro', 'caract': 'Ecossistema marinho e costeiro do litoral da Região Sul.'}
+        )
+        oceano_atlantico.estados.add(pr, sc, rs)
+
         # 8. Espécies Emblemáticas e Reais da Região Sul (Imagens Unsplash 100% Estáveis e Confiáveis)
         especies = [
             {

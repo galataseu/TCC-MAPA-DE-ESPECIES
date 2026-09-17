@@ -114,6 +114,7 @@ class Animal(SoftDeleteModel):
     dieta = models.CharField(max_length=50, null=True, blank=True)
     habitos = models.TextField(null=True, blank=True)
     obs = models.TextField(null=True, blank=True)
+    fonte = models.CharField(max_length=500, null=True, blank=True, default='https://salve.icmbio.gov.br/', help_text='Link da fonte das informações (padrão: SALVE / ICMBio)')
     
     nivel_extincao = models.ForeignKey(NivelExtincao, on_delete=models.PROTECT, related_name='animais')
     nivel_destruicao = models.ForeignKey(NivelDestruicao, on_delete=models.SET_NULL, null=True, blank=True, related_name='animais')

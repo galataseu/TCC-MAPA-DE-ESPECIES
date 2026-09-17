@@ -63,11 +63,29 @@ const CERRADO_POLYGON = [
   [-23.90, -49.70]  // Fechamento do anel
 ];
 
+// Polígono do Bioma Oceano Atlântico (Marinho/Costeiro da Região Sul)
+const OCEANO_ATLANTICO_POLYGON = [
+  [-25.30, -48.30], // Paranaguá (Litoral Norte PR - costa)
+  [-25.10, -46.00], // Oceano aberto (PR)
+  [-27.00, -46.50], // Oceano aberto (SC)
+  [-29.50, -47.50], // Oceano aberto (RS Norte)
+  [-33.70, -50.20], // Oceano aberto (Extremo Sul RS - Chuí)
+  [-33.75, -53.35], // Foz do Chuí / Praia do Cassino (costa)
+  [-32.18, -52.10], // Rio Grande (costa)
+  [-29.34, -49.70], // Torres / Litoral RS (costa)
+  [-28.48, -48.75], // Laguna SC (costa)
+  [-27.59, -48.50], // Florianópolis SC (costa)
+  [-26.24, -48.60], // São Francisco do Sul SC (costa)
+  [-25.88, -48.55], // Guaratuba PR (costa)
+  [-25.30, -48.30]  // Fechamento do anel
+];
+
 // Centróides de referência para marcadores (lat, lng)
 const CENTROIDS = {
   PAMPA: { lat: -30.85, lng: -54.80 },
   MATA_ATLANTICA: { lat: -26.75, lng: -50.60 },
   CERRADO: { lat: -24.55, lng: -49.65 },
+  OCEANO_ATLANTICO: { lat: -29.00, lng: -48.20 },
   SUL_GERAL: { lat: -28.20, lng: -51.90 }
 };
 
@@ -81,13 +99,19 @@ function getBiomaGeometry(biomaStr = '') {
   const hasPampa = norm.includes('pampa');
   const hasMataAtlantica = norm.includes('mata atlântica') || norm.includes('mata atlantica') || norm.includes('floresta');
   const hasCerrado = norm.includes('cerrado');
+  const hasOceano = norm.includes('oceano') || norm.includes('atlantico') || norm.includes('marinho');
 
   let polygons = [];
   let color = '#2E7D32'; // Verde floresta por padrão
   let centroid = CENTROIDS.SUL_GERAL;
   let label = 'Sul do Brasil';
 
-  if (hasPampa && hasMataAtlantica && hasCerrado) {
+  if (hasOceano) {
+    polygons = [OCEANO_ATLANTICO_POLYGON];
+    color = '#1A5FB4'; // Azul oceano
+    centroid = CENTROIDS.OCEANO_ATLANTICO;
+    label = 'Bioma Oceano Atlântico';
+  } else if (hasPampa && hasMataAtlantica && hasCerrado) {
     polygons = [PAMPA_POLYGON, MATA_ATLANTICA_POLYGON, CERRADO_POLYGON];
     color = '#4E7D32';
     centroid = CENTROIDS.SUL_GERAL;
@@ -249,6 +273,7 @@ module.exports = {
   PAMPA_POLYGON,
   MATA_ATLANTICA_POLYGON,
   CERRADO_POLYGON,
+  OCEANO_ATLANTICO_POLYGON,
   CENTROIDS,
   getBiomaGeometry,
   getDistributedCoordinate

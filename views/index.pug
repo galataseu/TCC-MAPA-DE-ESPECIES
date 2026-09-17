@@ -6,11 +6,12 @@ block content
   main#container
     #map
     
-    //- Barra de Pesquisa Flutuante com Dropdown Customizado
+    //- Barra de Pesquisa Flutuante com Dropdown Customizado (Inline sem quebra de linha)
     #floating-search
-      .search-icon-container
-        i#searchicon.fa-solid.fa-magnifying-glass
-      input#searchbox.form-control(type="text", placeholder="Pesquisar animal ou local...", autocomplete="off")
+      .search-input-wrapper
+        .search-icon-container
+          i#searchicon.fa-solid.fa-magnifying-glass
+        input#searchbox.form-control(type="text", placeholder="Pesquisar animal ou local...", autocomplete="off")
       #search-results-dropdown.search-dropdown-menu.d-none
 
     #map-legend.leaflet-bar
@@ -32,6 +33,14 @@ block content
         label
           input#toggle-layer-zonas(type="checkbox", checked)
           |  Zonas de preservação
+      .legend-toggle
+        label
+          input#toggle-layer-ocorrencias(type="checkbox")
+          |  Áreas de ocorrência
+      .legend-toggle
+        label(title="Agrupa marcadores próximos em um número quando ativado")
+          input#toggle-clustering(type="checkbox")
+          |  Junção de marcadores
 
       hr.legend-divider
 
@@ -49,6 +58,10 @@ block content
           span.legend-color(style="background-color: #E6C140;")
           img.legend-icon(src="/svg/cerrado.png")
           span Cerrado
+        .legend-item
+          span.legend-color(style="background-color: #1a5fb4;")
+          img.legend-icon(src="/svg/mataatlantica.png")
+          span Oceano Atlântico
       .legend-toggle
         label
           input#toggle-textures-legend(type="checkbox", checked)
@@ -99,12 +112,6 @@ block content
           span#marker-size-val 100%
           span 200%
 
-      .legend-toggle#admin-debug-toggle-container.d-none
-        hr.legend-divider
-        label.text-warning.fw-bold
-          input#toggle-debug-areas(type="checkbox")
-          i.fa-solid.fa-bug.me-1
-          | Exibir Áreas dos Animais (Debug)
 
     //- Indicador Visual do Modo Admin
     #admin-mode-badge.d-none
@@ -220,10 +227,14 @@ block content
                   .biome-chip.biome-chip-cerrado(data-id="3", data-selected="false")
                     span Cerrado
                     i.fa-solid.fa-plus.chip-icon
+                  .biome-chip.biome-chip-oceano-atlantico(data-id="4", data-selected="false")
+                    span Oceano Atlântico
+                    i.fa-solid.fa-plus.chip-icon
                   select.select-biomas.d-none(name="biomas_ids", multiple)
                     option(value="1", selected) Mata Atlântica
                     option(value="2", selected) Pampa
                     option(value="3") Cerrado
+                    option(value="4") Oceano Atlântico
 
             //- Linha 4: Peso, Altura e Dieta
             .row.g-3.mb-3
@@ -239,7 +250,13 @@ block content
                 label.species-form-label Dieta
                 input.form-control.colored-pill-input-crimson(type="text", name="dieta", placeholder="Ex: Onívoro, Insetos")
 
-            //- Linha 5: Descrição / Curiosidade (campo único)
+            //- Linha 5: Fonte (link oficial - SALVE padrão)
+            .row.g-3.mb-3
+              .col-12
+                label.species-form-label Fonte / Referência (SALVE sempre incluído)
+                input.form-control.colored-pill-input-blue(type="url", name="fonte", value="https://salve.icmbio.gov.br/", placeholder="https://salve.icmbio.gov.br/")
+
+            //- Linha 6: Descrição / Curiosidade (campo único)
             .row.g-3.mb-4
               .col-12
                 label.species-form-label Descrição / Curiosidade
@@ -291,6 +308,7 @@ block content
                   option(value="mata_atlantica") Mata Atlântica
                   option(value="pampa") Pampa
                   option(value="cerrado") Cerrado
+                  option(value="oceano_atlantico") Oceano Atlântico
                 button#modal-btn-use-biome-area.btn.btn-success.btn-sm.rounded-pill.fw-bold(type="button", title="Carrega o polígono do bioma como área de ocorrência (editável depois)")
                   i.fa-solid.fa-leaf.me-1
                   | Usar bioma

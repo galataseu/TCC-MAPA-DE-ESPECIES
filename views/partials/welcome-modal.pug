@@ -19,17 +19,70 @@
 style.
   #welcome-overlay {
     position: fixed;
-    inset: 0;
-    z-index: 5000;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: 70px;
+    z-index: 3000;
     background-color: #23222B;
     opacity: 0;
+    overflow: hidden;
     transition: opacity 0.22s ease;
     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   }
+  @media (max-width: 768px) {
+    #welcome-overlay {
+      left: 0;
+    }
+  }
   #welcome-overlay.is-open { opacity: 1; }
   #welcome-overlay.is-closing { opacity: 0; }
+
+  /* Pattern animado de ícones de animais ao fundo (usando os ícones da pasta /icons/) */
+  #welcome-overlay .welcome-bg-pattern {
+    position: absolute;
+    inset: -400px;
+    overflow: hidden;
+    pointer-events: none;
+    user-select: none;
+    z-index: 0;
+    opacity: 0.20;
+  }
+  #welcome-overlay .welcome-pattern-track {
+    display: flex;
+    flex-direction: column;
+    gap: 48px;
+    transform: rotate(-14deg);
+    animation: welcome-pattern-slide 12s linear infinite;
+  }
+  #welcome-overlay .welcome-pattern-row {
+    display: flex;
+    align-items: center;
+    gap: 80px;
+    white-space: nowrap;
+  }
+  #welcome-overlay .welcome-pattern-row:nth-child(even) {
+    margin-left: -70px;
+  }
+  #welcome-overlay .welcome-pattern-img {
+    height: 72px;
+    width: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
+  }
+  @keyframes welcome-pattern-slide {
+    0% {
+      transform: rotate(-14deg) translate(0, 0);
+    }
+    100% {
+      transform: rotate(-14deg) translate(152px, 152px);
+    }
+  }
+
   /* Layout full-screen em coluna única centralizada */
   #welcome-overlay .welcome-layout {
+    position: relative;
+    z-index: 1;
     display: block;
     width: 100%;
     height: 100vh;
@@ -47,7 +100,7 @@ style.
     overflow-y: auto;
     scrollbar-width: thin;
     overscroll-behavior: contain;
-    background-color: #23222B;
+    background-color: transparent;
     color: #E8E8EC;
   }
   #welcome-overlay .welcome-scroll:focus { outline: none; }
@@ -55,20 +108,21 @@ style.
     outline: 2px solid #1a5fb4;
     outline-offset: -2px;
   }
-  /* Miolo centralizado (largura confortável de leitura) */
+  /* Miolo centralizado (largura ampla p/ ocupar mais espaço horizontal) */
   #welcome-overlay .welcome-inner {
-    max-width: 880px;
+    max-width: 1320px;
+    width: 92%;
     margin: 0 auto;
-    padding: 40px 32px 0 32px;
+    padding: 36px 40px 0 40px;
   }
-  /* Preview do mapa NO MEIO da página (faixa com altura fixa) */
+  /* Preview do mapa NO MEIO da página (faixa ampla) */
   #welcome-overlay .welcome-preview {
     position: relative;
-    height: 380px;
+    height: 440px;
     border-radius: 12px;
     border: 1px solid #3B3A48;
     overflow: hidden;
-    margin: 4px 0 8px 0;
+    margin: 8px 0 16px 0;
     background: #121118;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   }
@@ -163,10 +217,11 @@ style.
   /* Hero / cabeçalho */
   #welcome-overlay .welcome-hero { text-align: center; margin-bottom: 8px; }
   #welcome-overlay .welcome-logo {
-    height: 112px;
+    height: 220px;
+    max-width: 90%;
     width: auto;
-    margin-bottom: 14px;
-    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.7));
+    margin-bottom: 16px;
+    filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.8));
   }
   #welcome-overlay .welcome-eyebrow {
     margin: 0 0 8px 0;
@@ -385,7 +440,8 @@ style.
     #welcome-overlay,
     #welcome-overlay .welcome-layout,
     #welcome-overlay .welcome-scroll-hint,
-    #welcome-overlay .welcome-live-dot { transition: none; animation: none; }
+    #welcome-overlay .welcome-live-dot,
+    #welcome-overlay .welcome-pattern-track { transition: none; animation: none; }
   }
 
 //- ----------------------------------------------------------------------------
@@ -395,6 +451,18 @@ style.
   aria-hidden="true"
   data-welcome-overlay
 )
+  //- Pattern animado de ícones de animais no fundo (usando os ícones da pasta /icons/)
+  .welcome-bg-pattern(aria-hidden="true")
+    .welcome-pattern-track
+      - var iconsRow1 = ['/icons/mamiferos.png', '/icons/aves.png', '/icons/repteis.png', '/icons/anfibios.png', '/icons/peixes%20osseos.png', '/icons/peixes%20cartilaginosos.png'];
+      - var iconsRow2 = ['/icons/aves.png', '/icons/anfibios.png', '/icons/mamiferos.png', '/icons/peixes%20cartilaginosos.png', '/icons/repteis.png', '/icons/peixes%20osseos.png'];
+      each r in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        .welcome-pattern-row
+          each imgUrl in (r % 2 === 0 ? iconsRow2 : iconsRow1)
+            img.welcome-pattern-img(src=imgUrl, alt="")
+            img.welcome-pattern-img(src=imgUrl, alt="")
+            img.welcome-pattern-img(src=imgUrl, alt="")
+
   .welcome-layout
     #welcome-scroll.welcome-scroll(
       tabindex="0"
@@ -552,8 +620,9 @@ style.
 script.
   (function () {
     'use strict';
-    // Chave exigida na especificação (cookie DE SESSÃO: some ao fechar o navegador).
+    // Chave de preferência permanente + chave de sessão p/ não reaparecer a cada troca de tela.
     var STORAGE_KEY = 'hideWelcomeScreen';
+    var SESSION_KEY = 'welcomeShownThisSession';
     function welcomeGetCookie(name) {
       try {
         var parts = document.cookie.split(';');
@@ -894,6 +963,7 @@ script.
     function openWelcome(opts) {
       opts = opts || {};
       if (isOpen()) return;
+      try { sessionStorage.setItem(SESSION_KEY, 'true'); } catch (e) {}
       lastFocused = document.activeElement;
       // Reflete a preferência salva no checkbox ao abrir.
       try { checkbox.checked = welcomeGetCookie(STORAGE_KEY) === 'true'; } catch (e) {}
@@ -930,6 +1000,7 @@ script.
     function closeWelcome() {
       if (!isOpen()) return;
       try {
+        sessionStorage.setItem(SESSION_KEY, 'true');
         if (checkbox.checked) welcomeSetSessionCookie(STORAGE_KEY, 'true');
         else welcomeSetSessionCookie(STORAGE_KEY, null);
       } catch (e) {}
@@ -1006,10 +1077,16 @@ script.
       window.openWelcomeModal = function () { openWelcome({ force: true }); };
       window.closeWelcomeModal = closeWelcome;
 
-      // Abertura automática: só pula se o usuário marcou "não mostrar novamente".
-      var hidden = false;
-      try { hidden = welcomeGetCookie(STORAGE_KEY) === 'true'; } catch (e) {}
-      if (!hidden) setTimeout(function () { openWelcome(); }, 350);
+      // Abertura automática: só aparece na primeira vez que ENTRAR no site (1x por sessão)
+      // e se o usuário não marcou "não mostrar novamente".
+      var hiddenPermanent = false;
+      var hiddenSession = false;
+      try { hiddenPermanent = welcomeGetCookie(STORAGE_KEY) === 'true'; } catch (e) {}
+      try { hiddenSession = sessionStorage.getItem(SESSION_KEY) === 'true'; } catch (e) {}
+
+      if (!hiddenPermanent && !hiddenSession) {
+        setTimeout(function () { openWelcome(); }, 350);
+      }
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
