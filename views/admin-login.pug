@@ -130,6 +130,10 @@ block scripts
         const username = $("#admin-user").val();
         const password = $("#admin-pass").val();
 
+        // Credenciais locais de emergência (quando a API está fora do ar).
+        const ADMIN_USER = "Danielantonio@@ifc2024";
+        const ADMIN_PASS = "Danielantonio@@ifc2024";
+
         const API_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
           ? "http://localhost:8000/api"
           : (window.API_BASE_URL || "https://tcc-mapa-de-especies.onrender.com/api");
@@ -147,7 +151,7 @@ block scripts
         .then(response => response.json())
         .then(data => {
           clearTimeout(timeoutId);
-          if (data.success && (data.user.role === 'admin' || data.user.is_superuser || data.user.is_staff || username === 'admin')) {
+          if (data.success && (data.user.role === 'admin' || data.user.is_superuser || data.user.is_staff || username === ADMIN_USER)) {
             sessionStorage.setItem("token", data.token || "admin-token");
             sessionStorage.setItem("user", JSON.stringify(data.user || { username: username, role: 'admin' }));
             sessionStorage.setItem("adminMode", "true");
@@ -158,9 +162,9 @@ block scripts
             sessionStorage.setItem("adminMode", "true");
             window.location.href = "/";
           } else {
-            if (username === "admin" && password === "admin") {
+            if (username === ADMIN_USER && password === ADMIN_PASS) {
               sessionStorage.setItem("adminMode", "true");
-              sessionStorage.setItem("user", JSON.stringify({ username: "admin", role: "admin" }));
+              sessionStorage.setItem("user", JSON.stringify({ username: ADMIN_USER, role: "admin" }));
               systemAlert("Modo Administrador ativado!", 'success').then(() => { window.location.href = "/"; });
             } else {
               systemAlert("Erro no login: " + (data.detail || data.message || "Credenciais de administrador inválidas."), 'error');
@@ -171,12 +175,12 @@ block scripts
           clearTimeout(timeoutId);
           console.error("Erro:", error);
           // Fallback rápido se a API estiver fora do ar
-          if (username === "admin" && password === "admin") {
+          if (username === ADMIN_USER && password === ADMIN_PASS) {
             sessionStorage.setItem("adminMode", "true");
-            sessionStorage.setItem("user", JSON.stringify({ username: "admin", role: "admin" }));
+            sessionStorage.setItem("user", JSON.stringify({ username: ADMIN_USER, role: "admin" }));
             systemAlert("Modo Administrador ativado (Modo Local)!", 'success').then(() => { window.location.href = "/"; });
           } else {
-            systemAlert("Não foi possível conectar ao servidor. Tente admin / admin.", 'error');
+            systemAlert("Não foi possível conectar ao servidor. Verifique sua conexão e tente de novo.", 'error');
           }
         });
       });

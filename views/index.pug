@@ -14,6 +14,11 @@ block content
         input#searchbox.form-control(type="text", placeholder="Pesquisar animal ou local...", autocomplete="off")
       #search-results-dropdown.search-dropdown-menu.d-none
 
+    //- QR Code no canto superior direito, abaixo da barra de pesquisa
+    #qrcode-card(title="Clique para ampliar/reduzir")
+      span.qrcode-caption Acesse a versão mobile
+      img(src="/assets/img/qrcode.png", alt="QR Code")
+
     #map-legend.leaflet-bar
       .legend-header(title="Clique e arraste para mover a legenda na tela")
         i.fa-solid.fa-grip-vertical.me-2.legend-grip
@@ -385,4 +390,11 @@ block content
 block scripts
   script(src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.10.5/typeahead.bundle.min.js")
   script(src="/assets/js/app.js?v=17")
+  script.
+    // QR Code redimensionável: clique alterna entre normal e ampliado
+    $(document).ready(function() {
+      $(document).on('click', '#qrcode-card', function() {
+        $(this).toggleClass('qr-expanded');
+      });
+    });
 
