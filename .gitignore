@@ -1,54 +1,205 @@
-# Dependencies
-node_modules/
-.pnp
-.pnp.js
-
-# Testing
-coverage/
-
-# Production
-build/
-dist/
-
-# Misc
-.DS_Store
+# ==========================================
+# 1. AMBIENTE, SEGREDOS E CREDENCIAIS (CRÍTICO)
+# ==========================================
+# Arquivos de variáveis de ambiente (contêm senhas, chaves de API e tokens)
 .env
+.env.*
+*.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Garante que o template/exemplo possa ser versionado no repositório
+!.env.example
+!.env.sample
+!.env.template
 
-# Prisma
-/prisma/generated/
-.prisma-client-js
+# Chaves privadas, certificados e tokens de autenticação
+*.pem
+*.key
+*.cert
+*.cer
+*.crt
+*.pfx
+*.p12
+*.id_rsa
+id_rsa*
+credentials.json
+client_secret*.json
+service-account*.json
+.npmrc
 
-# Python (Django)
+# ==========================================
+# 2. PYTHON E DJANGO (BACKEND)
+# ==========================================
+# Bytecode e cache do interpretador
 __pycache__/
 *.py[cod]
 *$py.class
-.venv
-venv/
-ENV/
-env/
-python/
+*.so
+.Python
 backend/__pycache__/
+backend/*/__pycache__/
+backend/*/*/__pycache__/
+
+# Ambientes virtuais
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+python/
 backend/venv/
 backend/.venv/
-backend/*.pyc
 
-# Database
+# Distribuição e empacotamento
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Django local e temporários
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+backend/db.sqlite3
+backend/db.sqlite3-journal
+
+# Pytest, cobertura de código e linters
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+nosetests.xml
+coverage.xml
+*.cover
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+
+# ==========================================
+# 3. NODE.JS E EXPRESS (FRONTEND & BFF)
+# ==========================================
+# Dependências
+node_modules/
+.pnp
+.pnp.js
+
+# Logs do Node e gerenciadores de pacotes
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Caches e deploy (Vercel, Turbo, Parcel)
+.pnpm-store/
+.parcel-cache/
+.turbo/
+.vercel/
+.output/
+
+# ==========================================
+# 4. BANCO DE DADOS E PRISMA
+# ==========================================
+# Prisma client gerado
+/prisma/generated/
+.prisma-client-js
+
+# Bancos SQLite e Dumps locais
+*.sqlite
 *.sqlite3
 *.db
+*.db-journal
+*.dump
+*.sql.gz
+*.sql.tar.gz
 
-# Local history
-.history/
+# ==========================================
+# 5. MOBILE / REACT NATIVE / EXPO (ATIVIDADE)
+# ==========================================
+.expo/
+.expo-shared/
+web-build/
+*.jks
+*.p8
+*.keystore
 
-# IDEs
+# ==========================================
+# 6. TESTES E AUTOMATIZAÇÃO (PUPPETEER / E2E)
+# ==========================================
+coverage/
+e2e-tmp/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+.puppeteer/
+
+# ==========================================
+# 7. SISTEMA OPERACIONAL
+# ==========================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+
+# Linux
+*~
+
+# ==========================================
+# 8. IDES E EDITORES DE CÓDIGO
+# ==========================================
 .vscode/
+*.code-workspace
 .idea/
+*.sublime-project
+*.sublime-workspace
 *.swp
 *.swo
+.history/
+
+# Ferramentas de IA e assistentes locais
+.antigravity/
+.gemini/
+.claude/
+GEMINI.md
+gemini.md
+AGENTS.md
+agents.md
+
+# ==========================================
+# 9. ARQUIVOS TEMPORÁRIOS E LOGS GERAIS
+# ==========================================
+tmp/
+temp/
+*.tmp
+logs/

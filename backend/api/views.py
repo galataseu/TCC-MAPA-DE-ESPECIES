@@ -61,7 +61,7 @@ class BaseViewSet(viewsets.ModelViewSet):
 class AnimalViewSet(BaseViewSet):
     queryset = Animal.objects.all().order_by('-created_at')
     serializer_class = AnimalSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsAdminOrReadOnly]
 
     def create(self, request, *args, **kwargs):
         # request.data is already MultiValueDict in DRF for multipart
