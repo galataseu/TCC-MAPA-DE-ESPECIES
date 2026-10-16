@@ -3692,11 +3692,12 @@ $(document).ready(function () {
 
     Promise.all([fetchNiveis, fetchBiomas])
       .then(([niveisRes, biomasRes]) => {
-        const selectNiveis = $(".select-nivel-extincao");
-        selectNiveis.empty();
-        selectNiveis.append('<option value="" style="background-color: #2B2A33; color: #FFF;">NÍVEL DE EXTINÇÃO</option>');
-        const niveis = niveisRes.data || niveisRes;
-        if (Array.isArray(niveis)) {
+        const niveis = (niveisRes && niveisRes.data) ? niveisRes.data : (Array.isArray(niveisRes) ? niveisRes : (niveisRes && niveisRes.results ? niveisRes.results : null));
+        if (Array.isArray(niveis) && niveis.length > 0) {
+          const selectNiveis = $(".select-nivel-extincao");
+          const currentVal = selectNiveis.val();
+          selectNiveis.empty();
+          selectNiveis.append('<option value="" style="background-color: #2B2A33; color: #FFF;">NÍVEL DE EXTINÇÃO</option>');
           const ordered = [...niveis].sort((a, b) => {
             const ia = extinctionSeverityOrder.indexOf(String(a.sigla || '').toLowerCase());
             const ib = extinctionSeverityOrder.indexOf(String(b.sigla || '').toLowerCase());
@@ -3708,6 +3709,7 @@ $(document).ready(function () {
             const textColor = sigla === 'vu' ? '#111111' : '#FFFFFF';
             selectNiveis.append(`<option value="${item.id}" data-sigla="${sigla}" style="background-color: ${color}; color: ${textColor}; font-weight: bold; padding: 8px;">${item.nome}</option>`);
           });
+          if (currentVal) selectNiveis.val(currentVal).trigger('change');
         }
 
         const selectBiomas = $(".select-biomas");

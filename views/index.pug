@@ -14,10 +14,6 @@ block content
         input#searchbox.form-control(type="text", placeholder="Pesquisar animal ou local...", autocomplete="off")
       #search-results-dropdown.search-dropdown-menu.d-none
 
-    //- QR Code no canto superior direito, abaixo da barra de pesquisa
-    #qrcode-card(title="Clique para ampliar/reduzir")
-      span.qrcode-caption Acesse a versão mobile
-      img(src="/assets/img/qrcode.png", alt="QR Code")
 
     #map-legend.leaflet-bar
       .legend-header(title="Clique e arraste para mover a legenda na tela")
@@ -202,6 +198,15 @@ block content
                 label.species-form-label Nível de extinção
                 select.form-select.select-nivel-extincao.dark-pill-select(name="nivel_extincao_id", required)
                   option(value="") NÍVEL DE EXTINÇÃO
+                  option(value="1", data-sigla="ex", style="background-color: #403E4C; color: #FFF; font-weight: bold; padding: 8px;") Extinta
+                  option(value="2", data-sigla="ew", style="background-color: #831F34; color: #FFF; font-weight: bold; padding: 8px;") Extinta na Natureza
+                  option(value="9", data-sigla="re", style="background-color: #B0214F; color: #FFF; font-weight: bold; padding: 8px;") Regionalmente Extinta
+                  option(value="3", data-sigla="cr", style="background-color: #FF4068; color: #FFF; font-weight: bold; padding: 8px;") Criticamente em Perigo
+                  option(value="4", data-sigla="en", style="background-color: #FF6426; color: #FFF; font-weight: bold; padding: 8px;") Em Perigo
+                  option(value="5", data-sigla="vu", style="background-color: #FFA63A; color: #111; font-weight: bold; padding: 8px;") Vulnerável
+                  option(value="6", data-sigla="nt", style="background-color: #217757; color: #FFF; font-weight: bold; padding: 8px;") Quase Ameaçada
+                  option(value="7", data-sigla="lc", style="background-color: #1A5FB4; color: #FFF; font-weight: bold; padding: 8px;") Pouco Preocupante
+                  option(value="8", data-sigla="dd", style="background-color: #555555; color: #FFF; font-weight: bold; padding: 8px;") Dados Insuficientes
               .col-md-6
                 label.species-form-label Biomas
                 #modal-biomes-tag-selector.biomes-tag-container
@@ -390,11 +395,4 @@ block content
 block scripts
   script(src="https://cdnjs.cloudflare.com/ajax/libs/typeahead.js/0.10.5/typeahead.bundle.min.js")
   script(src="/assets/js/app.js?v=17")
-  script.
-    // QR Code redimensionável: clique alterna entre normal e ampliado
-    $(document).ready(function() {
-      $(document).on('click', '#qrcode-card', function() {
-        $(this).toggleClass('qr-expanded');
-      });
-    });
 

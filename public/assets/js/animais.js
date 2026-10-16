@@ -95,11 +95,13 @@ $(document).ready(function() {
     fetch('/api/v1/niveis-extincao/')
         .then(res => res.json())
         .then(res => {
-            if (res.success && res.data) {
+            const list = (res && res.data) ? res.data : (Array.isArray(res) ? res : (res && res.results ? res.results : null));
+            if (Array.isArray(list) && list.length > 0) {
                 const select = $('.select-nivel-extincao');
+                const currentVal = select.val();
                 select.empty();
                 select.append('<option value="" style="background-color: #2B2A33; color: #FFF;">NÍVEL DE EXTINÇÃO</option>');
-                const ordered = [...res.data].sort((a, b) => {
+                const ordered = [...list].sort((a, b) => {
                     const ia = extinctionSeverityOrder.indexOf(String(a.sigla || '').toLowerCase());
                     const ib = extinctionSeverityOrder.indexOf(String(b.sigla || '').toLowerCase());
                     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
@@ -110,6 +112,7 @@ $(document).ready(function() {
                     const textColor = sigla === 'vu' ? '#111111' : '#FFFFFF';
                     select.append(`<option value="${n.id}" data-sigla="${sigla}" style="background-color: ${color}; color: ${textColor}; font-weight: bold; padding: 8px;">${n.nome}</option>`);
                 });
+                if (currentVal) select.val(currentVal).trigger('change');
             }
         }).catch(err => console.error(err));
 
