@@ -152,18 +152,140 @@ block content
 
         //- VISÃO 1: LISTA DE ANIMAIS CADASTRADOS
         #panel-view-list.h-100.d-flex.flex-column
-          .search-box-wrapper
-            input#animalSearch.form-control.right-panel-search(type="text", placeholder="Pesquisar animais...")
-            i.fa-solid.fa-magnifying-glass.search-icon
+          //- Barra de Ferramentas e Filtros da Fauna
+          .species-toolbar-container.mb-3
+            //- Linha 1: Pesquisa de Texto e Botões de Ação
+            .species-search-row.d-flex.align-items-center.gap-2.mb-2.flex-wrap
+              .search-box-wrapper.flex-grow-1.mb-0.position-relative
+                i.fa-solid.fa-magnifying-glass.search-icon-left
+                input#animalSearch.form-control.right-panel-search(type="text", placeholder="Pesquisar por nome comum, científico, família...", autocomplete="off")
+                button#btn-clear-search.btn-clear-search.d-none(type="button", title="Limpar busca")
+                  i.fa-solid.fa-xmark
 
+              button#btn-filter-favs.btn.species-filter-btn-fav(type="button", title="Exibir apenas animais favoritados")
+                i.fa-solid.fa-star.me-1
+                span Apenas Favoritos
+                span#favs-pill-counter.badge.badge-pill-fav.ms-1 0
+
+              button#btn-reset-filters.btn.btn-outline-secondary.species-btn-reset.d-none(type="button", title="Resetar todos os filtros")
+                i.fa-solid.fa-rotate-left.me-1
+                span Limpar Filtros
+
+            //- Linha 2: Filtros por Bioma, Nível de Ameaça, Classe e Ordenação
+            .species-filters-grid.d-flex.align-items-center.gap-2.flex-wrap
+              //- Filtro de Bioma
+              .filter-pill-select-wrapper
+                span.filter-pill-label
+                  i.fa-solid.fa-leaf.me-1
+                  | Bioma:
+                select#filter-biome.form-select.species-select-filter
+                  option(value="all") Todos os Biomas
+                  option(value="1") Mata Atlântica
+                  option(value="2") Pampa
+                  option(value="3") Cerrado
+                  option(value="4") Oceano Atlântico
+
+              //- Filtro de Nível de Extinção
+              .filter-pill-select-wrapper
+                span.filter-pill-label
+                  i.fa-solid.fa-triangle-exclamation.me-1
+                  | Extinção:
+                select#filter-extinction.form-select.species-select-filter
+                  option(value="all") Todos os Níveis
+                  option(value="threatened") Somente Ameaçadas (CR, EN, VU)
+                  option(value="cr") CR • Criticamente em Perigo
+                  option(value="en") EN • Em Perigo
+                  option(value="vu") VU • Vulnerável
+                  option(value="nt") NT • Quase Ameaçada
+                  option(value="lc") LC • Pouco Preocupante
+                  option(value="dd") DD • Dados Insuficientes
+                  option(value="re") RE • Regionalmente Extinta
+                  option(value="ew") EW • Extinta na Natureza
+                  option(value="ex") EX • Extinta
+
+              //- Filtro de Classe Taxonômica
+              .filter-pill-select-wrapper
+                span.filter-pill-label
+                  i.fa-solid.fa-paw.me-1
+                  | Classe:
+                select#filter-class.form-select.species-select-filter
+                  option(value="all") Todas as Classes
+                  option(value="Mammalia") Mamíferos
+                  option(value="Aves") Aves
+                  option(value="Reptilia") Répteis
+                  option(value="Amphibia") Anfíbios
+                  option(value="Peixes") Peixes
+
+              //- Ordenação
+              .filter-pill-select-wrapper
+                span.filter-pill-label
+                  i.fa-solid.fa-arrow-down-a-z.me-1
+                  | Ordem:
+                select#filter-sort.form-select.species-select-filter
+                  option(value="name_asc") Nome (A → Z)
+                  option(value="name_desc") Nome (Z → A)
+                  option(value="threat_desc") Mais Ameaçados
+                  option(value="threat_asc") Menos Ameaçados
+
+            //- Linha 3: Resumo dos Resultados e Tags Ativas
+            .species-filter-status-bar.d-flex.align-items-center.justify-content-between.mt-2.pt-2
+              .d-flex.align-items-center.gap-2.flex-wrap
+                span#species-results-summary.species-results-summary
+                  i.fa-solid.fa-sliders.me-1
+                  span Exibindo espécies
+                #species-active-tags.d-flex.align-items-center.gap-1.flex-wrap
+
+          //- Área de Rolagem dos Cards com Divisão Clara
           .species-cards-scroll-area
-            #fav-section.d-none
-              #fav-section-title
-                i.fa-solid.fa-star
-                span Favoritos
-              #favGrid.species-cards-grid
-            #animalCardsGrid.species-cards-grid
-              //- Cards renderizados dinamicamente via JS
+            //- SEÇÃO 1: FAVORITOS
+            #fav-section.species-section-container.species-fav-deck.d-none
+              .species-section-banner.fav-banner
+                .section-banner-title-area
+                  .section-banner-icon.fav-icon-box
+                    i.fa-solid.fa-star
+                  .section-banner-headings
+                    .d-flex.align-items-center.gap-2
+                      h3.section-banner-heading Espécies Favoritadas
+                      span#fav-count-pill.badge.badge-fav-counter 0 salvas
+                    p.section-banner-description Animais marcados como favoritos para acompanhamento rápido
+                .section-banner-tools
+                  span.text-muted.small.d-none.d-md-inline-block Clique na estrela do card para gerenciar favoritos
+
+              .species-fav-grid-wrapper
+                #favGrid.species-cards-grid
+
+            //- SEPARADOR VISUAL ELEGANTE (Aparece quando há favoritos E outras espécies)
+            #species-sections-divider.species-sections-divider.d-none
+              .divider-line
+              .divider-badge
+                i.fa-solid.fa-layer-group.me-2
+                span Demais Espécies Cadastradas
+              .divider-line
+
+            //- SEÇÃO 2: DEMAIS / TODAS AS ESPÉCIES
+            #regular-section.species-section-container.species-regular-deck
+              .species-section-banner.regular-banner
+                .section-banner-title-area
+                  .section-banner-icon.regular-icon-box
+                    i.fa-solid.fa-paw
+                  .section-banner-headings
+                    .d-flex.align-items-center.gap-2
+                      h3#regular-section-title.section-banner-heading Todas as Espécies
+                      span#regular-count-pill.badge.badge-regular-counter 0 espécies
+                    p#regular-section-subtitle.section-banner-description Catálogo completo de espécies da fauna do Sul do Brasil
+
+              #animalCardsGrid.species-cards-grid
+
+            //- ESTADO VAZIO (Nenhum resultado para os filtros)
+            #species-empty-state.species-empty-state-box.d-none
+              .empty-state-illustration
+                i.fa-solid.fa-magnifying-glass.empty-search-icon
+                i.fa-solid.fa-paw.empty-paw-icon
+              h4.empty-state-title Nenhuma espécie encontrada
+              p.empty-state-text Não encontramos nenhum animal correspondente aos filtros e termos pesquisados.
+              button#btn-empty-reset.btn.btn-warning.rounded-pill.px-4.py-2.fw-bold(type="button")
+                i.fa-solid.fa-rotate-left.me-2
+                | Redefinir Todos os Filtros
 
         //- VISÃO 2: MAPA DA LOCALIZAÇÃO
         #panel-view-map.h-100.d-flex.flex-column.d-none
@@ -280,7 +402,7 @@ block content
             | Iniciar Importação
 
 block scripts
-  script(src="/assets/js/animais.js?v=13")
+  script(src="/assets/js/animais.js?v=14")
 
 
 

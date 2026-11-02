@@ -84,7 +84,7 @@ $(document).ready(function() {
             .then(response => response.json())
             .then(data => {
                 animals = data;
-                renderSpeciesGrid(animals);
+                applySpeciesFilters();
             })
             .catch(error => {
                 console.error('Erro ao buscar animais:', error);
@@ -268,12 +268,232 @@ $(document).ready(function() {
         }).join('');
     }
 
-    // Renderizar os Cards Coloridos de Tamanho Fixo no Painel Direito.
-    // Favoritos aparecem SÓ na seção Favoritos (acima), nunca duplicados.
+    // Estado unificado dos filtros da fauna
+    const speciesFilterState = {
+        searchTerm: '',
+        biome: 'all',
+        extinction: 'all',
+        classTaxon: 'all',
+        sortBy: 'name_asc',
+        favsOnly: false
+    };
+
+    function updateActiveFilterUI() {
+        const tagsContainer = $('#species-active-tags');
+        tagsContainer.empty();
+        let hasActiveFilters = false;
+
+        if (speciesFilterState.searchTerm) {
+            hasActiveFilters = true;
+            tagsContainer.append(`
+                <span class="active-filter-tag" data-filter-type="search" title="Remover filtro de texto">
+                    Busca: "${speciesFilterState.searchTerm}"
+                    <i class="fa-solid fa-xmark"></i>
+                </span>
+            `);
+            $('#btn-clear-search').removeClass('d-none');
+        } else {
+            $('#btn-clear-search').addClass('d-none');
+        }
+
+        if (speciesFilterState.biome !== 'all') {
+            hasActiveFilters = true;
+            const biomeLabel = $('#filter-biome option:selected').text();
+            tagsContainer.append(`
+                <span class="active-filter-tag" data-filter-type="biome" title="Remover filtro de bioma">
+                    Bioma: ${biomeLabel}
+                    <i class="fa-solid fa-xmark"></i>
+                </span>
+            `);
+        }
+
+        if (speciesFilterState.extinction !== 'all') {
+            hasActiveFilters = true;
+            const extLabel = $('#filter-extinction option:selected').text();
+            tagsContainer.append(`
+                <span class="active-filter-tag" data-filter-type="extinction" title="Remover filtro de extinção">
+                    Ameaça: ${extLabel}
+                    <i class="fa-solid fa-xmark"></i>
+                </span>
+            `);
+        }
+
+        if (speciesFilterState.classTaxon !== 'all') {
+            hasActiveFilters = true;
+            const classLabel = $('#filter-class option:selected').text();
+            tagsContainer.append(`
+                <span class="active-filter-tag" data-filter-type="class" title="Remover filtro de classe">
+                    Classe: ${classLabel}
+                    <i class="fa-solid fa-xmark"></i>
+                </span>
+            `);
+        }
+
+        if (speciesFilterState.favsOnly) {
+            hasActiveFilters = true;
+            tagsContainer.append(`
+                <span class="active-filter-tag" data-filter-type="favsOnly" title="Remover filtro de apenas favoritos">
+                    ⭐ Somente Favoritos
+                    <i class="fa-solid fa-xmark"></i>
+                </span>
+            `);
+        }
+
+        if (hasActiveFilters) {
+            $('#btn-reset-filters').removeClass('d-none');
+        } else {
+            $('#btn-reset-filters').addClass('d-none');
+        }
+    }
+
+    function resetSpeciesFilters() {
+        speciesFilterState.searchTerm = '';
+        speciesFilterState.biome = 'all';
+        speciesFilterState.extinction = 'all';
+        speciesFilterState.classTaxon = 'all';
+        speciesFilterState.sortBy = 'name_asc';
+        speciesFilterState.favsOnly = false;
+
+        $('#animalSearch').val('');
+        $('#filter-biome').val('all');
+        $('#filter-extinction').val('all');
+        $('#filter-class').val('all');
+        $('#filter-sort').val('name_asc');
+        $('#btn-filter-favs').removeClass('active');
+
+        applySpeciesFilters();
+    }
+
+    function applySpeciesFilters() {
+        const isFav = (typeof favIsFav === 'function') ? favIsFav : function () { return false; };
+
+        // 1. Atualizar o contador geral de favoritos no botão
+        const allFavs = (animals || []).filter(a => isFav(a.id));
+        $('#favs-pill-counter').text(allFavs.length);
+        $('#btn-filter-favs').toggleClass('active', !!speciesFilterState.favsOnly);
+
+        const term = (speciesFilterState.searchTerm || '').toLowerCase();
+
+        // 2. Filtragem
+        let filtered = (animals || []).filter(animal => {
+            // Filtro Favoritos apenas
+            if (speciesFilterState.favsOnly && !isFav(animal.id)) {
+                return false;
+            }
+
+            // Filtro por Texto
+            if (term) {
+                const sigla = (animal.api_nivelextincao ? animal.api_nivelextincao.sigla : (animal.nivel_sigla || '')).toLowerCase();
+                const nomeComum = (animal.nome_comum || '').toLowerCase();
+                const nomeCientifico = (animal.nome_cientifico || '').toLowerCase();
+                const familia = (animal.familia || '').toLowerCase();
+                const classe = (animal.classe || '').toLowerCase();
+                const dieta = (animal.dieta || '').toLowerCase();
+                const habitos = (animal.habitos || '').toLowerCase();
+
+                const matchesText = nomeComum.includes(term) ||
+                    nomeCientifico.includes(term) ||
+                    familia.includes(term) ||
+                    classe.includes(term) ||
+                    dieta.includes(term) ||
+                    habitos.includes(term) ||
+                    sigla.includes(term);
+
+                if (!matchesText) return false;
+            }
+
+            // Filtro por Bioma
+            if (speciesFilterState.biome !== 'all') {
+                const targetBiome = speciesFilterState.biome;
+                const animalBiomes = animal.biomas || [];
+                const hasBiome = animalBiomes.some(b => {
+                    let bId = '';
+                    let bName = '';
+                    if (typeof b === 'object' && b !== null) {
+                        bId = String(b.id || '');
+                        bName = (b.nome || '').toLowerCase();
+                    } else {
+                        bId = String(b);
+                        bName = String(b).toLowerCase();
+                    }
+                    if (targetBiome === '1' && (bId === '1' || bName.includes('mata'))) return true;
+                    if (targetBiome === '2' && (bId === '2' || bName.includes('pampa'))) return true;
+                    if (targetBiome === '3' && (bId === '3' || bName.includes('cerrado'))) return true;
+                    if (targetBiome === '4' && (bId === '4' || bName.includes('oceano'))) return true;
+                    return bId === targetBiome;
+                });
+                if (!hasBiome) return false;
+            }
+
+            // Filtro por Nível de Extinção
+            if (speciesFilterState.extinction !== 'all') {
+                const sigla = (animal.api_nivelextincao ? animal.api_nivelextincao.sigla : (animal.nivel_sigla || '')).toLowerCase();
+                if (speciesFilterState.extinction === 'threatened') {
+                    // Ameaçadas = CR, EN, VU
+                    if (sigla !== 'cr' && sigla !== 'en' && sigla !== 'vu') return false;
+                } else if (sigla !== speciesFilterState.extinction.toLowerCase()) {
+                    return false;
+                }
+            }
+
+            // Filtro por Classe Taxonômica
+            if (speciesFilterState.classTaxon !== 'all') {
+                const animalClass = (animal.classe || '').toLowerCase();
+                const targetClass = speciesFilterState.classTaxon.toLowerCase();
+                if (targetClass === 'peixes') {
+                    const isFish = animalClass.includes('peixe') || animalClass.includes('ichthyes') || animalClass.includes('osteichthyes') || animalClass.includes('chondrichthyes');
+                    if (!isFish) return false;
+                } else if (targetClass === 'mammalia') {
+                    if (animalClass !== 'mammalia' && !animalClass.includes('mam')) return false;
+                } else if (targetClass === 'aves') {
+                    if (animalClass !== 'aves' && !animalClass.includes('ave')) return false;
+                } else if (targetClass === 'reptilia') {
+                    if (animalClass !== 'reptilia' && !animalClass.includes('répt') && !animalClass.includes('rept')) return false;
+                } else if (targetClass === 'amphibia') {
+                    if (animalClass !== 'amphibia' && !animalClass.includes('anf')) return false;
+                } else {
+                    if (!animalClass.includes(targetClass)) return false;
+                }
+            }
+
+            return true;
+        });
+
+        // 3. Ordenação
+        filtered.sort((a, b) => {
+            if (speciesFilterState.sortBy === 'name_asc') {
+                return (a.nome_comum || '').localeCompare(b.nome_comum || '', 'pt-BR');
+            } else if (speciesFilterState.sortBy === 'name_desc') {
+                return (b.nome_comum || '').localeCompare(a.nome_comum || '', 'pt-BR');
+            } else if (speciesFilterState.sortBy === 'threat_desc') {
+                const siglaA = (a.api_nivelextincao ? a.api_nivelextincao.sigla : (a.nivel_sigla || '')).toLowerCase();
+                const siglaB = (b.api_nivelextincao ? b.api_nivelextincao.sigla : (b.nivel_sigla || '')).toLowerCase();
+                const ia = extinctionSeverityOrder.indexOf(siglaA);
+                const ib = extinctionSeverityOrder.indexOf(siglaB);
+                return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+            } else if (speciesFilterState.sortBy === 'threat_asc') {
+                const siglaA = (a.api_nivelextincao ? a.api_nivelextincao.sigla : (a.nivel_sigla || '')).toLowerCase();
+                const siglaB = (b.api_nivelextincao ? b.api_nivelextincao.sigla : (b.nivel_sigla || '')).toLowerCase();
+                const ia = extinctionSeverityOrder.indexOf(siglaA);
+                const ib = extinctionSeverityOrder.indexOf(siglaB);
+                return (ib === -1 ? -1 : ib) - (ia === -1 ? -1 : ia);
+            }
+            return 0;
+        });
+
+        updateActiveFilterUI();
+        renderSpeciesGrid(filtered);
+    }
+
+    // Renderizar os Cards no Painel com Separação Nítida de Favoritos
     function renderSpeciesGrid(filteredAnimals) {
         const gridContainer = $('#animalCardsGrid');
         const favGrid = $('#favGrid');
         const favSection = $('#fav-section');
+        const divider = $('#species-sections-divider');
+        const regularSection = $('#regular-section');
+        const emptyState = $('#species-empty-state');
+
         gridContainer.empty();
         if (favGrid.length) favGrid.empty();
 
@@ -281,42 +501,66 @@ $(document).ready(function() {
         const favs = (filteredAnimals || []).filter(a => isFav(a.id));
         const rest = (filteredAnimals || []).filter(a => !isFav(a.id));
 
-        if (favSection.length) {
-            if (favs.length > 0) {
-                favSection.removeClass('d-none');
-                favs.forEach((animal) => { favGrid.append(buildSpeciesCard(animal)); });
-            } else {
-                favSection.addClass('d-none');
-            }
-        }
-        // Seção Favoritos some junto quando a busca não retorna nada
-        // (cards já nascem com estrela/sino certos via favCardButtons,
-        //  então não chama refreshFavUI aqui p/ evitar recursão).
-        if (rest.length === 0 && favs.length === 0) {
-            gridContainer.html('<div class="col-12 text-center text-muted py-5"><p>Nenhuma espécie encontrada.</p></div>');
-            if (favSection.length) favSection.addClass('d-none');
-            return;
+        const total = (filteredAnimals || []).length;
+        if (total === 0) {
+            $('#species-results-summary').html('<i class="fa-solid fa-circle-exclamation me-1 text-warning"></i> Nenhuma espécie encontrada');
+        } else if (favs.length > 0 && rest.length > 0) {
+            $('#species-results-summary').html(`<i class="fa-solid fa-check-circle me-1 text-success"></i> Exibindo <strong>${total}</strong> espécies (<strong>${favs.length}</strong> ${favs.length === 1 ? 'favoritada' : 'favoritadas'} e <strong>${rest.length}</strong> demais)`);
+        } else if (favs.length > 0) {
+            $('#species-results-summary').html(`<i class="fa-solid fa-star me-1 text-warning"></i> Exibindo <strong>${favs.length}</strong> ${favs.length === 1 ? 'espécie favoritada' : 'espécies favoritadas'}`);
+        } else {
+            $('#species-results-summary').html(`<i class="fa-solid fa-check-circle me-1 text-success"></i> Exibindo <strong>${total}</strong> ${total === 1 ? 'espécie' : 'espécies'}`);
         }
 
-        rest.forEach((animal) => {
-            gridContainer.append(buildSpeciesCard(animal));
-        });
+        // Seção de Favoritos
+        if (favs.length > 0) {
+            favSection.removeClass('d-none');
+            $('#fav-count-pill').text(`${favs.length} ${favs.length === 1 ? 'salva' : 'salvas'}`);
+            favs.forEach(animal => {
+                favGrid.append(buildSpeciesCard(animal));
+            });
+        } else {
+            favSection.addClass('d-none');
+        }
+
+        // Divisor visual elegante entre seções
+        if (favs.length > 0 && rest.length > 0) {
+            divider.removeClass('d-none');
+        } else {
+            divider.addClass('d-none');
+        }
+
+        // Seção Demais / Todas as Espécies
+        if (rest.length > 0) {
+            regularSection.removeClass('d-none');
+            if (favs.length > 0) {
+                $('#regular-section-title').text('Demais Espécies');
+                $('#regular-section-subtitle').text('Demais espécies do catálogo que ainda não foram favoritadas');
+            } else {
+                $('#regular-section-title').text('Todas as Espécies');
+                $('#regular-section-subtitle').text('Catálogo completo de espécies da fauna do Sul do Brasil');
+            }
+            $('#regular-count-pill').text(`${rest.length} ${rest.length === 1 ? 'espécie' : 'espécies'}`);
+            rest.forEach(animal => {
+                gridContainer.append(buildSpeciesCard(animal));
+            });
+        } else {
+            regularSection.addClass('d-none');
+        }
+
+        // Estado Vazio
+        if (total === 0) {
+            emptyState.removeClass('d-none');
+        } else {
+            emptyState.addClass('d-none');
+        }
 
         startCardSlideshows();
     }
 
-    // Re-renderiza a divisão Favoritos/Geral (ex: ao favoritar/desfavoritar).
+    // Re-renderiza a divisão Favoritos/Geral preservando os filtros ativos
     window.__favSectionRefresh = function () {
-        const term = ($('#animalSearch').val() || '').toLowerCase().trim();
-        if (!term) { renderSpeciesGrid(animals); return; }
-        const filtered = animals.filter(a => {
-            const sigla = (a.api_nivelextincao ? a.api_nivelextincao.sigla : (a.nivel_sigla || '')).toLowerCase();
-            return (a.nome_comum && a.nome_comum.toLowerCase().includes(term)) ||
-                (a.nome_cientifico && a.nome_cientifico.toLowerCase().includes(term)) ||
-                (a.classe && a.classe.toLowerCase().includes(term)) ||
-                sigla.includes(term);
-        });
-        renderSpeciesGrid(filtered);
+        applySpeciesFilters();
     };
 
     function buildSpeciesCard(animal) {
@@ -580,21 +824,68 @@ $(document).ready(function() {
         redrawDraftPolygonLayers();
     };
 
-    // Pesquisa em tempo real ultra-rápida na lista
+    // Manipuladores de Eventos da Barra de Ferramentas e Filtros da Fauna
     $('#animalSearch').on('input', function() {
-        const term = $(this).val().toLowerCase().trim();
-        if (!term) {
-            renderSpeciesGrid(animals);
-            return;
+        speciesFilterState.searchTerm = $(this).val().trim();
+        applySpeciesFilters();
+    });
+
+    $('#btn-clear-search').on('click', function() {
+        $('#animalSearch').val('');
+        speciesFilterState.searchTerm = '';
+        applySpeciesFilters();
+        $('#animalSearch').focus();
+    });
+
+    $('#filter-biome').on('change', function() {
+        speciesFilterState.biome = $(this).val();
+        applySpeciesFilters();
+    });
+
+    $('#filter-extinction').on('change', function() {
+        speciesFilterState.extinction = $(this).val();
+        applySpeciesFilters();
+    });
+
+    $('#filter-class').on('change', function() {
+        speciesFilterState.classTaxon = $(this).val();
+        applySpeciesFilters();
+    });
+
+    $('#filter-sort').on('change', function() {
+        speciesFilterState.sortBy = $(this).val();
+        applySpeciesFilters();
+    });
+
+    $('#btn-filter-favs').on('click', function() {
+        speciesFilterState.favsOnly = !speciesFilterState.favsOnly;
+        applySpeciesFilters();
+    });
+
+    $('#btn-reset-filters, #btn-empty-reset').on('click', function() {
+        resetSpeciesFilters();
+    });
+
+    // Clique nas tags ativas para remover filtro individual
+    $(document).on('click', '.active-filter-tag', function() {
+        const type = $(this).data('filter-type');
+        if (type === 'search') {
+            speciesFilterState.searchTerm = '';
+            $('#animalSearch').val('');
+        } else if (type === 'biome') {
+            speciesFilterState.biome = 'all';
+            $('#filter-biome').val('all');
+        } else if (type === 'extinction') {
+            speciesFilterState.extinction = 'all';
+            $('#filter-extinction').val('all');
+        } else if (type === 'class') {
+            speciesFilterState.classTaxon = 'all';
+            $('#filter-class').val('all');
+        } else if (type === 'favsOnly') {
+            speciesFilterState.favsOnly = false;
+            $('#btn-filter-favs').removeClass('active');
         }
-        const filtered = animals.filter(a => {
-            const sigla = (a.api_nivelextincao ? a.api_nivelextincao.sigla : (a.nivel_sigla || '')).toLowerCase();
-            return (a.nome_comum && a.nome_comum.toLowerCase().includes(term)) ||
-                (a.nome_cientifico && a.nome_cientifico.toLowerCase().includes(term)) ||
-                (a.classe && a.classe.toLowerCase().includes(term)) ||
-                sigla.includes(term);
-        });
-        renderSpeciesGrid(filtered);
+        applySpeciesFilters();
     });
 
     // Alternância de Abas (Animais Cadastrados vs Mapa)
@@ -1858,15 +2149,15 @@ $(document).ready(function() {
                 <div class="bg-dark p-3 rounded-3 mt-3" style="border-top: 3px solid ${statusColor}; border-bottom: 3px solid ${statusColor};">
                   <div class="row text-center mb-1 gy-2 text-white animal-stats-row">
                       <div class="col-4 animal-stat-col">
-                          <span class="mb-1 text-muted small"><i class="fas fa-utensils me-1"></i> Dieta</span>
+                          <span class="mb-1 text-white small"><i class="fas fa-utensils me-1"></i> Dieta</span>
                           <div class="fw-bold animal-stat-value" style="color: #FFFFFF; font-size: 0.95rem;">${animal.dieta || 'N/A'}</div>
                       </div>
                       <div class="col-4 border-start border-secondary animal-stat-col">
-                          <span class="mb-1 text-muted small"><i class="fas fa-weight-hanging me-1"></i> Peso</span>
+                          <span class="mb-1 text-white small"><i class="fas fa-weight-hanging me-1"></i> Peso</span>
                           <div class="fw-bold animal-stat-value" style="color: #FFFFFF; font-size: 0.95rem;">${animal.peso ? animal.peso + ' g' : '0 g'}</div>
                       </div>
                       <div class="col-4 border-start border-secondary animal-stat-col">
-                          <span class="mb-1 text-muted small"><i class="fas fa-arrows-alt-v me-1"></i> Altura</span>
+                          <span class="mb-1 text-white small"><i class="fas fa-arrows-alt-v me-1"></i> Altura</span>
                           <div class="fw-bold animal-stat-value" style="color: #FFFFFF; font-size: 0.95rem;">${animal.altura ? animal.altura + ' cm' : '0 cm'}</div>
                       </div>
                   </div>
