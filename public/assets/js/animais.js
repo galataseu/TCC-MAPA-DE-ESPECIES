@@ -1859,15 +1859,15 @@ $(document).ready(function() {
                   <div class="row text-center mb-1 gy-2 text-white animal-stats-row">
                       <div class="col-4 animal-stat-col">
                           <span class="mb-1 text-muted small"><i class="fas fa-utensils me-1"></i> Dieta</span>
-                          <div class="fw-bold animal-stat-value" style="color: ${statusColor}; font-size: 0.95rem;">${animal.dieta || 'N/A'}</div>
+                          <div class="fw-bold animal-stat-value" style="color: #FFFFFF; font-size: 0.95rem;">${animal.dieta || 'N/A'}</div>
                       </div>
                       <div class="col-4 border-start border-secondary animal-stat-col">
                           <span class="mb-1 text-muted small"><i class="fas fa-weight-hanging me-1"></i> Peso</span>
-                          <div class="fw-bold animal-stat-value" style="color: ${statusColor}; font-size: 0.95rem;">${animal.peso ? animal.peso + ' g' : '0 g'}</div>
+                          <div class="fw-bold animal-stat-value" style="color: #FFFFFF; font-size: 0.95rem;">${animal.peso ? animal.peso + ' g' : '0 g'}</div>
                       </div>
                       <div class="col-4 border-start border-secondary animal-stat-col">
                           <span class="mb-1 text-muted small"><i class="fas fa-arrows-alt-v me-1"></i> Altura</span>
-                          <div class="fw-bold animal-stat-value" style="color: ${statusColor}; font-size: 0.95rem;">${animal.altura ? animal.altura + ' cm' : '0 cm'}</div>
+                          <div class="fw-bold animal-stat-value" style="color: #FFFFFF; font-size: 0.95rem;">${animal.altura ? animal.altura + ' cm' : '0 cm'}</div>
                       </div>
                   </div>
                   <hr style="border-color: ${statusColor}; opacity: 0.3;" class="my-2">
