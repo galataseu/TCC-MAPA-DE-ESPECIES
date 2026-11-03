@@ -15,7 +15,7 @@ No painel do Render, em **Environment Variables**, adicione/ajuste:
 | `NODE_ENV` | `production` | Desliga o modo debug |
 | `JWT_SECRET` | `chave_longa_e_aleatoria` | Mesma usada pelo frontend/login |
 | `ALLOWED_HOSTS` | `*` | Já está no settings |
-| `CORS_ALLOWED_ORIGINS` | `https://tcc-mapa-de-especies.vercel.app` | **Obrigatório**: URL do seu frontend na Vercel. Se houver mais de uma (preview), separe por vírgula. |
+| `CORS_ALLOWED_ORIGINS` | (opcional) | A origem oficial `https://tcc-mapa-de-especies.vercel.app` já é permitida por padrão. Informe domínios extras de preview ou personalizados separados por vírgula. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | conforme seu e-mail | Para notificações de mudança de status (opcional para estatísticas) |
 
 ### 1.2. Comandos de build no Render
@@ -43,7 +43,7 @@ No painel da Vercel, em **Settings → Environment Variables**, adicione:
 > Isso faz com que `API_DJANGO` no `app.js` aponte para o Django na Render e as estatísticas funcionem em produção.
 
 ### 2.2. CORS
-O Django agora lê `CORS_ALLOWED_ORIGINS` da variável de ambiente. Defina no Render com a URL da Vercel (passo 1.1). Sem isso, o frontend na Vercel receberá erro de CORS ao chamar `/api/v1/stats/uso/`.
+O Django permite por padrão a origem oficial `https://tcc-mapa-de-especies.vercel.app` e os endereços locais. `CORS_ALLOWED_ORIGINS` acrescenta domínios de preview ou personalizados, separados por vírgula. Depois de alterar `settings.py` ou as variáveis de ambiente, faça redeploy do serviço Django no Render. Sem essa configuração no backend, o navegador bloqueia as chamadas da Vercel, inclusive login e estatísticas.
 
 ---
 

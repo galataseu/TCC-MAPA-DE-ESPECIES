@@ -210,3 +210,17 @@ class StatsUsoTests(APITestCase):
         self.assertEqual(valido.status_code, status.HTTP_201_CREATED)
         self.assertEqual(EventoUso.objects.count(), 1)
         self.assertEqual(EventoUso.objects.get().animal_id, self.animal_mais_visto.id)
+
+    def test_preflight_cors_permite_frontend_oficial_da_vercel(self):
+        response = self.client.options(
+            reverse('login'),
+            HTTP_ORIGIN='https://tcc-mapa-de-especies.vercel.app',
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD='POST',
+            HTTP_ACCESS_CONTROL_REQUEST_HEADERS='content-type',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response['Access-Control-Allow-Origin'],
+            'https://tcc-mapa-de-especies.vercel.app',
+        )

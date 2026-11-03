@@ -139,7 +139,7 @@ block scripts
           : (window.API_BASE_URL || "https://tcc-mapa-de-especies.onrender.com/api");
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const timeoutId = setTimeout(() => controller.abort(), 90000);
 
         fetch(`${API_URL}/v1/auth/login/`, {
           method: "POST",
@@ -170,7 +170,12 @@ block scripts
           console.error("Erro:", error);
           sessionStorage.removeItem("token");
           sessionStorage.removeItem("adminMode");
-          systemAlert("Não foi possível autenticar uma conta administradora: " + (error.message || "verifique a conexão com a API."), 'error');
+          const message = error.name === "AbortError"
+            ? "A API demorou mais de 90 segundos para responder. Tente novamente em instantes."
+            : error instanceof TypeError
+              ? "Não foi possível conectar à API. Verifique a disponibilidade do backend e a configuração CORS_ALLOWED_ORIGINS no Render para https://tcc-mapa-de-especies.vercel.app."
+              : (error.message || "Verifique a conexão com a API.");
+          systemAlert("Não foi possível autenticar uma conta administradora: " + message, 'error');
         });
       });
     });

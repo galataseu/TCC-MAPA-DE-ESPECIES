@@ -120,18 +120,18 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20
 }
 
-# Origens permitidas pelo CORS. Em produção (Vercel/Render), defina a variável
-# de ambiente CORS_ALLOWED_ORIGINS com a URL do frontend, ex.:
-#   CORS_ALLOWED_ORIGINS=https://tcc-mapa-de-especies.vercel.app
-# Múltiplas origens separam por vírgula.
+# A origem oficial da Vercel e os endereços locais são sempre permitidos.
+# CORS_ALLOWED_ORIGINS pode acrescentar domínios de preview ou personalizados.
 _cors_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
-if _cors_env:
-    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_env.split(',') if o.strip()]
-else:
-    CORS_ALLOWED_ORIGINS = [
-        "http://localhost:3000",
-        "http://localhost:3001",
-    ]
+_default_cors_origins = [
+    "https://tcc-mapa-de-especies.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:3001",
+]
+CORS_ALLOWED_ORIGINS = list(dict.fromkeys(
+    _default_cors_origins
+    + [o.strip() for o in _cors_env.split(',') if o.strip()]
+))
 
 # Permite envio do cabeçalho Authorization (Bearer JWT) entre origens.
 CORS_ALLOW_CREDENTIALS = True
