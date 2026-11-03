@@ -113,10 +113,14 @@
       setFavEntry(id, null);
       serverUnnotify(id, email);
       refreshFavUI();
+      // Estatística invisível: desfavorito
+      try { if (typeof window.registrarEventoUso === 'function') window.registrarEventoUso('unfavorite', id); } catch (e) {}
       return false;
     }
     setFavEntry(id, { notify: false, ts: Date.now() });
     refreshFavUI();
+    // Estatística invisível: favorito
+    try { if (typeof window.registrarEventoUso === 'function') window.registrarEventoUso('favorite', id); } catch (e) {}
     if (!window.favGetCookie(HIDE_NOTIFY_COOKIE)) {
       openNotifyModal(id, nome || 'esta espécie', { auto: true });
     }

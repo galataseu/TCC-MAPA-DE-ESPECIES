@@ -1,0 +1,105 @@
+//- ============================================================================
+//- CookieBanner — aviso de consentimento (LGPD)
+//- Exibe uma única vez por visitante (cookie "tcc_cookie_consent", 12 meses).
+//- Só libera o rastreamento anônimo de uso (estatísticas do admin) se o
+//- usuário aceitar. Sem dados pessoais: nenhum IP, e-mail ou identificador
+//- é coletado. Design segue o padrão escuro do app.
+//- ============================================================================
+#cookie-banner.cookie-banner(
+  role="dialog"
+  aria-modal="true"
+  aria-label="Aviso de cookies"
+  style="display:none;"
+)
+  .cookie-banner-panel
+    .cookie-banner-header
+      i.fa-solid.fa-info-circle.me-2
+      | Cookies e estatísticas de uso
+    .cookie-banner-corpo
+      p.cookie-banner-texto
+        | O Gralha dos Ventos utiliza cookies e tecnologias semelhantes para
+        | melhorar sua experiência e, de forma totalmente anônima, gerar
+        | estatísticas de uso (ex: animais mais visualizados e mais
+        | favoritadas) exclusivas para o administrador do site.
+        | Nenhum dado pessoal (nome, e-mail, IP) é coletado para essa finalidade.
+    .cookie-banner-rodape
+      button.cookie-banner-btn.cookie-banner-recusar(type="button", id="btn-cookie-recusar")
+        | Recusar
+      button.cookie-banner-btn.cookie-banner-aceitar(type="button", id="btn-cookie-aceitar")
+        | Aceitar
+
+script.
+  (function () {
+    'use strict';
+
+    var BANNER_KEY = 'tcc_cookie_consent';
+    var banner = document.getElementById('cookie-banner');
+    if (!banner) return;
+
+    // Já respondeu antes? Não mostra novamente.
+    function getConsent() {
+      try {
+        var parts = document.cookie.split(';');
+        for (var i = 0; i < parts.length; i++) {
+          var kv = parts[i].split('=');
+          if (kv[0] && kv[0].trim() === BANNER_KEY) return decodeURIComponent((kv[1] || '').trim());
+        }
+      } catch (e) {}
+      return '';
+    }
+    function setConsent(value, dias) {
+      try {
+        var c = BANNER_KEY + '=' + encodeURIComponent(value) + ';path=/;SameSite=Lax';
+        if (dias) {
+          var d = new Date();
+          d.setTime(d.getTime() + dias * 24 * 60 * 60 * 1000);
+          c += ';expires=' + d.toUTCString();
+        }
+        document.cookie = c;
+      } catch (e) {}
+    }
+
+    var consent = getConsent();
+    if (consent) {
+      // Já decidiu: libera rastreamento se aceitou analytics
+      if (consent === 'analytics' || consent === 'all') {
+        window.__cookieConsent = true;
+      }
+      return;
+    }
+
+    // Mostra o banner
+    banner.style.display = 'block';
+    setTimeout(function () { banner.classList.add('visivel'); }, 20);
+
+    var btnAceitar = document.getElementById('btn-cookie-aceitar');
+    var btnRecusar = document.getElementById('btn-cookie-recusar');
+
+    function fechar() {
+      banner.classList.remove('visivel');
+      setTimeout(function () { banner.style.display = 'none'; }, 300);
+    }
+
+    // Aceitar = consente com estatísticas anônimas de uso
+    btnAceitar.addEventListener('click', function () {
+      setConsent('analytics', 365);
+      window.__cookieConsent = true;
+      fechar();
+    });
+
+    // Recusar = sem estatísticas anônimas
+    btnRecusar.addEventListener('click', function () {
+      setConsent('essenciais', 365);
+      window.__cookieConsent = false;
+      fechar();
+    });
+
+    // Fecha clicando fora (opcional: apenas no overlay, mantemos simples)
+    banner.addEventListener('click', function (e) {
+      if (e.target === banner) {
+        setConsent('essenciais', 365);
+        window.__cookieConsent = false;
+        fechar();
+      }
+    });
+  })();

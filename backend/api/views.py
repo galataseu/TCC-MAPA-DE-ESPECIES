@@ -1,13 +1,19 @@
+from decimal import Decimal
+from datetime import date, datetime, timedelta
+
 from rest_framework import viewsets, permissions, status, pagination
 from rest_framework.response import Response
-from django.db.models import Q
+from rest_framework.views import APIView
+from django.db.models import Q, Count
+from django.db.models.functions import TruncDay
+from django.utils import timezone
 from django.contrib.gis.geos import Point
-from .models import User, NivelExtincao, NivelDestruicao, Bioma, Estado, Regiao, Animal, Ong, ZonaPreservacao, Marcador
+from .models import User, NivelExtincao, NivelDestruicao, Bioma, Estado, Regiao, Animal, Ong, ZonaPreservacao, Marcador, EventoUso
 from .serializers import (
     UserSerializer, NivelExtincaoSerializer, NivelDestruicaoSerializer, BiomaSerializer, 
     EstadoSerializer, RegiaoSerializer, AnimalSerializer, OngSerializer, ZonaPreservacaoSerializer
 )
-from .permissions import IsAdminOrReadOnly
+from .permissions import IsAdminOrReadOnly, IsAdminUser
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -184,3 +190,225 @@ class RegisterView(viewsets.GenericViewSet):
             'message': 'Usuário criado com sucesso',
             'user': UserSerializer(user).data
         }, status=status.HTTP_201_CREATED)
+
+
+# ============================================================================
+# Estatísticas de uso (apenas administrador)
+# ============================================================================
+class RegistroEventoUsoView(APIView):
+    """Registra um evento de uso anônimo (visualização, favorito, busca, visita).
+
+    Aberto (AllowAny) porque é chamado pelo frontend de qualquer visitante.
+    Não grava dados pessoais: apenas animal, tipo, termo e carimbo.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        tipo = request.data.get('tipo')
+        validos = dict(EventoUso.TIPO_EVENTO)
+        if tipo not in validos:
+            return Response({'success': False, 'error': 'Tipo de evento inválido.'}, status=400)
+
+        animal = None
+        animal_id = request.data.get('animal_id')
+        if animal_id:
+            try:
+                animal = Animal.objects.get(id=animal_id)
+            except Animal.DoesNotExist:
+                pass
+
+        EventoUso.objects.create(
+            animal=animal,
+            tipo=tipo,
+            termo=(request.data.get('termo') or '').strip() or None,
+            resultado_encontrado=request.data.get('resultado_encontrado'),
+        )
+        return Response({'success': True}, status=201)
+
+
+class StatsUsoView(APIView):
+    """Retorna estatísticas agregadas de uso para o painel do administrador.
+
+    Bloqueado por IsAdminUser: usuários comuns recebem 403.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        agora = timezone.now()
+        sete_dias = agora - timedelta(days=7)
+        trinta_dias = agora - timedelta(days=30)
+
+        eventos = EventoUso.objects.all()
+
+        # --- Animal mais visto (total) ---
+        mais_visto = (
+            eventos.filter(tipo='view', animal__isnull=False)
+            .values('animal_id', 'animal__nome_comum')
+            .annotate(total=Count('id'))
+            .order_by('-total')
+            .first()
+        )
+
+        # --- Animal mais favoritado (total) ---
+        mais_favoritado = (
+            eventos.filter(tipo='favorite', animal__isnull=False)
+            .values('animal_id', 'animal__nome_comum')
+            .annotate(total=Count('id'))
+            .order_by('-total')
+            .first()
+        )
+
+        # --- Totais por período ---
+        total_visualizacoes_7d = eventos.filter(tipo='view', created_at__gte=sete_dias).count()
+        total_visualizacoes_30d = eventos.filter(tipo='view', created_at__gte=trinta_dias).count()
+        total_favoritos_7d = eventos.filter(tipo='favorite', created_at__gte=sete_dias).count()
+        total_favoritos_30d = eventos.filter(tipo='favorite', created_at__gte=trinta_dias).count()
+        total_visitas_7d = eventos.filter(tipo='visit', created_at__gte=sete_dias).count()
+        total_visitas_30d = eventos.filter(tipo='visit', created_at__gte=trinta_dias).count()
+
+        # --- Visualizações e favoritos por dia (últimos 30 dias) ---
+        views_por_dia = list(
+            eventos.filter(tipo='view', created_at__gte=trinta_dias)
+            .annotate(dia=TruncDay('created_at'))
+            .values('dia')
+            .annotate(total=Count('id'))
+            .order_by('dia')
+        )
+        favs_por_dia = list(
+            eventos.filter(tipo='favorite', created_at__gte=trinta_dias)
+            .annotate(dia=TruncDay('created_at'))
+            .values('dia')
+            .annotate(total=Count('id'))
+            .order_by('dia')
+        )
+        visitas_por_dia = list(
+            eventos.filter(tipo='visit', created_at__gte=trinta_dias)
+            .annotate(dia=TruncDay('created_at'))
+            .values('dia')
+            .annotate(total=Count('id'))
+            .order_by('dia')
+        )
+
+        # --- Biomas mais acessados (a partir dos animais mais vistos) ---
+        top_animais_ids = list(
+            eventos.filter(tipo='view', animal__isnull=False)
+            .values_list('animal_id', flat=True)
+            .annotate(total=Count('id'))
+            .order_by('-total')[:50]
+        )
+        from .models import Bioma
+        biomas_contagem = {}
+        if top_animais_ids:
+            animais = Animal.objects.filter(id__in=top_animais_ids).prefetch_related('biomas')
+            views_por_animal = {
+                r['animal_id']: r['total']
+                for r in eventos.filter(tipo='view', animal__id__in=top_animais_ids)
+                .values('animal_id')
+                .annotate(total=Count('id'))
+            }
+            for a in animais:
+                for b in a.biomas.all():
+                    biomas_contagem[b.id] = {
+                        'id': b.id,
+                        'nome': b.nome,
+                        'total': biomas_contagem.get(b.id, {}).get('total', 0) + views_por_animal.get(a.id, 0),
+                    }
+        biomas_mais_acessados = sorted(
+            biomas_contagem.values(), key=lambda x: x['total'], reverse=True
+        )[:10]
+
+        # --- Taxa de conversão: animais com muitas visualizações e poucos favoritos ---
+        animais_stats = (
+            eventos.filter(animal__isnull=False)
+            .values('animal_id', 'animal__nome_comum')
+            .annotate(
+                views=Count('id', filter=Q(tipo='view')),
+                favoritos=Count('id', filter=Q(tipo='favorite')),
+            )
+            .order_by('-views')[:30]
+        )
+        conversao = []
+        for a in animais_stats:
+            v = a['views'] or 0
+            f = a['favoritos'] or 0
+            taxa = round((f / v) * 100, 2) if v else 0
+            conversao.append({
+                'animal_id': a['animal_id'],
+                'nome_comum': a['nome_comum'],
+                'views': v,
+                'favoritos': f,
+                'taxa_conversao': taxa,
+            })
+        conversao_ordenada = sorted(conversao, key=lambda x: x['taxa_conversao'])
+
+        # --- Horários de pico (hora do dia) ---
+        # TruncDay não serve para hora; usamos extração manual via Python p/ portabilidade.
+        horas = {}
+        for e in eventos.filter(created_at__gte=sete_dias).only('created_at'):
+            h = e.created_at.hour
+            horas[h] = horas.get(h, 0) + 1
+        horarios_pico = [{'hora': h, 'total': horas.get(h, 0)} for h in range(24)]
+
+        # --- Dias da semana de pico ---
+        dias_semana = {}
+        for e in eventos.filter(created_at__gte=sete_dias).only('created_at'):
+            # 0=segunda ... 6=domingo (Python weekday)
+            nome = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'][e.created_at.weekday()]
+            dias_semana[nome] = dias_semana.get(nome, 0) + 1
+        ordem_dias = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+        dias_pico = [{'dia': d, 'total': dias_semana.get(d, 0)} for d in ordem_dias]
+
+        # --- Termos mais buscados e buscas sem resultado ---
+        buscas = eventos.filter(tipo='search')
+        termos = (
+            buscas.exclude(termo__isnull=True).exclude(termo='')
+            .values('termo')
+            .annotate(total=Count('id'))
+            .order_by('-total')[:20]
+        )
+        buscas_sem_resultado = (
+            buscas.filter(resultado_encontrado=False)
+            .exclude(termo__isnull=True).exclude(termo='')
+            .values('termo')
+            .annotate(total=Count('id'))
+            .order_by('-total')[:10]
+        )
+
+        data = {
+            'animal_mais_visto': mais_visto,
+            'animal_mais_favoritado': mais_favoritado,
+            'total_visualizacoes_7d': total_visualizacoes_7d,
+            'total_visualizacoes_30d': total_visualizacoes_30d,
+            'total_favoritos_7d': total_favoritos_7d,
+            'total_favoritos_30d': total_favoritos_30d,
+            'total_visitas_7d': total_visitas_7d,
+            'total_visitas_30d': total_visitas_30d,
+            'views_por_dia': views_por_dia,
+            'favs_por_dia': favs_por_dia,
+            'visitas_por_dia': visitas_por_dia,
+            'biomas_mais_acessados': biomas_mais_acessados,
+            'conversao': conversao_ordenada,
+            'horarios_pico': horarios_pico,
+            'dias_pico': dias_pico,
+            'termos_mais_busados': list(termos),
+            'buscas_sem_resultado': list(buscas_sem_resultado),
+            'gerado_em': agora.isoformat(),
+        }
+
+        # Serialização segura de datas/decimais
+        return Response({'success': True, 'data': self._serialize(data)})
+
+    def _serialize(self, obj):
+        if isinstance(obj, dict):
+            return {k: self._serialize(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [self._serialize(v) for v in obj]
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, date):
+            return obj.isoformat()
+        if isinstance(obj, timedelta):
+            return str(obj)
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return obj

@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     AnimalViewSet, OngViewSet, ZonaPreservacaoViewSet, 
     NivelExtincaoViewSet, NivelDestruicaoViewSet, BiomaViewSet, 
-    EstadoViewSet, RegiaoViewSet, LoginView, RegisterView
+    EstadoViewSet, RegiaoViewSet, LoginView, RegisterView,
+    RegistroEventoUsoView, StatsUsoView
 )
 
 router = DefaultRouter()
@@ -21,5 +22,8 @@ router.register(r'regioes', RegiaoViewSet)
 urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/register/', RegisterView.as_view({'post': 'create'}), name='register'),
+    # Estatísticas de uso (apenas administrador)
+    path('stats/uso/', StatsUsoView.as_view(), name='stats-uso'),
+    path('stats/uso/evento/', RegistroEventoUsoView.as_view(), name='registro-evento-uso'),
     path('', include(router.urls)),
 ]

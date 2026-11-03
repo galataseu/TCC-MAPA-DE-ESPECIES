@@ -214,3 +214,40 @@ class ZonaPreservacao(SoftDeleteModel):
 
     def __str__(self):
         return self.nome
+
+
+class EventoUso(models.Model):
+    """Eventos de uso anônimos para estatísticas do painel administrativo.
+
+    Sem dados pessoais: registra apenas animal, tipo de evento, termo de busca
+    e carimbo de data/hora. Usado para agregar "animal mais visto", "mais
+    favoritado", picos de acesso, termos buscados, etc.
+    """
+    TIPO_EVENTO = [
+        ('view', 'Visualização de animal'),
+        ('favorite', 'Favoritar animal'),
+        ('unfavorite', 'Desfavoritar animal'),
+        ('search', 'Busca'),
+        ('visit', 'Visita ao site'),
+    ]
+
+    animal = models.ForeignKey(
+        Animal, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='eventos_uso'
+    )
+    tipo = models.CharField(max_length=20, choices=TIPO_EVENTO)
+    termo = models.CharField(max_length=200, null=True, blank=True)
+    resultado_encontrado = models.BooleanField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Evento de uso"
+        verbose_name_plural = "Eventos de uso"
+        indexes = [
+            models.Index(fields=['tipo', 'created_at']),
+            models.Index(fields=['animal', 'tipo']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} - {self.created_at:%d/%m/%Y %H:%M}"

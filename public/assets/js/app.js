@@ -16,9 +16,8 @@ var stateLayers = [];
 var markersData = [];
 
 /* Camadas de Base */
-var darkFull = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_3l5t_1_889f4489a3fb5fb5051816e3', {
-  attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-  subdomains: 'abcd',
+var darkFull = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
   maxZoom: 19,
   updateWhenIdle: true,
   keepBuffer: 4
@@ -109,6 +108,70 @@ const southCitiesList = [
 ];
 
 $(document).ready(function () {
+  // =========================================================================
+  // API Django (mesma base usada pelo login de administrador)
+  // =========================================================================
+  var API_DJANGO = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+    ? "http://localhost:8000/api"
+    : (window.API_BASE_URL || "https://tcc-mapa-de-especies.onrender.com/api");
+  var API_STATS = API_DJANGO + '/v1/stats/uso';
+
+  // -------------------------------------------------------------------------
+  // Rastreamento invisível de uso (estatísticas do admin).
+  // Sem dados pessoais: apenas animal_id, tipo de evento, termo e carimbo.
+  // Falha silenciosamente para nunca quebrar a experiência do usuário.
+  // -------------------------------------------------------------------------
+  var EVENT_SESSION_KEY = 'tcc_uso_session';
+  var VIEWED_KEY = 'tcc_uso_views';
+  function usoGetSessionId() {
+    try {
+      var sid = sessionStorage.getItem(EVENT_SESSION_KEY);
+      if (!sid) {
+        sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        sessionStorage.setItem(EVENT_SESSION_KEY, sid);
+      }
+      return sid;
+    } catch (e) { return 'anon'; }
+  }
+  function usoJaVisto(animalId) {
+    try {
+      var visto = JSON.parse(sessionStorage.getItem(VIEWED_KEY) || '{}');
+      return !!visto[String(animalId)];
+    } catch (e) { return false; }
+  }
+  function usoMarcarVisto(animalId) {
+    try {
+      var visto = JSON.parse(sessionStorage.getItem(VIEWED_KEY) || '{}');
+      visto[String(animalId)] = true;
+      sessionStorage.setItem(VIEWED_KEY, JSON.stringify(visto));
+    } catch (e) {}
+  }
+  window.registrarEventoUso = function(tipo, animalId, termo, resultadoEncontrado) {
+    try {
+      // Respeita o consentimento do banner LGPD: só rastreia se aceitou analytics.
+      if (window.__cookieConsent !== true) return;
+      var body = { tipo: tipo, session_id: usoGetSessionId() };
+      if (animalId != null) body.animal_id = String(animalId);
+      if (termo !== undefined) body.termo = termo;
+      if (resultadoEncontrado !== undefined) body.resultado_encontrado = !!resultadoEncontrado;
+      fetch(API_STATS + '/evento/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).catch(function () {}); // sem bloquear a UI
+    } catch (e) {}
+  }
+
+  // Visita ao site (uma vez por sessão) — respeita consentimento LGPD
+  (function registrarVisita() {
+    try {
+      if (!sessionStorage.getItem('tcc_uso_visita_sessao')) {
+        sessionStorage.setItem('tcc_uso_visita_sessao', '1');
+        registrarEventoUso('visit');
+      }
+    } catch (e) {}
+  })();
+
   /* Oculta a logo Gralha dos Ventos (#brand-header) e a barra de pesquisa
      de localidades (#floating-search) na tela de criação de animais
      (modal fullscreen). */
@@ -464,10 +527,31 @@ $(document).ready(function () {
     });
   })();
 
-  // Botão "Sobre": tratado em views/partials/welcome-modal.pug (overlay global
-  // WelcomeModal com localStorage "hideWelcomeScreen"). Mantido aqui apenas como
-  // fallback caso o partial não esteja presente.
-  $("#about-btn").click(function() {
+  // -------------------------------------------------------------------------
+  // Aba "Sobre" / Estatísticas do admin (navbar).
+  // Apenas o administrador vê a aba. Para o usuário comum ela fica oculta e
+  // o "Sobre" continua sendo o welcome-modal (primeira visita).
+  // -------------------------------------------------------------------------
+  function configurarAbaEstatisticas() {
+    var btn = $("#about-btn");
+    var li = btn.parent("li");
+    if (isAdminModeActive()) {
+      li.removeClass("d-none");
+      btn.find("i").attr("class", "fa-solid fa-chart-bar");
+      btn.find(".nav-label").text("Estatísticas");
+      btn.attr("title", "Estatísticas de uso (apenas administrador)");
+    } else {
+      li.addClass("d-none");
+    }
+  }
+  configurarAbaEstatisticas();
+
+  $("#about-btn").click(function(e) {
+    if (isAdminModeActive()) {
+      e.preventDefault();
+      abrirModalEstatisticas();
+      return false;
+    }
     if (typeof window.openWelcomeModal === 'function') { window.openWelcomeModal(); return false; }
     $("#aboutModal").modal("show"); return false;
   });
@@ -502,6 +586,12 @@ $(document).ready(function () {
 
     // Renderiza imediatamente os resultados locais
     renderSearchResults(matchedCities.slice(0, 5), matchedAnimals.slice(0, 8));
+
+    // Estatística invisível: termo buscado e se houve resultado (debounce)
+    clearTimeout(window.__searchBuscaTimer || null);
+    window.__searchBuscaTimer = setTimeout(function () {
+      registrarEventoUso('search', null, query, (matchedCities.length + matchedAnimals.length) > 0);
+    }, 600);
 
     // 2. Busca Remota em background apenas se query for mais específica (>= 3 caracteres)
     clearTimeout(remoteSearchDebounceTimer);
@@ -1632,6 +1722,8 @@ $(document).ready(function () {
       $("#admin-btn").attr("href", "/admin/login");
       closeAdminDrawer();
     }
+    // A aba Estatísticas só é visível para o administrador.
+    configurarAbaEstatisticas();
     // Recarrega ONGs e zonas para mostrar/ocultar os botões de excluir
     // dos popups conforme o modo (admin ou comum).
     if (typeof loadOngs === 'function') loadOngs();
@@ -1650,6 +1742,402 @@ $(document).ready(function () {
   });
 
   updateAdminUI();
+
+  // =========================================================================
+  // Modal de Estatísticas de Uso (apenas administrador)
+  // =========================================================================
+  window.abrirModalEstatisticas = function () {
+    // Carrega Chart.js via CDN se ainda não estiver disponível
+    function garantirChart(callback) {
+      if (window.Chart) { callback(); return; }
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+      s.onload = callback;
+      document.head.appendChild(s);
+    }
+
+    function token() {
+      try { return sessionStorage.getItem('token'); } catch (e) { return null; }
+    }
+
+    function montarModalHtml() {
+      return `
+      <div id="modal-estatisticas" class="modal-estat-overlay" role="dialog" aria-modal="true" aria-label="Estatísticas de uso">
+        <div class="modal-estat-panel">
+          <div class="modal-estat-header">
+            <button class="modal-estat-close" id="btn-fechar-estat" aria-label="Fechar estatísticas">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="modal-estat-titulo">
+              <i class="fa-solid fa-chart-bar me-2"></i>
+              <span>Estatísticas de Uso</span>
+            </div>
+            <button class="modal-estat-export" id="btn-exportar-estat" title="Exportar CSV">
+              <i class="fa-solid fa-download me-1"></i>Exportar CSV
+            </button>
+          </div>
+
+          <div class="modal-estat-corpo">
+            <!-- Cards resumo -->
+            <div class="modal-estat-grid">
+              <div class="modal-estat-card">
+                <div class="modal-estat-valor" id="estat-total-visitas">—</div>
+                <div class="modal-estat-label">Visitas ao site (30d)</div>
+              </div>
+              <div class="modal-estat-card">
+                <div class="modal-estat-valor" id="estat-total-views">—</div>
+                <div class="modal-estat-label">Visualizações de animais (30d)</div>
+              </div>
+              <div class="modal-estat-card">
+                <div class="modal-estat-valor" id="estat-total-favs">—</div>
+                <div class="modal-estat-label">Favoritos (30d)</div>
+              </div>
+              <div class="modal-estat-card">
+                <div class="modal-estat-valor" id="estat-taxa-conversao">—</div>
+                <div class="modal-estat-label">Taxa média de conversão</div>
+              </div>
+            </div>
+
+            <!-- Destaques -->
+            <div class="modal-estat-sec">
+              <h4 class="modal-estat-sec-titulo"><i class="fa-solid fa-trophy me-2"></i>Destaques</h4>
+              <div class="modal-estat-grid modal-estat-grid-2">
+                <div class="modal-estat-card">
+                  <div class="modal-estat-valor" id="estat-mais-visto">—</div>
+                  <div class="modal-estat-label">Animal mais visto</div>
+                </div>
+                <div class="modal-estat-card">
+                  <div class="modal-estat-valor" id="estat-mais-fav">—</div>
+                  <div class="modal-estat-label">Animal mais favoritado</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gráficos -->
+            <div class="modal-estat-sec">
+              <h4 class="modal-estat-sec-titulo"><i class="fa-solid fa-chart-line me-2"></i>Movimento ao longo do tempo</h4>
+              <div class="modal-estat-graficos">
+                <div class="modal-estat-grafico">
+                  <canvas id="grafico-visitas-dia"></canvas>
+                </div>
+                <div class="modal-estat-grafico">
+                  <canvas id="grafico-views-dia"></canvas>
+                </div>
+                <div class="modal-estat-grafico">
+                  <canvas id="grafico-favs-dia"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-estat-sec">
+              <h4 class="modal-estat-sec-titulo"><i class="fa-solid fa-clock me-2"></i>Picos de acesso</h4>
+              <div class="modal-estat-graficos">
+                <div class="modal-estat-grafico">
+                  <canvas id="grafico-horas"></canvas>
+                </div>
+                <div class="modal-estat-grafico">
+                  <canvas id="grafico-dias"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-estat-sec">
+              <h4 class="modal-estat-sec-titulo"><i class="fa-solid fa-paw me-2"></i>Top animais</h4>
+              <div class="modal-estat-graficos">
+                <div class="modal-estat-grafico">
+                  <canvas id="grafico-top-vistos"></canvas>
+                </div>
+                <div class="modal-estat-grafico">
+                  <canvas id="grafico-top-favs"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-estat-sec">
+              <h4 class="modal-estat-sec-titulo"><i class="fa-solid fa-magnifying-glass me-2"></i>Buscas</h4>
+              <div class="modal-estat-graficos">
+                <div class="modal-estat-grafico">
+                  <canvas id="grafico-termos"></canvas>
+                </div>
+                <div class="modal-estat-grafico">
+                  <canvas id="grafico-sem-resultado"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-estat-sec">
+              <h4 class="modal-estat-sec-titulo"><i class="fa-solid fa-leaf me-2"></i>Biomas mais acessados</h4>
+              <div class="modal-estat-lista" id="lista-biomas"></div>
+            </div>
+
+            <div class="modal-estat-sec">
+              <h4 class="modal-estat-sec-titulo"><i class="fa-solid fa-percent me-2"></i>Taxa de conversão (views → favoritos)</h4>
+              <div class="modal-estat-tabela">
+                <table class="modal-estat-table">
+                  <thead><tr><th>Animal</th><th>Views</th><th>Favoritos</th><th>Conversão</th></tr></thead>
+                  <tbody id="tabela-conversao"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // Injeta o modal se ainda não existir
+    if (!document.getElementById('modal-estatisticas')) {
+      var wrap = document.createElement('div');
+      wrap.innerHTML = montarModalHtml();
+      document.body.appendChild(wrap.firstElementChild);
+    }
+
+    var overlay = document.getElementById('modal-estatisticas');
+    overlay.classList.add('aberto');
+    document.documentElement.style.overflow = 'hidden';
+
+    // Fecha
+    document.getElementById('btn-fechar-estat').onclick = function () {
+      overlay.classList.remove('aberto');
+      document.documentElement.style.overflow = '';
+      // Destrói gráficos para liberar memória
+      try { window.__graficosEstat.forEach(function (g) { if (g) g.destroy(); }); } catch (e) {}
+      window.__graficosEstat = [];
+    };
+    overlay.onclick = function (e) {
+      if (e.target === overlay) document.getElementById('btn-fechar-estat').click();
+    };
+
+    // Exportar CSV
+    document.getElementById('btn-exportar-estat').onclick = function () {
+      if (!window.__dadosEstat) return;
+      var d = window.__dadosEstat;
+      var linhas = [];
+      linhas.push(['Métrica', 'Valor']);
+      linhas.push(['Visitas ao site (30d)', d.total_visitas_30d]);
+      linhas.push(['Visualizações (30d)', d.total_visualizacoes_30d]);
+      linhas.push(['Favoritos (30d)', d.total_favoritos_30d]);
+      linhas.push([]);
+      linhas.push(['Animal mais visto', (d.animal_mais_visto && d.animal_mais_visto.animal__nome_comum) || '—', (d.animal_mais_visto && d.animal_mais_visto.total) || 0]);
+      linhas.push(['Animal mais favoritado', (d.animal_mais_favoritado && d.animal_mais_favoritado.animal__nome_comum) || '—', (d.animal_mais_favoritado && d.animal_mais_favoritado.total) || 0]);
+      linhas.push([]);
+      linhas.push(['Dia', 'Visitas', 'Visualizações', 'Favoritos']);
+      var maxLen = Math.max(d.visitas_por_dia.length, d.views_por_dia.length, d.favs_por_dia.length);
+      for (var i = 0; i < maxLen; i++) {
+        var dia = (d.visitas_por_dia[i] && d.visitas_por_dia[i].dia) || (d.views_por_dia[i] && d.views_por_dia[i].dia) || (d.favs_por_dia[i] && d.favs_por_dia[i].dia) || '';
+        linhas.push([dia,
+          (d.visitas_por_dia[i] && d.visitas_por_dia[i].total) || 0,
+          (d.views_por_dia[i] && d.views_por_dia[i].total) || 0,
+          (d.favs_por_dia[i] && d.favs_por_dia[i].total) || 0]);
+      }
+      var csv = linhas.map(function (r) { return r.map(function (c) { return String(c).replace(/"/g, '""'); }).join(','); }).join('\n');
+      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'estatisticas-uso.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
+    // Busca dados da API (protegida: apenas admin)
+    fetch(API_STATS + '/', {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': token() ? 'Bearer ' + token() : ''
+      }
+    })
+      .then(function (r) {
+        if (r.status === 403) { throw new Error('Acesso negado: apenas administrador.'); }
+        return r.json();
+      })
+      .then(function (res) {
+        if (!res || !res.success || !res.data) return;
+        var data = res.data;
+        window.__dadosEstat = data;
+
+        // Cards
+        document.getElementById('estat-total-visitas').textContent = data.total_visitas_30d;
+        document.getElementById('estat-total-views').textContent = data.total_visualizacoes_30d;
+        document.getElementById('estat-total-favs').textContent = data.total_favoritos_30d;
+
+        var maisVisto = data.animal_mais_visto;
+        document.getElementById('estat-mais-visto').textContent = (maisVisto && maisVisto.animal__nome_comum) ? maisVisto.animal__nome_comum : '—';
+        document.getElementById('estat-mais-visto').title = maisVisto ? ('Total: ' + maisVisto.total) : '';
+
+        var maisFav = data.animal_mais_favoritado;
+        document.getElementById('estat-mais-fav').textContent = (maisFav && maisFav.animal__nome_comum) ? maisFav.animal__nome_comum : '—';
+        document.getElementById('estat-mais-fav').title = maisFav ? ('Total: ' + maisFav.total) : '';
+
+        // Taxa média de conversão
+        if (Array.isArray(data.conversao) && data.conversao.length) {
+          var media = data.conversao.reduce(function (acc, c) { return acc + c.taxa_conversao; }, 0) / data.conversao.length;
+          document.getElementById('estat-taxa-conversao').textContent = media.toFixed(2) + '%';
+        } else {
+          document.getElementById('estat-taxa-conversao').textContent = '—';
+        }
+
+        garantirChart(function () {
+          window.__graficosEstat = [];
+
+          // Helper: cor
+          var cores = ['#1a5fb4', '#FFAA44', '#217757', '#FF6426', '#B0214F', '#831F34', '#FF4068', '#555555'];
+
+          // Visitas por dia
+          var ctx = document.getElementById('grafico-visitas-dia');
+          if (ctx) {
+            var labelsV = (data.visitas_por_dia || []).map(function (x) { return x.dia ? x.dia.slice(0, 10) : ''; });
+            var valsV = (data.visitas_por_dia || []).map(function (x) { return x.total; });
+            window.__graficosEstat.push(new window.Chart(ctx.getContext('2d'), {
+              type: 'bar',
+              data: { labels: labelsV, datasets: [{ label: 'Visitas', data: valsV, backgroundColor: cores[0] }] },
+              options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Visitas ao site por dia' }, legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            }));
+          }
+
+          // Visualizações por dia
+          var ctx2 = document.getElementById('grafico-views-dia');
+          if (ctx2) {
+            var labelsVw = (data.views_por_dia || []).map(function (x) { return x.dia ? x.dia.slice(0, 10) : ''; });
+            var valsVw = (data.views_por_dia || []).map(function (x) { return x.total; });
+            window.__graficosEstat.push(new window.Chart(ctx2.getContext('2d'), {
+              type: 'bar',
+              data: { labels: labelsVw, datasets: [{ label: 'Visualizações', data: valsVw, backgroundColor: cores[1] }] },
+              options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Visualizações de animais por dia' }, legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            }));
+          }
+
+          // Favoritos por dia
+          var ctx3 = document.getElementById('grafico-favs-dia');
+          if (ctx3) {
+            var labelsFv = (data.favs_por_dia || []).map(function (x) { return x.dia ? x.dia.slice(0, 10) : ''; });
+            var valsFv = (data.favs_por_dia || []).map(function (x) { return x.total; });
+            window.__graficosEstat.push(new window.Chart(ctx3.getContext('2d'), {
+              type: 'bar',
+              data: { labels: labelsFv, datasets: [{ label: 'Favoritos', data: valsFv, backgroundColor: cores[2] }] },
+              options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Favoritos por dia' }, legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            }));
+          }
+
+          // Horários de pico
+          var ctx4 = document.getElementById('grafico-horas');
+          if (ctx4) {
+            var horas = (data.horarios_pico || []).map(function (x) { return x.hora + 'h'; });
+            var valsH = (data.horarios_pico || []).map(function (x) { return x.total; });
+            window.__graficosEstat.push(new window.Chart(ctx4.getContext('2d'), {
+              type: 'bar',
+              data: { labels: horas, datasets: [{ label: 'Eventos', data: valsH, backgroundColor: cores[3] }] },
+              options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Picos por hora do dia' }, legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            }));
+          }
+
+          // Dias da semana
+          var ctx5 = document.getElementById('grafico-dias');
+          if (ctx5) {
+            var dias = (data.dias_pico || []).map(function (x) { return x.dia; });
+            var valsD = (data.dias_pico || []).map(function (x) { return x.total; });
+            window.__graficosEstat.push(new window.Chart(ctx5.getContext('2d'), {
+              type: 'bar',
+              data: { labels: dias, datasets: [{ label: 'Eventos', data: valsD, backgroundColor: cores[4] }] },
+              options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Picos por dia da semana' }, legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            }));
+          }
+
+          // Top animais mais vistos
+          var ctx6 = document.getElementById('grafico-top-vistos');
+          if (ctx6) {
+            var topV = [];
+            if (data.animal_mais_visto) topV.push({ nome: data.animal_mais_visto.animal__nome_comum, total: data.animal_mais_visto.total });
+            var nomesV = topV.map(function (x) { return x.nome; });
+            var valsTV = topV.map(function (x) { return x.total; });
+            window.__graficosEstat.push(new window.Chart(ctx6.getContext('2d'), {
+              type: 'bar',
+              data: { labels: nomesV, datasets: [{ label: 'Visualizações', data: valsTV, backgroundColor: cores[0] }] },
+              options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { title: { display: true, text: 'Animal mais visto' }, legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+            }));
+          }
+
+          // Top animais mais favoritados
+          var ctx7 = document.getElementById('grafico-top-favs');
+          if (ctx7) {
+            var topF = [];
+            if (data.animal_mais_favoritado) topF.push({ nome: data.animal_mais_favoritado.animal__nome_comum, total: data.animal_mais_favoritado.total });
+            var nomesF = topF.map(function (x) { return x.nome; });
+            var valsTF = topF.map(function (x) { return x.total; });
+            window.__graficosEstat.push(new window.Chart(ctx7.getContext('2d'), {
+              type: 'bar',
+              data: { labels: nomesF, datasets: [{ label: 'Favoritos', data: valsTF, backgroundColor: cores[1] }] },
+              options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { title: { display: true, text: 'Animal mais favoritado' }, legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+            }));
+          }
+
+          // Termos mais buscados
+          var ctx8 = document.getElementById('grafico-termos');
+          if (ctx8) {
+            var termos = (data.termos_mais_busados || []).slice(0, 10);
+            var nomesT = termos.map(function (x) { return x.termo; });
+            var valsT = termos.map(function (x) { return x.total; });
+            window.__graficosEstat.push(new window.Chart(ctx8.getContext('2d'), {
+              type: 'bar',
+              data: { labels: nomesT, datasets: [{ label: 'Buscas', data: valsT, backgroundColor: cores[5] }] },
+              options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { title: { display: true, text: 'Termos mais buscados' }, legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+            }));
+          }
+
+          // Buscas sem resultado
+          var ctx9 = document.getElementById('grafico-sem-resultado');
+          if (ctx9) {
+            var sem = (data.buscas_sem_resultado || []).slice(0, 10);
+            var nomesS = sem.map(function (x) { return x.termo; });
+            var valsS = sem.map(function (x) { return x.total; });
+            window.__graficosEstat.push(new window.Chart(ctx9.getContext('2d'), {
+              type: 'bar',
+              data: { labels: nomesS, datasets: [{ label: 'Buscas sem resultado', data: valsS, backgroundColor: '#FF4068' }] },
+              options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { title: { display: true, text: 'Buscas sem resultado' }, legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+            }));
+          }
+        });
+
+        // Biomas mais acessados
+        var listaBiomas = document.getElementById('lista-biomas');
+        if (listaBiomas) {
+          var biomas = (data.biomas_mais_acessados || []).slice(0, 8);
+          if (biomas.length) {
+            listaBiomas.innerHTML = biomas.map(function (b) {
+              var pct = data.total_visualizacoes_30d ? Math.round((b.total / data.total_visualizacoes_30d) * 100) : 0;
+              return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #3B3A48;">' +
+                '<span style="color:#C0BFC8;">' + (b.nome || '—') + '</span>' +
+                '<strong style="color:#FFFFFF;">' + b.total + ' <small style="color:#A09FA9;font-weight:500;">(' + pct + '%)</small></strong>' +
+                '</div>';
+            }).join('');
+          } else {
+            listaBiomas.innerHTML = '<p style="color:#A09FA9;font-size:0.9rem;">Sem dados suficientes.</p>';
+          }
+        }
+
+        // Tabela de conversão
+        var tabela = document.getElementById('tabela-conversao');
+        if (tabela) {
+          var conv = (data.conversao || []).slice(0, 15);
+          if (conv.length) {
+            tabela.innerHTML = conv.map(function (c) {
+              return '<tr><td style="color:#C0BFC8;">' + (c.nome_comum || '—') + '</td>' +
+                '<td style="color:#FFFFFF;">' + c.views + '</td>' +
+                '<td style="color:#FFFFFF;">' + c.favoritos + '</td>' +
+                '<td style="color:#' + (c.taxa_conversao < 20 ? 'FF4068' : c.taxa_conversao < 50 ? 'FFAA44' : '217757') + ';font-weight:bold;">' + c.taxa_conversao.toFixed(2) + '%</td></tr>';
+            }).join('');
+          } else {
+            tabela.innerHTML = '<tr><td colspan="4" style="color:#A09FA9;">Sem dados suficientes.</td></tr>';
+          }
+        }
+      })
+      .catch(function (err) {
+        console.error('[estatísticas]', err);
+        try { systemAlert('Não foi possível carregar as estatísticas: ' + (err.message || err), 'error'); } catch (e) {}
+      });
+  };
 
   // Menu de Contexto no Mapa
   map.on('contextmenu', function(e) {
@@ -2533,10 +3021,9 @@ $(document).ready(function () {
   }
 
   function darkTileLayer() {
-    return L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_3l5t_1_889f4489a3fb5fb5051816e3', {
-      subdomains: 'abcd',
+    return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution: '© CARTO'
+      attribution: '&copy; OpenStreetMap contributors'
     });
   }
 
@@ -3967,6 +4454,12 @@ $(document).ready(function () {
   window.showDetails = function(id) {
     const animal = markersData.find(a => a.animal_id == id);
     if (!animal) return;
+
+    // Estatística invisível: visualização do animal (dedup por sessão)
+    if (animal.animal_id != null && !usoJaVisto(animal.animal_id)) {
+      usoMarcarVisto(animal.animal_id);
+      registrarEventoUso('view', animal.animal_id);
+    }
 
     const statusSigla = animal.nivel_sigla ? animal.nivel_sigla.toLowerCase() : 'dd';
     const statusConfig = {

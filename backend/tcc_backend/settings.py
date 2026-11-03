@@ -120,10 +120,21 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-]
+# Origens permitidas pelo CORS. Em produção (Vercel/Render), defina a variável
+# de ambiente CORS_ALLOWED_ORIGINS com a URL do frontend, ex.:
+#   CORS_ALLOWED_ORIGINS=https://tcc-mapa-de-especies.vercel.app
+# Múltiplas origens separam por vírgula.
+_cors_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
+if _cors_env:
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_env.split(',') if o.strip()]
+else:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+    ]
+
+# Permite envio do cabeçalho Authorization (Bearer JWT) entre origens.
+CORS_ALLOW_CREDENTIALS = True
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
