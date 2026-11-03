@@ -1765,12 +1765,33 @@ $(document).ready(function () {
   // Modal de Estatísticas de Uso (apenas administrador)
   // =========================================================================
   window.abrirModalEstatisticas = function () {
+    function configurarEstiloGraficos() {
+      window.Chart.defaults.color = '#FFFFFF';
+      window.Chart.defaults.scale.grid.color = '#FFFFFF';
+      window.Chart.defaults.scale.ticks.color = '#FFFFFF';
+      window.Chart.defaults.scale.ticks.callback = function (value) {
+        var label = this.getLabelForValue(value);
+        return typeof label === 'string' && label.length > 24
+          ? label.slice(0, 21) + '…'
+          : label;
+      };
+      window.Chart.defaults.plugins.title.color = '#FFFFFF';
+      window.Chart.defaults.plugins.legend.labels.color = '#FFFFFF';
+    }
+
     // Carrega Chart.js via CDN se ainda não estiver disponível
     function garantirChart(callback) {
-      if (window.Chart) { callback(); return; }
+      if (window.Chart) {
+        configurarEstiloGraficos();
+        callback();
+        return;
+      }
       var s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
-      s.onload = callback;
+      s.onload = function () {
+        configurarEstiloGraficos();
+        callback();
+      };
       document.head.appendChild(s);
     }
 
@@ -1796,6 +1817,10 @@ $(document).ready(function () {
           </div>
 
           <div class="modal-estat-corpo">
+            <div id="estat-status" role="status" aria-live="polite" style="padding:12px 14px;margin-bottom:16px;border:1px solid #3B3A48;border-radius:8px;color:#C0BFC8;">
+              Carregando estatísticas...
+            </div>
+
             <!-- Cards resumo -->
             <div class="modal-estat-grid">
               <div class="modal-estat-card">
@@ -1967,14 +1992,28 @@ $(document).ready(function () {
         'Authorization': token() ? 'Bearer ' + token() : ''
       }
     })
-      .then(function (r) {
-        if (r.status === 403) { throw new Error('Acesso negado: apenas administrador.'); }
-        return r.json();
+      .then(function (response) {
+        return response.json().catch(function () { return null; }).then(function (res) {
+          if (response.status === 401) {
+            throw new Error('Sua sessão administrativa não está autenticada. Entre novamente em /admin/login e abra as estatísticas outra vez.');
+          }
+          if (response.status === 403) {
+            throw new Error('Acesso negado: apenas administrador. Entre novamente com uma conta administradora.');
+          }
+          if (!response.ok) {
+            throw new Error((res && (res.detail || res.error || res.message)) || ('Falha ao carregar estatísticas (HTTP ' + response.status + ').'));
+          }
+          if (!res || !res.success || !res.data) {
+            throw new Error('A API respondeu, mas não retornou os dados de estatísticas esperados.');
+          }
+          return res;
+        });
       })
       .then(function (res) {
-        if (!res || !res.success || !res.data) return;
         var data = res.data;
         window.__dadosEstat = data;
+        var statusEstat = document.getElementById('estat-status');
+        if (statusEstat) statusEstat.remove();
 
         // Cards
         document.getElementById('estat-total-visitas').textContent = data.total_visitas_30d;
@@ -2153,6 +2192,13 @@ $(document).ready(function () {
       })
       .catch(function (err) {
         console.error('[estatísticas]', err);
+        var statusEstat = document.getElementById('estat-status');
+        if (statusEstat) {
+          statusEstat.textContent = 'Não foi possível carregar as estatísticas: ' + (err.message || err);
+          statusEstat.style.borderColor = '#FF4068';
+          statusEstat.style.color = '#FFFFFF';
+          statusEstat.setAttribute('role', 'alert');
+        }
         try { systemAlert('Não foi possível carregar as estatísticas: ' + (err.message || err), 'error'); } catch (e) {}
       });
   };
@@ -5126,4 +5172,3 @@ $(document).ready(function () {
   loadZonas();
   setTimeout(function() { map.invalidateSize(); }, 400);
 });
-

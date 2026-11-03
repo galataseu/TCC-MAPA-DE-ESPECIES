@@ -134,58 +134,43 @@ block scripts
         const username = $("#admin-user").val();
         const password = $("#admin-pass").val();
 
-        // Credenciais locais de emergência (quando a API está fora do ar).
-        const ADMIN_USER = "admin";
-        const ADMIN_PASS = "Danielantonio@@ifc2024";
-
         const API_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
           ? "http://localhost:8000/api"
           : (window.API_BASE_URL || "https://tcc-mapa-de-especies.onrender.com/api");
 
-        // Timeout rápido de 3 segundos para não travar a tela na Vercel
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-        fetch(`${API_URL}/auth/login/`, {
+        fetch(`${API_URL}/v1/auth/login/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username, password }),
           signal: controller.signal
         })
-        .then(response => response.json())
+        .then(async response => {
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.detail || data.message || "Credenciais inválidas.");
+          }
+          return data;
+        })
         .then(data => {
           clearTimeout(timeoutId);
-          if (data.success && (data.user.role === 'admin' || data.user.is_superuser || data.user.is_staff || username === ADMIN_USER)) {
-            sessionStorage.setItem("token", data.token || "admin-token");
-            sessionStorage.setItem("user", JSON.stringify(data.user || { username: username, role: 'admin' }));
-            sessionStorage.setItem("adminMode", "true");
-            systemAlert("Modo Administrador ativado com sucesso!", 'success').then(() => { window.location.href = "/"; });
-          } else if (data.success) {
+          if (data.success && data.token && data.user && data.user.role === 'admin') {
             sessionStorage.setItem("token", data.token);
             sessionStorage.setItem("user", JSON.stringify(data.user));
             sessionStorage.setItem("adminMode", "true");
-            window.location.href = "/";
+            systemAlert("Modo Administrador ativado com sucesso!", 'success').then(() => { window.location.href = "/"; });
           } else {
-            if (username === ADMIN_USER && password === ADMIN_PASS) {
-              sessionStorage.setItem("adminMode", "true");
-              sessionStorage.setItem("user", JSON.stringify({ username: ADMIN_USER, role: "admin" }));
-              systemAlert("Modo Administrador ativado!", 'success').then(() => { window.location.href = "/"; });
-            } else {
-              systemAlert("Erro no login: " + (data.detail || data.message || "Credenciais de administrador inválidas."), 'error');
-            }
+            throw new Error("A conta autenticada não tem permissão de administrador.");
           }
         })
         .catch(error => {
           clearTimeout(timeoutId);
           console.error("Erro:", error);
-          // Fallback rápido se a API estiver fora do ar
-          if (username === ADMIN_USER && password === ADMIN_PASS) {
-            sessionStorage.setItem("adminMode", "true");
-            sessionStorage.setItem("user", JSON.stringify({ username: ADMIN_USER, role: "admin" }));
-            systemAlert("Modo Administrador ativado (Modo Local)!", 'success').then(() => { window.location.href = "/"; });
-          } else {
-            systemAlert("Não foi possível conectar ao servidor. Verifique sua conexão e tente de novo.", 'error');
-          }
+          sessionStorage.removeItem("token");
+          sessionStorage.removeItem("adminMode");
+          systemAlert("Não foi possível autenticar uma conta administradora: " + (error.message || "verifique a conexão com a API."), 'error');
         });
       });
     });

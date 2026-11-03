@@ -291,7 +291,11 @@ class StatsUsoView(APIView):
 
         # --- Biomas mais acessados (a partir dos animais mais vistos) ---
         top_animais_ids = list(
-            eventos.filter(tipo='view', animal__isnull=False)
+            eventos.filter(
+                tipo='view',
+                animal__isnull=False,
+                created_at__gte=trinta_dias,
+            )
             .values_list('animal_id', flat=True)
             .annotate(total=Count('id'))
             .order_by('-total')[:50]
@@ -302,7 +306,11 @@ class StatsUsoView(APIView):
             animais = Animal.objects.filter(id__in=top_animais_ids).prefetch_related('biomas')
             views_por_animal = {
                 r['animal_id']: r['total']
-                for r in eventos.filter(tipo='view', animal__id__in=top_animais_ids)
+                for r in eventos.filter(
+                    tipo='view',
+                    animal__id__in=top_animais_ids,
+                    created_at__gte=trinta_dias,
+                )
                 .values('animal_id')
                 .annotate(total=Count('id'))
             }
@@ -334,7 +342,7 @@ class StatsUsoView(APIView):
             taxa = round((f / v) * 100, 2) if v else 0
             conversao.append({
                 'animal_id': a['animal_id'],
-                'nome_comum': a['nome_comum'],
+                'nome_comum': a['animal__nome_comum'],
                 'views': v,
                 'favoritos': f,
                 'taxa_conversao': taxa,
