@@ -36,12 +36,21 @@ app.use('/api/v1', v1Router);
 
 // Rota para a página de animais
 app.get('/animais', function(req, res) {
-  res.render('animais', { title: 'Gralha dos Ventos' });
+  res.render('animais', {
+    title: 'Espécies Ameaçadas | Gralha dos Ventos - Fauna do Sul do Brasil',
+    description: 'Catálogo de espécies de animais ameaçados de extinção no Paraná, Santa Catarina e Rio Grande do Sul. Veja fotos, classificação de risco, biomas e fichas completas.',
+    canonicalUrl: 'https://tcc-mapa-de-especies.vercel.app/animais'
+  });
 });
 
 // Rota para a página de login de administração
 app.get('/admin/login', function(req, res) {
-  res.render('admin-login', { title: 'Gralha dos Ventos' });
+  res.render('admin-login', {
+    title: 'Acesso Administrativo | Gralha dos Ventos',
+    description: 'Painel de autenticação administrativa do sistema Gralha dos Ventos.',
+    canonicalUrl: 'https://tcc-mapa-de-especies.vercel.app/admin/login',
+    robots: 'noindex, nofollow'
+  });
 });
 
 // catch 404 and forward to error handler

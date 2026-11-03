@@ -1,8 +1,9 @@
 extends layouts/main
 
 block content
-  #brand-header
-    img.brand-logo(src="/assets/img/logotipo.png", alt="Logotipo")
+  header#brand-header
+    h1.visually-hidden Gralha dos Ventos - Mapa Interativo de Espécies Ameaçadas do Sul do Brasil
+    img.brand-logo(src="/assets/img/logotipo.png", alt="Logotipo Gralha dos Ventos - Mapa de Espécies Ameaçadas")
   main#container
     #map
     
@@ -40,15 +41,15 @@ block content
       .legend-items
         .legend-item
           span.legend-color(style="background-color: #287f5e;")
-          img.legend-icon(src="/svg/mataatlantica.png")
+          img.legend-icon(src="/svg/mataatlantica.png", alt="Bioma Mata Atlântica")
           span Mata Atlântica
         .legend-item
           span.legend-color(style="background-color: #3b7ba5;")
-          img.legend-icon(src="/svg/pampa.png")
+          img.legend-icon(src="/svg/pampa.png", alt="Bioma Pampa")
           span Pampa
         .legend-item
           span.legend-color(style="background-color: #E6C140;")
-          img.legend-icon(src="/svg/cerrado.png")
+          img.legend-icon(src="/svg/cerrado.png", alt="Bioma Cerrado")
           span Cerrado
       .legend-toggle
         label
@@ -160,7 +161,7 @@ block content
                     #modal-icon-placeholder-content.text-center.text-secondary
                       i.fa-solid.fa-paw.fs-3.mb-1.d-block(style="color: #539bf5;")
                       span(style="font-size: 10px;") Sem Ícone
-                    img#modal-icon-preview-img.position-absolute.d-none(src="", alt="Preview Ícone", style="cursor: move; user-select: none; touch-action: none;")
+                    img#modal-icon-preview-img.position-absolute.d-none(src="", alt="Prévia do ícone da espécie", style="cursor: move; user-select: none; touch-action: none;")
                   
                   button#modal-btn-choose-icon.btn.btn-sm.btn-outline-primary.rounded-pill.mt-2.px-3(type="button")
                     i.fa-solid.fa-folder-open.me-1
@@ -326,7 +327,7 @@ block content
         .modal-header.border-bottom.border-secondary
           .d-flex.align-items-center.gap-2
             i.fa-solid.fa-cloud-arrow-up.fs-4.text-warning
-            h5.modal-title.fw-bold Importar Espécies do SALVE (ICMBio)
+            h2.modal-title.h5.fw-bold Importar Espécies do SALVE (ICMBio)
           button.btn-close.btn-close-white(type="button", data-bs-dismiss="modal", aria-label="Close")
         .modal-body.p-4
           p.text-light.small.mb-3

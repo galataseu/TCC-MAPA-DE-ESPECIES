@@ -34,6 +34,7 @@ block head
     .admin-card-header img:hover {
       transform: scale(1.05);
     }
+    .admin-card-header h2,
     .admin-card-header h3 {
       font-weight: 700;
       color: #1E7552;
@@ -91,12 +92,15 @@ block head
     }
 
 block content
-  .container.d-flex.justify-content-center.align-items-center(style="min-height: calc(100vh - 40px);")
+  main.container.d-flex.justify-content-center.align-items-center(style="min-height: calc(100vh - 40px);")
+    h1.visually-hidden Acesso Administrativo - Gralha dos Ventos
     .admin-card
       .admin-card-header
-        img(src="/assets/img/logotipo.png", alt="Logotipo")
-        <h3><i class="fa-solid fa-user-shield me-2"></i>Acesso Administrativo</h3>
-        <p>Insira suas credenciais de administrador para acessar o modo de edição do mapa.</p>
+        img(src="/assets/img/logotipo.png", alt="Logotipo Gralha dos Ventos - Painel Administrativo")
+        h2.h3
+          i.fa-solid.fa-user-shield.me-2
+          | Acesso Administrativo
+        p Insira suas credenciais de administrador para acessar o modo de edição do mapa.
       
       form#admin-login-page-form
         .mb-3

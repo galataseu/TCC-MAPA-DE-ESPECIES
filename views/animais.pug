@@ -1,7 +1,8 @@
 extends layouts/main
 
 block content
-  .species-modal-fullscreen(style="position: relative; left: 0; top: 0; width: 100%; height: 100%;")
+  main.species-modal-fullscreen(style="position: relative; left: 0; top: 0; width: 100%; height: 100%;")
+    h1.visually-hidden Catálogo de Espécies Ameaçadas do Sul do Brasil - Gralha dos Ventos
     .species-split-layout
       //- PAINEL ESQUERDO: FORMULÁRIO CADASTRAR ANIMAIS (RESTRITO A ADMINISTRADORES)
       #admin-species-form-panel.species-form-panel.d-none
@@ -45,7 +46,7 @@ block content
                   #icon-placeholder-content.text-center.text-secondary
                     i.fa-solid.fa-paw.fs-3.mb-1.d-block(style="color: #539bf5;")
                     span(style="font-size: 10px;") Sem Ícone
-                  img#icon-preview-img.position-absolute.d-none(src="", alt="Preview Ícone", style="cursor: move; user-select: none; touch-action: none;")
+                  img#icon-preview-img.position-absolute.d-none(src="", alt="Prévia do ícone do marcador da espécie", style="cursor: move; user-select: none; touch-action: none;")
                 
                 button#btn-choose-icon.btn.btn-sm.btn-outline-primary.rounded-pill.mt-2.px-3(type="button")
                   i.fa-solid.fa-folder-open.me-1
@@ -245,7 +246,7 @@ block content
                     i.fa-solid.fa-star
                   .section-banner-headings
                     .d-flex.align-items-center.gap-2
-                      h3.section-banner-heading Espécies Favoritadas
+                      h2.section-banner-heading Espécies Favoritadas
                       span#fav-count-pill.badge.badge-fav-counter 0 salvas
                     p.section-banner-description Animais marcados como favoritos para acompanhamento rápido
                 .section-banner-tools
@@ -270,7 +271,7 @@ block content
                     i.fa-solid.fa-paw
                   .section-banner-headings
                     .d-flex.align-items-center.gap-2
-                      h3#regular-section-title.section-banner-heading Todas as Espécies
+                      h2#regular-section-title.section-banner-heading Todas as Espécies
                       span#regular-count-pill.badge.badge-regular-counter 0 espécies
                     p#regular-section-subtitle.section-banner-description Catálogo completo de espécies da fauna do Sul do Brasil
 

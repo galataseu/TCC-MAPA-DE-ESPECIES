@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tcc-mapa-de-especies.vercel.app/sitemap.xml
+
