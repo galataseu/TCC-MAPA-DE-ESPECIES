@@ -16,11 +16,17 @@ var stateLayers = [];
 var markersData = [];
 
 /* Camadas de Base */
-var darkFull = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors',
+// Tile de fallback (cinza claro) para quando o OpenStreetMap falhar (ex: localhost sem DNS/CORS).
+// Evita que o mapa fique totalmente vazio/cinzo quando os tiles não carregam.
+var FALLBACK_TILE = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22256%22 height=%22256%22%3E%3Crect width=%22256%22 height=%22256%22 fill=%22%231a1a1a%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23666%22 font-family=%22sans-serif%22 font-size=%2214%22%3ETile indispon%C3%ADvel%3C/text%3E%3C/svg%3E';
+
+var darkFull = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_3l5t_1_889f4489a3fb5fb5051816e3', {
+  attribution: '&copy; OpenStreetMap contributors, &copy; CARTO',
   maxZoom: 19,
   updateWhenIdle: true,
-  keepBuffer: 4
+  keepBuffer: 4,
+  errorTileUrl: FALLBACK_TILE,
+  detectRetina: false
 });
 
 // Mapa de cores para níveis de extinção — FONTE ÚNICA NO FRONTEND.
@@ -160,7 +166,7 @@ $(document).ready(function () {
         body: JSON.stringify(body),
       }).catch(function () {}); // sem bloquear a UI
     } catch (e) {}
-  }
+  };
 
   // Visita ao site (uma vez por sessão) — respeita consentimento LGPD
   (function registrarVisita() {
@@ -235,13 +241,14 @@ $(document).ready(function () {
     renderer: svgRenderer
   }).addTo(map);
 
-  // Máscara de escurecimento fora do Sul: puramente visual (`pointerEvents`
-  // não é opção do Leaflet — o correto é `interactive: false`).
+  // Máscara de escurecimento fora do Sul: puramente visual.
+  // Começa com fillOpacity 0 para não escurecer o mapa se os dados locais
+  // falharem ao carregar. A opacidade é aplicada apenas após loadData().
   maskLayer = L.polygon(maskPaths, {
     interactive: false,
     color: "transparent",
     fillColor: "#000000",
-    fillOpacity: 0.6,
+    fillOpacity: 0,
     fillRule: 'evenodd'
   }).addTo(map);
 
@@ -283,6 +290,7 @@ $(document).ready(function () {
       var results = Array.prototype.slice.call(arguments).map(function(res) { 
         return Array.isArray(res) ? res[0] : res; 
       });
+      maskLayer.setStyle({ fillOpacity: 0.6 });
       
       var forestData = results[0];
       var prData = results[1];
@@ -355,6 +363,11 @@ $(document).ready(function () {
       reorderLayers();
       injectTreePattern();
       refreshAreaViewport();
+      try { map.invalidateSize(); } catch (e) {}
+    }).fail(function () {
+      // Se os dados locais falharem, mantém a máscara sem escurecer (fillOpacity 0)
+      // e ainda assim tenta invalidar o tamanho do mapa.
+      try { map.invalidateSize(); } catch (e) {}
     });
   };
 
@@ -535,13 +548,18 @@ $(document).ready(function () {
   function configurarAbaEstatisticas() {
     var btn = $("#about-btn");
     var li = btn.parent("li");
+    // O item do menu nunca fica oculto: para o usuário comum ele permanece
+    // como "Sobre" (reabre o welcome-modal); para o administrador vira
+    // "Estatísticas" e abre o painel de uso.
+    li.removeClass("d-none");
     if (isAdminModeActive()) {
-      li.removeClass("d-none");
       btn.find("i").attr("class", "fa-solid fa-chart-bar");
       btn.find(".nav-label").text("Estatísticas");
       btn.attr("title", "Estatísticas de uso (apenas administrador)");
     } else {
-      li.addClass("d-none");
+      btn.find("i").attr("class", "fa-solid fa-circle-question");
+      btn.find(".nav-label").text("Sobre");
+      btn.attr("title", "Sobre o projeto");
     }
   }
   configurarAbaEstatisticas();
@@ -3021,9 +3039,11 @@ $(document).ready(function () {
   }
 
   function darkTileLayer() {
-    return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    return L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_3l5t_1_889f4489a3fb5fb5051816e3', {
       maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
+      attribution: '&copy; OpenStreetMap contributors, &copy; CARTO',
+      errorTileUrl: FALLBACK_TILE,
+      detectRetina: false
     });
   }
 
