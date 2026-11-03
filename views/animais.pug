@@ -404,6 +404,38 @@ block content
 
 block scripts
   script(src="/assets/js/animais.js?v=14")
+  script.
+    // Responsividade: adiciona .page-animais ao <html> e <body> para que o CSS
+    // possa sobrescrever o overflow:hidden global (necessário para o mapa na
+    // página principal, mas não nesta página de espécies).
+    (function () {
+      document.documentElement.classList.add('page-animais');
+      document.body.classList.add('page-animais');
+
+      // Fallback explícito para navegadores sem suporte a :has()
+      var MOBILE_BP = 768;
+      function applyMobileScroll() {
+        var isMobile = window.innerWidth <= MOBILE_BP;
+        var el = document.documentElement;
+        var body = document.body;
+        var layout = document.getElementById('main-layout');
+        if (isMobile) {
+          el.style.overflowY = 'auto';
+          el.style.height = 'auto';
+          body.style.overflowY = 'auto';
+          body.style.height = 'auto';
+          if (layout) { layout.style.overflowY = 'auto'; layout.style.height = 'auto'; }
+        } else {
+          el.style.overflowY = '';
+          el.style.height = '';
+          body.style.overflowY = '';
+          body.style.height = '';
+          if (layout) { layout.style.overflowY = ''; layout.style.height = ''; }
+        }
+      }
+      applyMobileScroll();
+      window.addEventListener('resize', applyMobileScroll, { passive: true });
+    })();
 
 
 

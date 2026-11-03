@@ -1,0 +1,393 @@
+/* ============================================================================
+   RESPONSIVO — Página de Espécies (/animais)
+   Corrige layout, scroll, filtros, cards e modais para mobile/tablet.
+   Todas as regras estão dentro de media queries — nada afeta o desktop.
+   Breakpoints:
+     ≤1100px  → tablet paisagem
+     ≤768px   → celular / tablet retrato
+     ≤575px   → celular médio
+     ≤420px   → celular pequeno
+   ============================================================================ */
+
+/* --------------------------------------------------------------------------
+   ≤768px — Celular / Tablet retrato
+   O scroll global (html,body { overflow:hidden }) é sobrescrito somente aqui.
+   A classe .page-animais é injetada via JS inline (animais.pug) apenas nesta
+   rota, garantindo que o mapa na rota "/" não seja afetado.
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  /* Libera o scroll: o html/body têm overflow:hidden para o mapa, mas a
+     página de espécies não usa o mapa de fundo, então precisamos de scroll. */
+  html.page-animais,
+  html.page-animais body,
+  html.page-animais #main-layout {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    height: auto !important;
+    min-height: 100dvh;
+  }
+
+  /* O wrapper principal do split-screen vira coluna e rola com o body */
+  .species-modal-fullscreen {
+    position: relative !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    overflow-y: visible !important;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    z-index: 1 !important;
+  }
+
+  /* Layout empilhado verticalmente */
+  .species-split-layout {
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    width: 100%;
+  }
+
+  /* Painel do formulário admin (só admin vê) */
+  .species-form-panel {
+    flex: none !important;
+    width: 100% !important;
+    max-width: 100%;
+    min-height: 0 !important;
+    border-right: none !important;
+    border-bottom: 2px solid #18171E !important;
+    padding: 16px !important;
+    overflow: visible !important;
+    box-sizing: border-box;
+  }
+
+  /* Painel de exibição de cards */
+  .species-display-panel {
+    flex: none !important;
+    width: 100% !important;
+    max-width: 100%;
+    min-height: auto !important;
+    overflow: visible !important;
+    padding: 14px 12px calc(var(--bottom-nav-h, 62px) + 20px) !important;
+    box-sizing: border-box;
+  }
+
+  /* Modo usuário comum (full width, sem painel admin) */
+  .user-mode-display-only {
+    flex: none !important;
+    width: 100% !important;
+    padding: 14px 12px calc(var(--bottom-nav-h, 62px) + 20px) !important;
+    min-height: auto !important;
+    border-left: none !important;
+  }
+
+  /* Lista interna: scroll feito pelo body */
+  #panel-view-list {
+    flex: none !important;
+    overflow: visible !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  .species-cards-scroll-area {
+    flex: none !important;
+    overflow-y: visible !important;
+    overflow-x: visible !important;
+    min-height: 0 !important;
+    height: auto !important;
+    padding-right: 0;
+  }
+
+  .user-mode-display-only #panel-view-list,
+  .user-mode-display-only .species-cards-scroll-area {
+    flex: none !important;
+    overflow: visible !important;
+  }
+
+  /* Grid de cards: 2 colunas em tablet */
+  .species-cards-grid,
+  .user-mode-display-only .species-cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  /* ---- Toolbar de filtros ---- */
+  .species-toolbar-container {
+    padding: 12px !important;
+    border-radius: 16px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .species-search-row {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .search-box-wrapper {
+    width: 100% !important;
+    margin-bottom: 0 !important;
+    flex: 1 1 100% !important;
+  }
+
+  /* Filtros em grade 2×2 */
+  .species-filters-grid {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .filter-pill-select-wrapper {
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
+    padding: 2px 4px 2px 10px !important;
+  }
+
+  .filter-pill-label {
+    font-size: 0.72rem !important;
+    white-space: nowrap;
+  }
+
+  .species-select-filter {
+    font-size: 0.78rem !important;
+    padding: 5px 20px 5px 6px !important;
+  }
+
+  .species-filter-status-bar {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .species-filter-btn-fav {
+    font-size: 0.8rem !important;
+    padding: 7px 12px !important;
+    flex-shrink: 0;
+  }
+
+  .species-btn-reset {
+    font-size: 0.78rem !important;
+    padding: 7px 10px !important;
+  }
+
+  /* Barra de alternância Lista/Mapa */
+  .view-toggle-bar {
+    margin-bottom: 12px !important;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .view-toggle-btns {
+    width: 100%;
+  }
+
+  .toggle-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 8px 10px !important;
+    font-size: 0.82rem !important;
+  }
+
+  /* Mapa de localização no painel direito */
+  #panel-view-map {
+    height: auto !important;
+    min-height: 380px;
+  }
+
+  #right-panel-map-container {
+    min-height: 340px !important;
+    border-radius: 12px;
+  }
+
+  .map-location-controls {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    padding: 8px !important;
+  }
+
+  /* Banners de seção */
+  .species-section-banner {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .section-banner-heading {
+    font-size: 1rem !important;
+  }
+
+  .section-banner-description {
+    font-size: 0.78rem !important;
+  }
+
+  .section-banner-icon {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    font-size: 1rem !important;
+  }
+
+  /* Cards de espécie */
+  .species-card {
+    height: 275px !important;
+    min-height: 275px !important;
+    max-height: 275px !important;
+  }
+
+  .species-card-slideshow {
+    height: 155px !important;
+    min-height: 155px !important;
+  }
+
+  .species-card-body {
+    height: 120px !important;
+    padding: 8px 10px 10px !important;
+  }
+
+  .species-card-name {
+    font-size: 1rem !important;
+  }
+
+  .species-card-scientific-name {
+    font-size: 0.75rem !important;
+  }
+
+  .species-fav-deck {
+    padding: 14px 14px 18px !important;
+    margin-bottom: 16px !important;
+  }
+
+  .species-empty-state-box {
+    padding: 36px 16px !important;
+  }
+
+  /* Modais em tela cheia no mobile */
+  #animalModal .modal-dialog,
+  #modalImportSalve .modal-dialog {
+    margin: 8px !important;
+    max-width: calc(100vw - 16px) !important;
+  }
+
+  .species-title {
+    font-size: 1.1rem !important;
+    margin-bottom: 14px !important;
+  }
+
+  .upload-gallery-container {
+    padding: 10px !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   ≤575px — Celular médio
+   -------------------------------------------------------------------------- */
+@media (max-width: 575px) {
+  .filter-pill-select-wrapper {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+  }
+
+  .species-cards-grid,
+  .user-mode-display-only .species-cards-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .species-card {
+    height: 260px !important;
+    min-height: 260px !important;
+    max-height: 260px !important;
+  }
+
+  .species-card-slideshow {
+    height: 145px !important;
+    min-height: 145px !important;
+  }
+
+  .species-card-body {
+    height: 115px !important;
+  }
+
+  .section-banner-description {
+    display: none;
+  }
+
+  .species-toolbar-container {
+    padding: 10px !important;
+  }
+
+  .species-display-panel,
+  .user-mode-display-only {
+    padding: 10px 10px calc(var(--bottom-nav-h, 62px) + 16px) !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   ≤420px — Celular pequeno
+   -------------------------------------------------------------------------- */
+@media (max-width: 420px) {
+  .species-cards-grid,
+  .user-mode-display-only .species-cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Em 1 coluna, o card pode ter altura automática */
+  .species-card {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  .species-card-slideshow {
+    height: 180px !important;
+    min-height: 180px !important;
+  }
+
+  .species-card-body {
+    height: auto !important;
+    min-height: 100px;
+    padding: 8px 10px 10px !important;
+  }
+
+  .species-display-panel,
+  .user-mode-display-only {
+    padding: 8px 8px calc(var(--bottom-nav-h, 62px) + 16px) !important;
+  }
+
+  .species-form-panel {
+    padding: 12px 8px !important;
+  }
+
+  /* Nome com múltiplas linhas em tela estreita */
+  .species-card-name {
+    font-size: 1.05rem !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    line-height: 1.3 !important;
+  }
+
+  .species-card-scientific-name {
+    font-size: 0.72rem !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   ≤1100px — Tablet paisagem (complementar ao app.css existente)
+   -------------------------------------------------------------------------- */
+@media (max-width: 1100px) {
+  .species-filters-grid {
+    flex-wrap: wrap !important;
+  }
+
+  .filter-pill-select-wrapper {
+    flex: 1 1 180px !important;
+    min-width: 160px;
+  }
+
+  .user-mode-display-only {
+    padding: 24px 28px !important;
+  }
+}
