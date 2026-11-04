@@ -91,12 +91,15 @@
       function finish(value) {
         if (done) return;
         done = true;
-        try {
-          var inst = bootstrap.Modal.getInstance(el);
-          if (inst) inst.hide();
-        } catch (e) {}
-        // Resolve após a transição p/ não emendar dois diálogos.
-        setTimeout(function () { resolve(value); }, 120);
+        var inst = bootstrap.Modal.getInstance(el);
+        if (inst && el.classList.contains('show')) {
+          el.addEventListener('hidden.bs.modal', function () {
+            resolve(value);
+          }, { once: true });
+          inst.hide();
+        } else {
+          resolve(value);
+        }
       }
 
       var modal = bootstrap.Modal.getOrCreateInstance(el, { backdrop: 'static', keyboard: false });
