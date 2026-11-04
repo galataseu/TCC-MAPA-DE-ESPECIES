@@ -390,6 +390,10 @@ html, body, #main-layout {
   z-index: 3600 !important;
 }
 
+#system-dialog-modal {
+  z-index: 7000 !important;
+}
+
 .modal-backdrop {
   --bs-backdrop-zindex: 3550 !important;
   z-index: 3550 !important;
@@ -886,7 +890,7 @@ html, body, #main-layout {
 /* Menu de Contexto Suspenso (Clique Direito) */
 .admin-context-menu {
   position: absolute;
-  z-index: 3500;
+  z-index: 6500;
   background: rgba(26, 26, 35, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(12px);

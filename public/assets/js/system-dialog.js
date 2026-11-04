@@ -31,7 +31,7 @@
     el.className = 'modal fade';
     el.tabIndex = -1;
     el.setAttribute('aria-hidden', 'true');
-    el.style.zIndex = '5000';
+    el.style.zIndex = '7000';
     el.innerHTML =
       '<div class="modal-dialog modal-dialog-centered" style="max-width: 440px;">' +
         '<div class="modal-content border-0 shadow-lg" style="background-color: #23222B; color: #E8E8EC; border-radius: 20px; overflow: hidden;">' +

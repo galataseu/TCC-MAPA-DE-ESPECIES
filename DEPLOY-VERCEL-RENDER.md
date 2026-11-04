@@ -27,6 +27,25 @@ No painel do Render, em **Environment Variables**, adicione/ajuste:
 ### 1.3. URL da API
 Acesse `https://<seu-servico>.onrender.com/api/v1/stats/uso/` com o token JWT de admin para confirmar que responde (deve retornar 401 sem token e 200 com token de admin).
 
+### 1.4. Criar ou redefinir o administrador de produção
+O banco local e o banco configurado no Render são separados. Criar ou trocar a senha localmente não altera a conta de produção.
+
+Se o plano do Render não oferece Shell, é possível redefinir a conta com um deploy temporário. Não é necessário adicionar a senha ao código ou ao repositório:
+
+1. Em **Environment → Environment Variables** do serviço Django, adicione `ADMIN_RESET_PASSWORD` com a nova senha. Marque-a como secreta, se essa opção aparecer.
+2. Em **Settings → Start Command**, copie o comando atual para poder restaurá-lo. Se o comando atual for `gunicorn tcc_backend.wsgi:application`, substitua-o temporariamente por:
+
+   ```bash
+   python manage.py shell -c 'import os; from api.models import User; u=User.objects.get(username="admin"); u.set_password(os.environ["ADMIN_RESET_PASSWORD"]); u.role="admin"; u.is_active=True; u.is_staff=True; u.is_superuser=True; u.save(update_fields=["password","role","is_active","is_staff","is_superuser"]); print("Admin production password updated.")' && gunicorn tcc_backend.wsgi:application
+   ```
+
+   Se o serviço usa outro comando de inicialização, troque somente o final `gunicorn tcc_backend.wsgi:application` pelo **Start Command original**, mantendo o trecho `python manage.py shell ... &&`.
+3. Salve e aguarde o deploy ficar **Live**. O comando atualiza a senha da conta `admin` e confirma o perfil de administrador da API.
+4. Imediatamente depois, restaure o **Start Command original**, remova `ADMIN_RESET_PASSWORD` e salve. Isso inicia um segundo deploy sem a redefinição temporária; não deixe o prefixo configurado, pois ele seria executado em cada reinício.
+5. Entre em `/admin/login` na Vercel usando `admin` e a senha definida no passo 1.
+
+Esse procedimento pressupõe que o usuário `admin` já existe no banco de produção. Ele não imprime a senha no log nem a envia à Vercel.
+
 ---
 
 ## 2. Frontend Express (Vercel)
